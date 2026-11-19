@@ -15,7 +15,8 @@ This roadmap is a plan, not a claim that every item exists.
 
 ## Source and evidence intelligence
 - [x] Initial local-file signature classification and source metadata registration (deep metadata inspection and extraction pending).
-- [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search (OCR and unified claim-evidence linking pending).
+- [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search (OCR pending).
+- [x] Unified source-bound evidence locator IDs for transcript intervals and PDF pages (claim/textbook link migration pending).
 - [ ] Authorized source adapters and metadata inspection.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [ ] Local audio transcription adapter.
