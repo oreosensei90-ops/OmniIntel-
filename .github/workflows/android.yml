@@ -1,4 +1,7 @@
 name: Android reader build
+concurrency:
+  group: android-reader-${{ github.ref }}
+  cancel-in-progress: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
