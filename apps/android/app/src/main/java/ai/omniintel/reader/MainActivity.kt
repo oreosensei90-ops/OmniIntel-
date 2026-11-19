@@ -43,7 +43,6 @@ private const val MAX_IMPORT_BYTES = 50L * 1024L * 1024L
 data class ReaderSource(val id: String, val title: String)
 data class Evidence(val sourceId: String, val source: String, val locator: String, val startMs: Long?, val excerpt: String)
 data class Block(val id: String, val type: String, val text: String, val provenance: String, val evidence: List<Evidence>)
-data class Chapter(val title: String, val blocks: List<Block>)
 data class Book(val title: String, val sources: List<ReaderSource>, val chapters: List<ReaderChapter>)
 data class ReaderChapter(val title: String, val blocks: List<Block>)
 
@@ -157,7 +156,7 @@ class MainActivity : ComponentActivity() {
                     evidence
                 )
             }
-            Chapter(chapter.optString("title", "Chapter ${i + 1}"), blocks)
+            ReaderChapter(chapter.optString("title", "Chapter ${i + 1}"), blocks)
         }
         require(chapters.isNotEmpty()) { "This textbook has no readable chapters." }
         return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), sourcesById.values.toList(), chapters)
@@ -166,14 +165,78 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
+    val context = LocalContext.current
     var book by remember { mutableStateOf<Book?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedSourceId by remember { mutableStateOf<String?>(null) }
+    var mediaUri by remember { mutableStateOf<Uri?>(null) }
+    var mediaMime by remember { mutableStateOf<String?>(null) }
+    var mediaStatus by remember { mutableStateOf("Select the exact course source before attaching media.") }
+    var sourceMenuExpanded by remember { mutableStateOf(false) }
+    var videoView by remember { mutableStateOf<VideoView?>(null) }
+    var audioPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var audioReady by remember { mutableStateOf(false) }
+    var audioPlaying by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) open(uri) { result ->
-            result.onSuccess { book = it; chapterIndex = 0; query = ""; error = null }
-                .onFailure { error = it.message ?: "Could not open reader export." }
+            result.onSuccess {
+                book = it; chapterIndex = 0; query = ""; error = null
+                selectedSourceId = null; mediaUri = null; mediaMime = null
+                audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false
+                videoView?.stopPlayback(); videoView = null
+                mediaStatus = "Select the exact course source, then attach only the matching local media file."
+            }.onFailure { error = it.message ?: "Could not open reader export." }
+        }
+    }
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        if (selectedSourceId == null) {
+            mediaStatus = "Select the exact course source first."
+        } else {
+            val mime = context.contentResolver.getType(uri).orEmpty()
+            if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                mediaUri = uri
+                mediaMime = mime
+                mediaStatus = "Attached locally to the selected source. Timestamps remain source-local."
+            } else {
+                mediaStatus = "Choose a supported audio or video file."
+            }
+        }
+    }
+    LaunchedEffect(mediaUri, mediaMime) {
+        audioPlayer?.release()
+        audioPlayer = null
+        audioReady = false
+        audioPlaying = false
+        val uri = mediaUri
+        if (uri != null && mediaMime?.startsWith("audio/") == true) {
+            runCatching {
+                MediaPlayer().also { player ->
+                    player.setDataSource(context, uri)
+                    player.setOnPreparedListener {
+                        audioReady = true
+                        mediaStatus = "Audio ready · selected source only."
+                    }
+                    player.setOnErrorListener { _, _, _ ->
+                        mediaStatus = "The selected audio file could not be played."
+                        true
+                    }
+                    audioPlayer = player
+                    player.prepareAsync()
+                }
+            }.onFailure {
+                audioPlayer?.release()
+                audioPlayer = null
+                mediaStatus = "The selected audio file could not be opened."
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            audioPlayer?.release()
+            videoView?.stopPlayback()
         }
     }
     Column(Modifier.fillMaxSize()) {
@@ -185,7 +248,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Text("OMNIINTEL", color = Color.White, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Text("OFFLINE READER", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
             }
-            OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/*", "*/*")) }) {
+            OutlinedButton(onClick = { picker.launch(arrayOf("application/json")) }) {
                 Text(if (book == null) "Open textbook" else "Open another")
             }
         }
@@ -206,7 +269,72 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
         } else {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Text(current.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("${current.chapters.size} chapters", color = Muted, fontSize = 11.sp)
+                Text("${current.chapters.size} chapters · ${current.sources.size} sources", color = Muted, fontSize = 11.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        OutlinedButton(onClick = { sourceMenuExpanded = true }) {
+                            Text(current.sources.firstOrNull { it.id == selectedSourceId }?.title ?: "Select exact source")
+                        }
+                        DropdownMenu(expanded = sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
+                            current.sources.forEach { source ->
+                                DropdownMenuItem(
+                                    text = { Text(source.title) },
+                                    onClick = {
+                                        sourceMenuExpanded = false
+                                        selectedSourceId = source.id
+                                        mediaUri = null
+                                        mediaMime = null
+                                        audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false
+                                        videoView?.stopPlayback(); videoView = null
+                                        mediaStatus = "Selected ${source.title}. Attach only the matching local media file."
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        enabled = selectedSourceId != null,
+                        onClick = { mediaPicker.launch(arrayOf("video/*", "audio/*")) }
+                    ) { Text("Attach media") }
+                }
+                Text(mediaStatus, color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                val attachedUri = mediaUri
+                if (attachedUri != null && mediaMime?.startsWith("video/") == true) {
+                    AndroidView(
+                        factory = { viewContext ->
+                            VideoView(viewContext).also { view ->
+                                view.tag = attachedUri.toString()
+                                MediaController(viewContext).also { controller ->
+                                    controller.setAnchorView(view)
+                                    view.setMediaController(controller)
+                                }
+                                view.setVideoURI(attachedUri)
+                                videoView = view
+                            }
+                        },
+                        update = { view ->
+                            if (view.tag != attachedUri.toString()) {
+                                view.tag = attachedUri.toString()
+                                view.setVideoURI(attachedUri)
+                            }
+                            videoView = view
+                        },
+                        modifier = Modifier.fillMaxWidth().height(210.dp)
+                    )
+                }
+                if (attachedUri != null && mediaMime?.startsWith("audio/") == true) {
+                    Button(
+                        enabled = audioReady,
+                        onClick = {
+                            audioPlayer?.let { player ->
+                                if (player.isPlaying) { player.pause(); audioPlaying = false }
+                                else { player.start(); audioPlaying = true }
+                            }
+                        },
+                        modifier = Modifier.padding(top = 6.dp)
+                    ) { Text(if (audioPlaying) "Pause audio" else "Play audio") }
+                }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
@@ -236,6 +364,27 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                             block.evidence.forEach { evidence ->
                                 HorizontalDivider(color = Color(0xFF343945), modifier = Modifier.padding(vertical = 8.dp))
                                 Text("${evidence.source} · ${evidence.locator}", color = Gold, fontSize = 11.sp)
+                                if (evidence.startMs != null) {
+                                    val canSeek = mediaUri != null && selectedSourceId == evidence.sourceId &&
+                                        (mediaMime?.startsWith("video/") == true || audioReady)
+                                    OutlinedButton(
+                                        enabled = canSeek,
+                                        onClick = {
+                                            val position = evidence.startMs.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
+                                            if (mediaMime?.startsWith("video/") == true) {
+                                                videoView?.seekTo(position)
+                                                videoView?.start()
+                                            } else {
+                                                audioPlayer?.let { player ->
+                                                    player.seekTo(position)
+                                                    if (!player.isPlaying) player.start()
+                                                    audioPlaying = true
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    ) { Text("Jump to ${evidence.locator}") }
+                                }
                                 if (evidence.excerpt.isNotBlank()) Text(evidence.excerpt, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
                             }
                         }
