@@ -5,7 +5,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from .database import connect, migrate
 from .ids import uuid7
