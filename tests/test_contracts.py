@@ -164,3 +164,32 @@ def test_claim_and_block_reference_link_contracts():
     block["relation"] = "QUALIFIES"
     assert not validator_for("block-evidence-reference.schema.json").is_valid(block)
 
+def test_document_topic_contracts_do_not_require_video_timestamps():
+    topic = {
+        "id": "0190f2a1-1234-7123-8123-123456789abc",
+        "source_id": "0190f2a1-1234-7123-8123-123456789abd",
+        "parent_topic_id": None,
+        "title": "Conservation laws",
+        "description": "Core principles",
+        "ordinal": 0,
+        "provenance": "EXPLANATION",
+        "status": "DRAFT",
+        "confidence": 0.9,
+        "created_at": "2026-11-19T08:00:00Z",
+        "updated_at": "2026-11-19T08:00:00Z",
+    }
+    assert validator_for("document-topic.schema.json").is_valid(topic)
+
+    link = {
+        "id": "0190f2a1-1234-7123-8123-123456789abe",
+        "topic_id": topic["id"],
+        "evidence_ref_id": "0190f2a1-1234-7123-8123-123456789abf",
+        "relation": "INTRODUCES",
+        "review_state": "PENDING",
+        "relevance_score": None,
+        "rationale": None,
+        "created_at": "2026-11-19T08:00:00Z",
+        "reviewed_at": None,
+    }
+    assert validator_for("document-topic-evidence-reference.schema.json").is_valid(link)
+
