@@ -6,6 +6,7 @@ from reportlab.pdfgen import canvas
 from omniintel.assets import AssetStore
 from omniintel.database import connect
 from omniintel.document_pdf import extract_pdf, list_extracted_pages
+from omniintel.evidence_refs import get_evidence_reference, search_evidence_references
 from omniintel.local_files import import_local_file
 
 
@@ -37,6 +38,15 @@ def test_extract_pdf_preserves_page_numbers_and_hashes(tmp_path: Path) -> None:
     assert "Second page text" in result.pages[1].text
     assert all(len(page.content_sha256) == 64 for page in result.pages)
     assert list_extracted_pages(database, result.extraction_id) == result.pages
+    assert len(result.evidence_ref_ids) == 2
+    reference = get_evidence_reference(database, result.evidence_ref_ids[1])
+    assert reference is not None
+    assert reference["locator_kind"] == "DOCUMENT_PAGE"
+    assert reference["page_number"] == 2
+    assert reference["start_ms"] is None and reference["end_ms"] is None
+    assert reference["content"] == result.pages[1].text
+    assert reference["source_asset_id"] == asset_id
+    assert search_evidence_references(database, "Second page text")[0]["page_number"] == 2
 
 
 def test_extract_pdf_rerun_is_idempotent_for_parser_version(tmp_path: Path) -> None:
@@ -44,7 +54,8 @@ def test_extract_pdf_rerun_is_idempotent_for_parser_version(tmp_path: Path) -> N
     first = extract_pdf(database, assets, asset_id)
     second = extract_pdf(database, assets, asset_id)
     assert first.extraction_id == second.extraction_id
-    assert first.pages[0].id != second.pages[0].id
+    assert first.pages[0].id == second.pages[0].id
+    assert first.evidence_ref_ids == second.evidence_ref_ids
     assert list_extracted_pages(database, second.extraction_id) == second.pages
     with connect(database) as conn:
         count = conn.execute(
@@ -124,3 +135,19 @@ def test_document_page_search_handles_empty_and_invalid_limits(tmp_path: Path) -
     with pytest.raises(ValueError, match="between 1 and 100"):
         search_document_pages(database, "page", limit=101)
 
+
+
+def test_evidence_reference_rejects_cross_source_page_locator(tmp_path: Path) -> None:
+    database, assets, asset_id = ingest_pdf(tmp_path, ["Source A page"])
+    result = extract_pdf(database, assets, asset_id)
+    other = import_local_file(
+        database, assets, tmp_path / "source.pdf", title="Second source"
+    )
+    with connect(database) as conn:
+        with pytest.raises(Exception, match="document page reference"):
+            conn.execute(
+                """INSERT INTO evidence_refs
+                   (id,source_id,locator_kind,document_page_id,source_asset_id,page_number,created_at)
+                   VALUES('bad-reference',?,'DOCUMENT_PAGE',?,?,1,'2026-01-01T00:00:00Z')""",
+                (other.source_id,result.pages[0].id,asset_id),
+            )
