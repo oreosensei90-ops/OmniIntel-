@@ -244,3 +244,29 @@ rejected patterns and implementation sequence are summarized in
 [docs/REFERENCE_IMPLEMENTATION_PLAN.md](docs/REFERENCE_IMPLEMENTATION_PLAN.md).
 These references inform our own implementation; they are not automatically approved
 dependencies or permission to copy third-party code.
+
+
+## Multi-source intake and course textbooks
+
+Create a read-only plan for local files, then review it before any work is approved:
+
+```bash
+omniintel plan-inputs ./course-folder --recursive --language en,hi
+```
+
+The execution coordinator is an application API: it requires an explicit approval decision and injected local stage adapters; it never runs shell commands or performs network acquisition. See [docs/EXECUTION_ALIGNMENT_COURSE_TEXTBOOKS.md](docs/EXECUTION_ALIGNMENT_COURSE_TEXTBOOKS.md).
+
+Create a course and a source-attributed course textbook:
+
+```bash
+omniintel collection-create ./omniintel.db "Physics 101" --type COURSE
+omniintel course-book-create ./omniintel.db COLLECTION_ID "Physics 101 — Complete Textbook"
+omniintel course-book-version ./omniintel.db TEXTBOOK_ID "Draft 1" --mode HYBRID
+omniintel course-book-chapter ./omniintel.db VERSION_ID "Kinematics" 0 --source-id SOURCE_ID
+omniintel course-book-block ./omniintel.db CHAPTER_ID PARAGRAPH '{"text":"Reviewed content"}' --provenance SOURCE --review ACCEPTED
+omniintel course-book-link-evidence ./omniintel.db BLOCK_ID EVIDENCE_REFERENCE_ID
+omniintel course-book-review-evidence ./omniintel.db LINK_ID ACCEPTED
+omniintel course-book-audit ./omniintel.db VERSION_ID
+```
+
+Course textbook evidence remains source-specific. Clock alignment proposals use measured feature envelopes and remain NEEDS_REVIEW until reviewed. Existing single-source exporters are not yet connected to course textbook versions. See [docs/DEEP_RESEARCH_AUDIT_2026-11-19.md](docs/DEEP_RESEARCH_AUDIT_2026-11-19.md).
