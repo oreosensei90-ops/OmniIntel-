@@ -1933,6 +1933,41 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         CREATE INDEX idx_transcription_chunks_run ON transcription_chunks(run_id,chunk_index);
         """
     ),
+    (
+        "0029_local_media_probe",
+        """
+        CREATE TABLE media_probes (
+            id TEXT PRIMARY KEY,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            asset_sha256 TEXT NOT NULL CHECK(length(asset_sha256)=64),
+            probe_fingerprint TEXT NOT NULL CHECK(length(probe_fingerprint)=64),
+            tool_name TEXT NOT NULL CHECK(tool_name='ffprobe'),
+            tool_version TEXT NOT NULL CHECK(length(trim(tool_version))>0),
+            format_name TEXT NOT NULL CHECK(length(trim(format_name))>0),
+            duration_ms INTEGER CHECK(duration_ms IS NULL OR duration_ms>0),
+            byte_size INTEGER NOT NULL CHECK(byte_size>0),
+            metadata_json TEXT NOT NULL CHECK(json_valid(metadata_json)),
+            created_at TEXT NOT NULL,
+            UNIQUE(source_asset_id,probe_fingerprint)
+        );
+        CREATE INDEX idx_media_probes_asset_created
+            ON media_probes(source_asset_id,created_at);
+        CREATE TABLE media_streams (
+            probe_id TEXT NOT NULL REFERENCES media_probes(id) ON DELETE CASCADE,
+            stream_index INTEGER NOT NULL CHECK(stream_index>=0),
+            codec_type TEXT NOT NULL,
+            codec_name TEXT,
+            duration_ms INTEGER CHECK(duration_ms IS NULL OR duration_ms>0),
+            width INTEGER CHECK(width IS NULL OR width>0),
+            height INTEGER CHECK(height IS NULL OR height>0),
+            sample_rate INTEGER CHECK(sample_rate IS NULL OR sample_rate>0),
+            channels INTEGER CHECK(channels IS NULL OR channels>0),
+            metadata_json TEXT NOT NULL CHECK(json_valid(metadata_json)),
+            PRIMARY KEY(probe_id,stream_index)
+        );
+        CREATE INDEX idx_media_streams_type ON media_streams(probe_id,codec_type);
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
