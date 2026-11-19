@@ -59,6 +59,10 @@ def main() -> None:
     extract_pdf_cmd.add_argument("--max-pages", type=int, default=500)
     extract_pdf_cmd.add_argument("--max-chars-per-page", type=int, default=100_000)
     extract_pdf_cmd.add_argument("--max-total-chars", type=int, default=5_000_000)
+    build_document_knowledge = sub.add_parser("build-document-knowledge", help="Create draft knowledge units from accepted document elements")
+    build_document_knowledge.add_argument("database", type=Path)
+    build_document_knowledge.add_argument("source_id")
+    build_document_knowledge.add_argument("--include-unreviewed", action="store_true")
     ocr_pdf_cmd = sub.add_parser("ocr-pdf", help="OCR image-only pages in a registered local PDF")
     ocr_pdf_cmd.add_argument("database", type=Path)
     ocr_pdf_cmd.add_argument("asset_dir", type=Path)
@@ -182,6 +186,19 @@ def main() -> None:
                 for page in result.pages
             ],
         }, ensure_ascii=False, indent=2))
+    elif args.command == "build-document-knowledge":
+        from .document_knowledge import create_knowledge_candidates_from_document_elements
+
+        result = create_knowledge_candidates_from_document_elements(
+            args.database,args.source_id,
+            accepted_elements_only=not args.include_unreviewed,
+        )
+        print(json.dumps({
+            "source_id": result.source_id,
+            "candidate_units": list(result.candidate_unit_ids),
+            "created_or_reused": len(result.candidate_unit_ids),
+            "skipped_unreviewed_elements": result.skipped_unreviewed_elements,
+        },ensure_ascii=False,indent=2))
     elif args.command == "ocr-pdf":
         from .document_ocr import ocr_pdf
 
