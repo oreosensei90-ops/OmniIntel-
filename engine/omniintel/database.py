@@ -167,6 +167,19 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def _execute_statements(conn: sqlite3.Connection, sql: str) -> None:
+    """Execute a static migration script without executescript's implicit commits."""
+    statement = ""
+    for line in sql.splitlines(keepends=True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            if statement.strip():
+                conn.execute(statement)
+            statement = ""
+    if statement.strip():
+        raise MigrationError("Migration contains an incomplete SQL statement")
+
+
 def migrate(conn: sqlite3.Connection, migrations: Iterable[tuple[str, str]] = MIGRATIONS) -> None:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS schema_migrations "
@@ -183,12 +196,14 @@ def migrate(conn: sqlite3.Connection, migrations: Iterable[tuple[str, str]] = MI
                 raise MigrationError(f"Applied migration {name!r} was modified")
             continue
         try:
-            conn.executescript(
-                "BEGIN IMMEDIATE;\n"
-                + sql
-                + f"\nINSERT INTO schema_migrations(name, checksum) VALUES('{name}', '{checksum}');\nCOMMIT;"
+            conn.execute("BEGIN IMMEDIATE")
+            _execute_statements(conn, sql)
+            conn.execute(
+                "INSERT INTO schema_migrations(name, checksum) VALUES(?, ?)",
+                (name, checksum),
             )
-        except sqlite3.Error:
+            conn.commit()
+        except (sqlite3.Error, MigrationError):
             if conn.in_transaction:
                 conn.rollback()
             raise
