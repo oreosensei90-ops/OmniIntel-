@@ -19,11 +19,14 @@ Open `http://localhost:8080` and choose `course-reader.json`. The service worker
 
 - Local JSON import with a 50 MiB limit and minimal shape validation.
 - Chapter navigation, current-chapter text search, provenance labels and expandable evidence citations.
-- Transcript excerpts and PDF page text when present in the reader payload.
+- Cross-chapter search across block content, transcript excerpts and PDF page text.
+- Explicit local audio/video attachment per selected course source; timestamp jumps are enabled only for the exact attached source and never apply unreviewed cross-source offsets.
+- Transcript excerpts, PDF page text and positioned document elements with confidence/review state when present in the reader payload.
+- Local IndexedDB notes and bookmarks per textbook block.
 - Per-block personal notes and bookmarks stored in IndexedDB on this browser only; no remote sync.
 - Responsive desktop/mobile layout and reduced-motion support.
 - Offline shell caching; no external fonts, scripts, analytics, APIs or network calls.
 
 ## Deliberate limits
 
-This is not the complete web application. It does not yet provide media playback/seek controls, annotation editing, bookmarks, IndexedDB document storage, account/sync, native math/diagram rendering, or a server/API. Source-specific times are displayed as citations only; no unsupported cross-source seek is invented. The native Android app remains a separate planned application.
+This is not the complete web application. It does not yet provide automatic source-file matching, native math/diagram rendering, full-text indexing at large-library scale, export/import of annotations, account/sync, or a server/API. Local media must be selected by the user and paired with the correct course source. Source-specific times are displayed as citations only; no unsupported cross-source seek is invented. The native Android app remains a separate planned application.
