@@ -40,3 +40,24 @@ Reader positions are persisted in local SQLite with course-version, anchor sourc
 ## Offline quality benchmark metrics
 
 `quality_eval` computes deterministic metrics over caller-supplied, versioned fixtures: transcript WER/CER, timestamp boundary MAE, OCR CER, evidence-ID precision/recall/F1, section coverage and alignment offset absolute error. Reports are stored locally with suite and dataset version. These metrics measure comparison against a supplied reference set; they do not establish semantic correctness, completeness, factual accuracy or teaching quality. Benchmark results must be interpreted with expert review and a representative, licensed golden corpus.
+
+
+### Approved local registration and content integrity
+
+The `execute-plan` CLI currently supports the `REGISTER_SOURCE` stage only. It requires the explicit `--approve` flag and writes source assets into the configured local asset store. The coordinator hashes every planned file and revalidates its identity immediately before a stage; the registration adapter also passes the approved SHA-256 into asset ingestion, where the bytes are hashed again while being copied. If the content differs, ingestion aborts before publishing the blob or source-asset link. This narrows the time-of-check/time-of-use window rather than relying on filename, size or modification time alone.
+
+Example stage JSON for the first planned file:
+
+```json
+[
+  {"stage":"REGISTER_SOURCE","input_indices":[0],"network":"none"}
+]
+```
+
+Run only after reviewing the plan and stage list:
+
+```bash
+omniintel execute-plan ./omniintel.db ./omniintel-assets ./plan.json ./stages.json --approve
+```
+
+This CLI does not yet execute ASR, OCR, PDF extraction or video frame sampling. Those require separately implemented and tested local adapters. A process crash between source creation and asset registration can leave an empty source record; the current coordinator records stage checkpoints, but crash-atomic multi-record source registration is still a hardening item.
