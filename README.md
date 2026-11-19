@@ -28,7 +28,8 @@ The repository is an actively evolving foundation implementation. The feature br
 - `schemas/` — versioned cross-platform data contracts.
 - `tests/` — automated tests.
 - `docs/` — architecture, decisions, research and roadmap.
-- `apps/web/` — first static offline Web Reader prototype; Android app and full web platform remain future work.
+- `apps/web/` — static offline Web Reader prototype with cross-chapter evidence search, local media playback and local notes.
+- `apps/android/` — first native Kotlin + Compose offline reader slice; independent Android CI builds a debug APK.
 
 ## Python development
 
@@ -327,3 +328,10 @@ python -m http.server 8080
 \`\`\`
 
 Open \`http://localhost:8080\` and choose \`course-reader.json\`. See [apps/web/README.md](apps/web/README.md) for scope and limitations. This is a first UI slice, not the completed web app.
+
+
+## Native Android reader prototype
+
+A separate Kotlin + Jetpack Compose app lives in `apps/android/`. It opens a user-selected reader JSON export through Android's Storage Access Framework, parses it off the main thread with a 50 MiB input cap, and renders chapter content and source evidence. It deliberately requests no network or broad storage permission.
+
+The Android CI workflow builds a debug APK and checks the packaged manifest for network permissions. This is an early reader prototype, not the complete Android application: durable library storage, media playback, annotations, study tools and background processing remain unimplemented.
