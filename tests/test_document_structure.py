@@ -130,6 +130,11 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
         assert topics.review_document_evidence_link(topic_link,"ACCEPTED") == "ACCEPTED"
         topic_links.append(topic_link)
     assert topic_links
+    outline_links = topics.get_document_outline(imported.source_id)[0]["evidence_references"]
+    assert len(outline_links) == len(topic_links)
+    assert {item["element_id"] for item in outline_links} == {
+        item.id for item in result.elements if item.element_type != "HEADING"
+    }
 
     textbooks = TextbookStore(database)
     version = textbooks.compose_from_accepted_document_topics(
