@@ -99,3 +99,10 @@ Install the optional PDF parser with \`pip install -e ".[documents]"\`. Extracti
 rejects encrypted PDFs, enforces page and character limits, and stores per-page text separately
 from video transcript segments. Scanned pages may be empty until an OCR adapter is implemented.
 See \`docs/PDF_PAGE_EXTRACTION.md\`.
+
+
+Search extracted PDF pages locally:
+
+\`\`\`bash
+omniintel search-pages ./omniintel.db "quantum entanglement"
+\`\`\`
