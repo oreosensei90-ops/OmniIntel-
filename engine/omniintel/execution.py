@@ -153,7 +153,7 @@ class PlanExecutor:
                 stage_key = f"{ordinal}:{stage['stage']}"
                 with connect(self.database_path) as conn:
                     prior = conn.execute(
-                        """SELECT state,result_json FROM execution_stage_checkpoints
+                        """SELECT id,state,result_json FROM execution_stage_checkpoints
                            WHERE plan_id=? AND stage_key=? AND input_hash=?""",
                         (plan_id, stage_key, input_hash),
                     ).fetchone()
