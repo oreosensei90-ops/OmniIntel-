@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import os
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,29 @@ def resolve_block_assets(
         if int(asset.get("byte_size",0)) <= 0 or int(asset["byte_size"]) > 25*1024*1024:
             raise ValueError("Textbook image exceeds the 25 MiB export limit")
         path=store.resolve_path(str(asset["asset_id"]),verify_hash=True)
+        if media_type not in {"image/jpeg","image/png"}:
+            try:
+                from PIL import Image
+            except ImportError as exc:
+                raise RuntimeError(
+                    "GIF/WebP export requires Pillow: pip install -e '.[vision]'"
+                ) from exc
+            cache=store.storage_dir/".staging"/"export-normalized"
+            cache.mkdir(parents=True,exist_ok=True)
+            normalized=cache/f"{asset['sha256']}.png"
+            if not normalized.is_file():
+                temporary=cache/f".{asset['sha256']}.tmp"
+                with Image.open(path) as image:
+                    image.seek(0)
+                    if image.width*image.height>40_000_000:
+                        raise ValueError("Decoded textbook image exceeds the 40 MP export limit")
+                    image.convert("RGBA").save(temporary,format="PNG",optimize=True)
+                if temporary.stat().st_size>25*1024*1024:
+                    temporary.unlink(missing_ok=True)
+                    raise ValueError("Normalized textbook image exceeds the 25 MiB export limit")
+                os.replace(temporary,normalized)
+            path=normalized
+            media_type="image/png"
         output.append((path,str(asset.get("caption") or ""),media_type,str(asset["sha256"])))
     return output
 
