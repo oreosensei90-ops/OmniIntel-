@@ -26,10 +26,11 @@ def test_alignment_requires_review_and_collection_membership(tmp_path: Path) -> 
     course=collections.create("Course")
     collections.add_source(course,a)
     collections.add_source(course,b)
-    estimate={"offset_ms":1200,"sample_interval_ms":100,"correlation":0.95,"runner_up_correlation":0.4}
+    signal=[0,1,0,2,0,1,0,2,0,1,0,2]
+    estimate=estimate_offset(signal,signal,sample_interval_ms=100,max_lag_samples=2)
     store=AlignmentStore(db)
     record=store.propose(course,a,b,estimate,rationale="Shared audio envelope peak sequence",
-                         signal_a=[0,1,0,2,0,1,0,2],signal_b=[0,1,0,2,0,1,0,2])
+                         signal_a=signal,signal_b=signal)
     assert store.list(course)[0]["review_state"]=="NEEDS_REVIEW"
     assert store.review(record,"ACCEPTED")=="ACCEPTED"
     other=source(db,"Not in course")
