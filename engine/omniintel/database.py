@@ -819,6 +819,268 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0018_document_ocr_pages",
+        """
+        CREATE TABLE document_ocr_pages (
+            page_id TEXT PRIMARY KEY REFERENCES document_pages(id) ON DELETE RESTRICT,
+            rendered_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            engine_name TEXT NOT NULL,
+            engine_version TEXT NOT NULL,
+            text_content TEXT NOT NULL,
+            words_json TEXT NOT NULL CHECK(json_valid(words_json)),
+            mean_confidence REAL CHECK(mean_confidence IS NULL OR
+                (mean_confidence >= 0 AND mean_confidence <= 100)),
+            status TEXT NOT NULL CHECK(status IN (
+                'NEEDS_REVIEW','ACCEPTED','REJECTED','EMPTY','FAILED'
+            )),
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT
+        );
+        CREATE INDEX idx_document_ocr_status ON document_ocr_pages(status);
+        DROP TRIGGER evidence_refs_fts_page_update;
+        CREATE TRIGGER evidence_refs_fts_page_update
+        AFTER UPDATE OF text_content ON document_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(NEW.text_content,'') || ' ' ||
+                        COALESCE((SELECT o.text_content FROM document_ocr_pages o
+                                  WHERE o.page_id=NEW.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er WHERE er.document_page_id=NEW.id;
+        END;
+        CREATE TRIGGER document_ocr_fts_insert
+        AFTER INSERT ON document_ocr_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' || NEW.text_content),
+                   er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.document_page_id=NEW.page_id;
+        END;
+        CREATE TRIGGER document_ocr_fts_update
+        AFTER UPDATE OF text_content ON document_ocr_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' || NEW.text_content),
+                   er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.document_page_id=NEW.page_id;
+        END;
+        CREATE TRIGGER document_ocr_fts_delete
+        AFTER DELETE ON document_ocr_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=OLD.page_id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,dp.text_content,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.document_page_id=OLD.page_id;
+        END;
+        """
+    ),
+    (
+        "0019_document_structure_elements",
+        """
+        CREATE TABLE document_elements (
+            id TEXT PRIMARY KEY,
+            page_id TEXT NOT NULL REFERENCES document_pages(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            parser_name TEXT NOT NULL,
+            parser_version TEXT NOT NULL,
+            element_type TEXT NOT NULL CHECK(element_type IN (
+                'HEADING','PARAGRAPH','EQUATION','TABLE','FIGURE','CAPTION','LIST_ITEM'
+            )),
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            text_content TEXT NOT NULL DEFAULT '',
+            content_json TEXT NOT NULL CHECK(json_valid(content_json)),
+            x0 REAL CHECK(x0 IS NULL OR (x0 >= 0 AND x0 <= 1)),
+            y0 REAL CHECK(y0 IS NULL OR (y0 >= 0 AND y0 <= 1)),
+            x1 REAL CHECK(x1 IS NULL OR (x1 >= 0 AND x1 <= 1)),
+            y1 REAL CHECK(y1 IS NULL OR (y1 >= 0 AND y1 <= 1)),
+            asset_id TEXT REFERENCES source_assets(id) ON DELETE RESTRICT,
+            confidence REAL CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            provenance TEXT NOT NULL CHECK(provenance IN ('SOURCE','DERIVED','UNCERTAIN')),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            review_rationale TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            UNIQUE(page_id,parser_name,parser_version,ordinal),
+            CHECK(x0 IS NULL OR x1 IS NULL OR x1 >= x0),
+            CHECK(y0 IS NULL OR y1 IS NULL OR y1 >= y0)
+        );
+        CREATE INDEX idx_document_elements_page_order
+            ON document_elements(page_id,parser_name,parser_version,ordinal);
+        CREATE INDEX idx_document_elements_type_review
+            ON document_elements(element_type,review_state);
+        ALTER TABLE claim_evidence_refs ADD COLUMN element_id TEXT
+            REFERENCES document_elements(id) ON DELETE RESTRICT;
+        ALTER TABLE block_evidence_refs ADD COLUMN element_id TEXT
+            REFERENCES document_elements(id) ON DELETE RESTRICT;
+        ALTER TABLE document_topic_evidence_refs ADD COLUMN element_id TEXT
+            REFERENCES document_elements(id) ON DELETE RESTRICT;
+        CREATE TRIGGER claim_element_reference_validate_insert
+        BEFORE INSERT ON claim_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'claim element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'claim element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER claim_element_reference_validate_update
+        BEFORE UPDATE OF element_id,evidence_ref_id,review_state ON claim_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'claim element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'claim element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER block_element_reference_validate_insert
+        BEFORE INSERT ON block_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'block element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'block element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER block_element_reference_validate_update
+        BEFORE UPDATE OF element_id,evidence_ref_id,review_state ON block_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'block element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'block element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER topic_element_reference_validate_insert
+        BEFORE INSERT ON document_topic_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'topic element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'topic element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER topic_element_reference_validate_update
+        BEFORE UPDATE OF element_id,evidence_ref_id,review_state ON document_topic_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'topic element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'topic element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER document_element_review_demotion
+        AFTER UPDATE OF review_state ON document_elements
+        WHEN NEW.review_state <> 'ACCEPTED'
+        BEGIN
+            UPDATE claim_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+            UPDATE block_evidence_refs SET review_state='NEEDS_REVIEW'
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+            UPDATE document_topic_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+        END;
+        CREATE VIRTUAL TABLE document_elements_fts USING fts5(
+            element_id UNINDEXED,
+            page_id UNINDEXED,
+            evidence_ref_id UNINDEXED,
+            element_type UNINDEXED,
+            content,
+            tokenize='unicode61 remove_diacritics 2'
+        );
+        CREATE TRIGGER document_elements_fts_insert
+        AFTER INSERT ON document_elements
+        WHEN length(trim(NEW.text_content)) > 0
+        BEGIN
+            INSERT INTO document_elements_fts(
+                element_id,page_id,evidence_ref_id,element_type,content
+            ) VALUES(
+                NEW.id,NEW.page_id,NEW.evidence_ref_id,NEW.element_type,NEW.text_content
+            );
+            DELETE FROM evidence_refs_fts WHERE evidence_ref_id=NEW.evidence_ref_id;
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' ||
+                        COALESCE(ocr.text_content,'') || ' ' ||
+                        COALESCE((SELECT group_concat(de.text_content,' ')
+                                  FROM document_elements de
+                                  WHERE de.evidence_ref_id=er.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
+            WHERE er.id=NEW.evidence_ref_id;
+        END;
+        CREATE TRIGGER document_elements_fts_delete
+        AFTER DELETE ON document_elements
+        BEGIN
+            DELETE FROM document_elements_fts WHERE element_id=OLD.id;
+            DELETE FROM evidence_refs_fts WHERE evidence_ref_id=OLD.evidence_ref_id;
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' ||
+                        COALESCE(ocr.text_content,'') || ' ' ||
+                        COALESCE((SELECT group_concat(de.text_content,' ')
+                                  FROM document_elements de
+                                  WHERE de.evidence_ref_id=er.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
+            WHERE er.id=OLD.evidence_ref_id;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
