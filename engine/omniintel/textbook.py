@@ -191,3 +191,107 @@ class TextbookStore:
                     block_items.append(item)
                 chapter_items.append({"chapter": dict(chapter), "blocks": block_items})
         return {"version": dict(version), "chapters": chapter_items}
+
+    def compose_from_accepted_topics(
+        self, source_id: str, title: str, *,
+        composition_mode: CompositionMode = "HYBRID",
+        version_title: str = "Draft 1",
+    ) -> str:
+        """Create a deterministic outline using only reviewed topics and supported claims.
+
+        Claims are placed in a topic only when the same evidence item has an
+        accepted topic link and an accepted SUPPORTS link for a publishable claim.
+        No prose is generated or inferred by this method.
+        """
+        with connect(self.database_path) as conn:
+            topic_rows = conn.execute(
+                "SELECT * FROM topics WHERE source_id=? ORDER BY start_ms,ordinal,id",
+                (source_id,),
+            ).fetchall()
+        all_topics = {row["id"]: dict(row) for row in topic_rows}
+        pending = {
+            row["id"]: dict(row) for row in topic_rows if row["status"] == "ACCEPTED"
+        }
+        textbook_id = self.create_textbook(source_id, title)
+        version_id = self.create_version(
+            textbook_id, version_title, composition_mode=composition_mode
+        )
+        chapter_ids: dict[str, str] = {}
+
+        while pending:
+            ready = [
+                row for row in pending.values()
+                if row["parent_topic_id"] is None
+                or row["parent_topic_id"] in chapter_ids
+                or row["parent_topic_id"] not in pending
+            ]
+            if not ready:
+                raise ValueError("Accepted topic hierarchy contains a cycle")
+            ready.sort(key=lambda row: (row["start_ms"], row["ordinal"], row["id"]))
+            for topic in ready:
+                parent_topic_id = topic["parent_topic_id"]
+                while parent_topic_id and parent_topic_id not in chapter_ids:
+                    parent = all_topics.get(parent_topic_id)
+                    parent_topic_id = parent["parent_topic_id"] if parent else None
+                chapter_id = self.add_chapter(
+                    version_id,
+                    topic["title"],
+                    ordinal=topic["ordinal"],
+                    summary=topic["description"],
+                    parent_chapter_id=chapter_ids.get(parent_topic_id),
+                    source_start_ms=topic["start_ms"],
+                    source_end_ms=topic["end_ms"],
+                )
+                chapter_ids[topic["id"]] = chapter_id
+                with connect(self.database_path) as conn:
+                    rows = conn.execute(
+                        """SELECT c.id AS claim_id,c.statement,c.provenance,c.knowledge_unit_id,
+                                  ce.evidence_id
+                           FROM topic_evidence te
+                           JOIN claim_evidence ce ON ce.evidence_id=te.evidence_id
+                           JOIN claims c ON c.id=ce.claim_id
+                           WHERE te.topic_id=? AND te.review_state='ACCEPTED'
+                             AND ce.relation='SUPPORTS' AND ce.review_state='ACCEPTED'
+                             AND c.status='SUPPORTED'
+                             AND NOT EXISTS (
+                               SELECT 1 FROM claim_evidence cx
+                               WHERE cx.claim_id=c.id AND cx.relation='CONTRADICTS'
+                                 AND cx.review_state='ACCEPTED'
+                             )
+                           ORDER BY c.created_at,c.id,ce.evidence_id""",
+                        (topic["id"],),
+                    ).fetchall()
+                grouped: dict[str, dict[str, Any]] = {}
+                for row in rows:
+                    claim = grouped.setdefault(
+                        row["claim_id"],
+                        {
+                            "statement": row["statement"],
+                            "provenance": row["provenance"],
+                            "knowledge_unit_id": row["knowledge_unit_id"],
+                            "evidence_ids": [],
+                        },
+                    )
+                    if row["evidence_id"] not in claim["evidence_ids"]:
+                        claim["evidence_ids"].append(row["evidence_id"])
+                ordinal = 0
+                for claim_id, claim in grouped.items():
+                    block_id = self.add_block(
+                        chapter_id,
+                        BlockInput(
+                            block_type="PARAGRAPH",
+                            content={"text": claim["statement"], "claim_id": claim_id},
+                            provenance=claim["provenance"],
+                            review_status="ACCEPTED",
+                            ordinal=ordinal,
+                            knowledge_unit_id=claim["knowledge_unit_id"],
+                            claim_id=claim_id,
+                        ),
+                    )
+                    ordinal += 1
+                    for evidence_id in claim["evidence_ids"]:
+                        self.link_evidence(
+                            block_id, evidence_id, relation="SUPPORTS", review_state="ACCEPTED"
+                        )
+                del pending[topic["id"]]
+        return version_id
