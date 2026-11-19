@@ -19,6 +19,14 @@ _ALLOWED_STAGES = {
     "REGISTER_SOURCE", "EXTRACT_AUDIO", "TRANSCRIBE_LOCAL",
     "EXTRACT_PDF_TEXT", "SAMPLE_VIDEO_FRAMES", "OCR_LOCAL",
 }
+_STAGE_MODALITIES = {
+    "REGISTER_SOURCE": {"DOCUMENT", "AUDIO", "VIDEO", "IMAGE", "CAPTIONS"},
+    "EXTRACT_AUDIO": {"VIDEO"},
+    "TRANSCRIBE_LOCAL": {"AUDIO", "VIDEO"},
+    "EXTRACT_PDF_TEXT": {"DOCUMENT"},
+    "SAMPLE_VIDEO_FRAMES": {"VIDEO"},
+    "OCR_LOCAL": {"IMAGE", "DOCUMENT", "VIDEO"},
+}
 
 
 def _sha256_file(path: Path) -> str:
@@ -104,6 +112,14 @@ class PlanExecutor:
                 for index in indices
             ):
                 raise PlanExecutionError("Stage input_indices must reference selected plan inputs")
+            for index in indices:
+                item = snapshot["inputs"][index]
+                if item["modality"] not in _STAGE_MODALITIES[key]:
+                    raise PlanExecutionError(
+                        key + " is incompatible with " + item["modality"] + " input"
+                    )
+                if key == "EXTRACT_PDF_TEXT" and item["media_type"] != "application/pdf":
+                    raise PlanExecutionError("EXTRACT_PDF_TEXT requires a PDF input")
             normalized.append({"stage": key, "input_indices": indices, "network": "none"})
         payload = {"snapshot": snapshot, "stages": normalized}
         plan_hash = _canonical_hash(payload)
