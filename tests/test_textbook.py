@@ -60,7 +60,7 @@ def test_textbook_rejects_cross_source_evidence(tmp_path: Path) -> None:
     version = store.create_version(book, "Draft")
     chapter = store.add_chapter(version, "Motion", ordinal=0)
     block = store.add_block(chapter, BlockInput("PARAGRAPH", {"text": "Velocity changes."}, "EXPLANATION"))
-    with pytest.raises(sqlite3.IntegrityError, match="same source"):
+    with pytest.raises(sqlite3.IntegrityError, match="textbook source"):
         store.link_evidence(block, second.evidence_ids[0])
 
 
