@@ -134,7 +134,7 @@ def test_probe_rejects_non_media_asset_and_missing_ffprobe(
         probe_local_media(database, assets, imported_media.asset.id)
 
 
-def test_probe_rejects_invalid_json_and_stream_limit(
+def test_probe_rejects_malformed_stream_list_and_stream_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database, assets, asset_id, _ = _import_media(tmp_path)
@@ -162,10 +162,10 @@ def test_probe_enforces_timeout_and_output_size(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database, assets, asset_id, _ = _import_media(tmp_path)
-    executable = _fake_ffprobe(tmp_path / "ffprobe", sleep=1)
+    executable = _fake_ffprobe(tmp_path / "ffprobe", sleep=2)
     monkeypatch.setattr("omniintel.media_probe.shutil.which", lambda _: str(executable))
     with pytest.raises(TimeoutError, match="time limit"):
-        probe_local_media(database, assets, asset_id, timeout_seconds=0.1)
+        probe_local_media(database, assets, asset_id, timeout_seconds=1.0)
 
     huge_payload = {
         "format": {"format_name": "mp4", "duration": "10"},
