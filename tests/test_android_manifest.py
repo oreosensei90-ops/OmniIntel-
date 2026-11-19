@@ -64,3 +64,12 @@ def test_android_video_timestamp_seek_waits_for_prepared_media() -> None:
     assert "videoReady = true" in code
     assert "mediaMime?.startsWith(\"video/\") == true && videoReady || audioReady" in code
     assert 'picker.launch(arrayOf("application/json"))' in code
+
+
+def test_android_audio_player_is_released_when_setup_fails_and_tracks_completion() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    setup = code.split("LaunchedEffect(mediaUri, mediaMime)", 1)[1].split("DisposableEffect(Unit)", 1)[0]
+    assert setup.index("audioPlayer = player") < setup.index("player.setDataSource(context, uri)")
+    assert "player.setOnCompletionListener" in setup
+    assert "audioPlayer?.release()" in setup
