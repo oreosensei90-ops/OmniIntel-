@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -134,7 +135,7 @@ def _optional_int(value: Any, *, maximum: int) -> int | None:
     if value is None or value in {"", "N/A"}:
         return None
     if isinstance(value, bool):
-        raise ValueError("ffprobe returned a boolean where an integer was expected")
+        raise TypeError("ffprobe returned a boolean where an integer was expected")
     try:
         number = int(value)
     except (TypeError, ValueError) as error:
@@ -163,7 +164,7 @@ def _bounded_text(value: Any, *, maximum: int = 128) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError("ffprobe returned a non-text metadata field")
+        raise TypeError("ffprobe returned a non-text metadata field")
     cleaned = "".join(character for character in value if character >= " " and character != "\x7f")
     cleaned = cleaned.strip()
     return cleaned[:maximum] or None
@@ -179,10 +180,10 @@ def _parse_probe(
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("ffprobe returned invalid JSON") from error
     if not isinstance(document, dict):
-        raise ValueError("ffprobe output must be a JSON object")
+        raise TypeError("ffprobe output must be a JSON object")
     format_info = document.get("format")
     if not isinstance(format_info, dict):
-        raise ValueError("ffprobe did not return container format metadata")
+        raise TypeError("ffprobe did not return container format metadata")
     format_name = _bounded_text(format_info.get("format_name"), maximum=255)
     if not format_name:
         raise ValueError("ffprobe did not identify the container format")
@@ -196,7 +197,7 @@ def _parse_probe(
     seen_indices: set[int] = set()
     for raw in raw_streams:
         if not isinstance(raw, dict):
-            raise ValueError("ffprobe returned a malformed stream record")
+            raise TypeError("ffprobe returned a malformed stream record")
         index = raw.get("index")
         if isinstance(index, bool) or not isinstance(index, int) or index < 0 or index in seen_indices:
             raise ValueError("ffprobe returned an invalid or duplicate stream index")
