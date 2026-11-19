@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/event-envelope.schema.json",
+  "title": "OmniIntel Event Envelope",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "$ref": "common.schema.json#/$defs/uuid7"
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurred_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "aggregate_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregate_id": {
+      "$ref": "common.schema.json#/$defs/uuid7"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "payload": {
+      "type": "object"
+    },
+    "correlation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "causation_id": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/uuid7"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "aggregate_type",
+    "aggregate_id",
+    "sequence",
+    "payload",
+    "correlation_id",
+    "causation_id"
+  ],
+  "additionalProperties": false
+}
