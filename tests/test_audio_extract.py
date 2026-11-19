@@ -82,7 +82,7 @@ def _ffmpeg(
         "  p=pathlib.Path(counter)\n"
         "  p.write_text(str(int(p.read_text())+1) if p.exists() else '1')\n"
         " if invalid:\n"
-        "  output.write_bytes(b'not a wav')\n"
+        "  output.write_bytes(b'not a wav' + b' ' * 100)\n"
         " else:\n"
         "  with wave.open(str(output),'wb') as wav:\n"
         "   wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(16000)\n"
