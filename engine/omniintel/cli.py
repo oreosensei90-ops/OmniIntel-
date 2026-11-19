@@ -13,7 +13,6 @@ from .docx_export import TextbookDOCXExporter
 from .html_export import TextbookHTMLExporter
 from .markdown_export import TextbookMarkdownExporter
 from .captions import import_caption_file
-from .local_files import import_local_file
 
 
 def main() -> None:
