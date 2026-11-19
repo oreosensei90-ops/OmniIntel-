@@ -49,7 +49,7 @@ Next cue.
 
 
 def test_caption_parser_rejects_bad_timestamps_and_empty_cues() -> None:
-    with pytest.raises(ValueError, match="Invalid caption timestamp"):
+    with pytest.raises(ValueError, match="component out of range"):
         parse_caption_text("00:99:00,000 --> 00:99:01,000\nBad", title="Bad")
     with pytest.raises(ValueError, match="no usable text cues"):
         parse_caption_text("1\n00:00:00,000 --> 00:00:01,000\n   ", title="Empty")
