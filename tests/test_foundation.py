@@ -53,7 +53,7 @@ def test_migrations_are_idempotent(tmp_path: Path) -> None:
     with connect(tmp_path / "db.sqlite") as conn:
         migrate(conn)
         migrate(conn)
-        assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == len(__import__("omniintel.database", fromlist=["MIGRATIONS"]).MIGRATIONS)
 
 
 def test_applied_migration_cannot_be_changed(tmp_path: Path) -> None:
