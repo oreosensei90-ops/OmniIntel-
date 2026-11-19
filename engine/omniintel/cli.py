@@ -59,6 +59,10 @@ def main() -> None:
     extract_pdf_cmd.add_argument("--max-pages", type=int, default=500)
     extract_pdf_cmd.add_argument("--max-chars-per-page", type=int, default=100_000)
     extract_pdf_cmd.add_argument("--max-total-chars", type=int, default=5_000_000)
+    search_pages = sub.add_parser("search-pages", help="Search extracted local PDF page text")
+    search_pages.add_argument("database", type=Path)
+    search_pages.add_argument("query")
+    search_pages.add_argument("--limit", type=int, default=20)
     export_markdown = sub.add_parser("export-markdown", help="Export a publication-ready textbook to portable Markdown")
     export_markdown.add_argument("database", type=Path)
     export_markdown.add_argument("version_id")
@@ -131,6 +135,11 @@ def main() -> None:
                 for page in result.pages
             ],
         }, ensure_ascii=False, indent=2))
+    elif args.command == "search-pages":
+        from .document_pdf import search_document_pages
+
+        results = search_document_pages(args.database, args.query, limit=args.limit)
+        print(json.dumps(results, ensure_ascii=False, indent=2))
     elif args.command == "export-pdf":
         output = TextbookPDFExporter(args.database).export(
             args.version_id, args.output, font_path=args.font
