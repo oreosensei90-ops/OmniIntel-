@@ -39,3 +39,16 @@ fails and requires a parser-version bump rather than silently invalidating exist
 This is the shared citation-location layer. Claim and textbook relationship tables still use their
 original transcript evidence links; integrating all relationships with the new reference IDs is
 the next migration. Claims and textbook blocks can now link directly to unified evidence references, and their review/publication gates aggregate old transcript links with new native-location links. The reference layer itself does not assert that a cited passage supports a claim.
+
+## Cross-platform relationship contracts
+
+The JSON Schema contracts are split by responsibility:
+
+- \`evidence-reference.schema.json\`: native source locator.
+- \`claim-evidence-reference.schema.json\`: reviewed relationship between a claim and a citation.
+- \`block-evidence-reference.schema.json\`: reviewed relationship between a textbook block and a citation.
+
+This keeps the location itself independent from how a claim or published block uses it. The same
+page citation can support multiple claims or appear in multiple learning artifacts without copying
+or rewriting its source locator.
+
