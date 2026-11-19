@@ -28,5 +28,5 @@ def test_normalized_frame_difference_detects_large_visual_change() -> None:
 
 def test_normalized_frame_difference_rejects_invalid_image() -> None:
     pytest.importorskip("PIL")
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):
         normalized_frame_difference(b"not an image",b"also not an image")
