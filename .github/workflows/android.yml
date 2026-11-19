@@ -6,9 +6,6 @@ concurrency:
 on:
   push:
     branches: [main, build/omniintel-foundation, migration/omniintel-foundation]
-    paths:
-      - "apps/android/**"
-      - ".github/workflows/android.yml"
   pull_request:
     paths:
       - "apps/android/**"

@@ -22,3 +22,9 @@ Thumbs.db
 # Local Gradle caches and Android build output
 .gradle/
 **/.gradle/
+
+# Local server uploads, extracted assets and model weights
+models/
+omniintel-assets/
+omniintel-uploads/
+uploads/
