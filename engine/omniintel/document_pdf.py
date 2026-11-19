@@ -179,3 +179,32 @@ def list_extracted_pages(
         )
         for row in rows
     )
+
+def search_document_pages(
+    database_path: str | Path, query: str, *, limit: int = 20
+) -> list[dict[str, object]]:
+    """Search extracted page text using quoted Unicode FTS terms."""
+    if not 1 <= limit <= 100:
+        raise ValueError("Search limit must be between 1 and 100")
+    terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    if not terms:
+        return []
+    match_query = " AND ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms)
+    with connect(database_path) as conn:
+        rows = conn.execute(
+            """SELECT s.id AS source_id,s.title,sa.id AS asset_id,
+                      dp.id AS page_id,dp.page_number,
+                      snippet(document_pages_fts,0,'[',']','…',18) AS excerpt,
+                      bm25(document_pages_fts) AS rank
+               FROM document_pages_fts
+               JOIN document_pages dp ON dp.rowid=document_pages_fts.rowid
+               JOIN document_extractions de ON de.id=dp.extraction_id
+               JOIN source_assets sa ON sa.id=de.source_asset_id
+               JOIN sources s ON s.id=sa.source_id
+               WHERE document_pages_fts MATCH ?
+               ORDER BY rank,s.title,dp.page_number
+               LIMIT ?""",
+            (match_query, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
