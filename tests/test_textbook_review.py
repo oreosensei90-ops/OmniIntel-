@@ -30,7 +30,7 @@ def _fixture(tmp_path: Path):
 
 
 def test_review_workflow_lists_and_audits_pending_items(tmp_path: Path):
-    db,version,block,link = _fixture(tmp_path)
+    db,_version,block,link = _fixture(tmp_path)
     review = TextbookReviewStore(db)
     pending = review.list_pending(version)
     assert [item["id"] for item in pending["pending_blocks"]] == [block]
