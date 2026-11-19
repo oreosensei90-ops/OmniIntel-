@@ -12,6 +12,7 @@ from .pdf_export import TextbookPDFExporter
 from .docx_export import TextbookDOCXExporter
 from .html_export import TextbookHTMLExporter
 from .markdown_export import TextbookMarkdownExporter
+from .captions import import_caption_file
 
 
 def main() -> None:
@@ -37,6 +38,13 @@ def main() -> None:
     export_html.add_argument("database", type=Path)
     export_html.add_argument("version_id")
     export_html.add_argument("output", type=Path)
+    import_captions = sub.add_parser("import-captions", help="Import a local SRT or WebVTT caption file")
+    import_captions.add_argument("database", type=Path)
+    import_captions.add_argument("caption_file", type=Path)
+    import_captions.add_argument("--title", default=None)
+    import_captions.add_argument("--source-uri", default=None)
+    import_captions.add_argument("--language", default=None)
+    import_captions.add_argument("--duration-ms", type=int, default=None)
     export_markdown = sub.add_parser("export-markdown", help="Export a publication-ready textbook to portable Markdown")
     export_markdown.add_argument("database", type=Path)
     export_markdown.add_argument("version_id")
@@ -58,6 +66,19 @@ def main() -> None:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
         if not report.ready:
             raise SystemExit(1)
+    elif args.command == "import-captions":
+        transcript = import_caption_file(
+            args.caption_file, title=args.title, source_uri=args.source_uri,
+            language=args.language, duration_ms=args.duration_ms,
+        )
+        result = OmniIntelStore(args.database).import_transcript(transcript)
+        print(json.dumps({
+            "source_id": result.source_id,
+            "segments": len(result.segment_ids),
+            "evidence_items": len(result.evidence_ids),
+            "duration_ms": transcript.duration_ms,
+            "caption_format": transcript.metadata["caption_format"],
+        }, ensure_ascii=False, indent=2))
     elif args.command == "export-pdf":
         output = TextbookPDFExporter(args.database).export(
             args.version_id, args.output, font_path=args.font
