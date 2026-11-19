@@ -122,3 +122,51 @@ def test_publication_gate_accepts_claim_supported_by_pdf_page_reference(tmp_path
     assert report.ready
     assert report.eligible_blocks == 1
 
+def test_document_topic_composition_builds_page_cited_textbook(tmp_path: Path) -> None:
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.knowledge import ClaimEvidenceReferenceInput, ClaimInput
+    from omniintel.knowledge_store import KnowledgeStore
+    from omniintel.local_files import import_local_file
+    from omniintel.topics import DocumentTopicEvidenceInput, DocumentTopicInput, TopicStore
+
+    pdf = tmp_path / "lesson.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.drawString(72, 720, "An isolated system conserves momentum.")
+    output.showPage()
+    output.save()
+    database = tmp_path / "document-book.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database, assets, pdf, title="Momentum lesson")
+    extraction = extract_pdf(database, assets, imported.asset.id)
+    reference_id = extraction.evidence_ref_ids[0]
+
+    topics = TopicStore(database)
+    topic_id = topics.create_document_topic(
+        DocumentTopicInput(imported.source_id, "Conservation of momentum", 0)
+    )
+    topic_link = topics.link_document_evidence(
+        DocumentTopicEvidenceInput(topic_id, reference_id, "INTRODUCES", 0.99)
+    )
+    assert topics.review_document_evidence_link(topic_link, "ACCEPTED") == "ACCEPTED"
+
+    knowledge = KnowledgeStore(database)
+    claim_id = knowledge.create_claim(ClaimInput("An isolated system conserves momentum."))
+    claim_link = knowledge.link_evidence_reference(
+        ClaimEvidenceReferenceInput(claim_id, reference_id, "SUPPORTS", 0.99)
+    )
+    assert knowledge.review_evidence_reference_link(claim_link, "ACCEPTED") == "SUPPORTED"
+
+    store = TextbookStore(database)
+    version_id = store.compose_from_accepted_document_topics(
+        imported.source_id, "Momentum textbook"
+    )
+    report = TextbookPublicationAuditor(database).audit(version_id)
+    assert report.ready
+    tree = store.get_version_tree(version_id)
+    block = tree["chapters"][0]["blocks"][0]
+    assert block["claim_id"] == claim_id
+    assert block["evidence_references"][0]["evidence_ref_id"] == reference_id
+    assert block["evidence_references"][0]["page_number"] == 1
+
