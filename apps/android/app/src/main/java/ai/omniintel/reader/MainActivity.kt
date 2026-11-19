@@ -185,6 +185,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     var book by remember { mutableStateOf<Book?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
+    var showBookmarksOnly by remember { mutableStateOf(false) }
     var notesByBlock by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var bookmarkedBlocks by remember { mutableStateOf<Set<String>>(emptySet()) }
     var editingBlockId by remember { mutableStateOf<String?>(null) }
@@ -211,6 +212,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                     book = loadedBook
                     chapterIndex = savedChapter.coerceIn(0, loadedBook.chapters.lastIndex)
                     query = ""
+                    showBookmarksOnly = false
                     error = null
                     selectedSourceId = null; mediaUri = null; mediaMime = null
                     audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
@@ -429,8 +431,13 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
-                    singleLine = true, label = { Text("Search all chapters") }
+                    singleLine = true, label = { Text("Search all chapters and notes") }
                 )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { showBookmarksOnly = !showBookmarksOnly }) {
+                        Text(if (showBookmarksOnly) "Show all blocks" else "★ Bookmarks (${bookmarkedBlocks.size})", color = Gold)
+                    }
+                }
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }, enabled = chapterIndex > 0) { Text("Previous") }
                     OutlinedButton(onClick = { chapterIndex = (chapterIndex + 1).coerceAtMost(current.chapters.lastIndex) }, enabled = chapterIndex < current.chapters.lastIndex) { Text("Next") }
@@ -438,13 +445,16 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Text("CHAPTER ${chapterIndex + 1} / ${current.chapters.size}", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
                 Text(current.chapters[chapterIndex].title, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
             }
-            val blocks: List<Triple<Int, String, Block>> = if (query.isBlank()) {
+            val blocks: List<Triple<Int, String, Block>> = if (query.isBlank() && !showBookmarksOnly) {
                 current.chapters[chapterIndex].blocks.map { Triple(chapterIndex, current.chapters[chapterIndex].title, it) }
             } else {
                 current.chapters.flatMapIndexed { index, chapter ->
                     chapter.blocks.filter { block ->
-                        block.text.contains(query, true) ||
+                        val matchesQuery = query.isBlank() ||
+                            block.text.contains(query, true) ||
+                            notesByBlock[block.id]?.contains(query, true) == true ||
                             block.evidence.any { it.excerpt.contains(query, true) || it.source.contains(query, true) }
+                        matchesQuery && (!showBookmarksOnly || block.id in bookmarkedBlocks)
                     }.map { Triple(index, chapter.title, it) }
                 }
             }
@@ -455,7 +465,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 items(blocks, key = { it.third.id }) { (resultChapterIndex, chapterTitle, block) ->
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                            if (query.isNotBlank()) {
+                            if (query.isNotBlank() || showBookmarksOnly) {
                                 Text(chapterTitle, color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 TextButton(onClick = {
                                     chapterIndex = resultChapterIndex
@@ -518,7 +528,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                         }
                     }
                 }
-                if (blocks.isEmpty()) item { Text("No matching blocks in this textbook.", color = Muted) }
+                if (blocks.isEmpty()) item { Text(if (showBookmarksOnly) "No bookmarked blocks match this view." else "No matching blocks in this textbook.", color = Muted) }
             }
         }
         editingBlockId?.let { blockId ->
