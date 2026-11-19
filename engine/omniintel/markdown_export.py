@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .export_visuals import copy_markdown_assets, evidence_locator_label, resolve_block_assets
 from .textbook import TextbookStore
 from .textbook_audit import TextbookPublicationAuditor
 
@@ -15,7 +16,7 @@ class TextbookMarkdownExporter:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
 
-    def export(self, version_id: str, output_path: str | Path) -> Path:
+    def export(self, version_id: str, output_path: str | Path, *, asset_dir: str | Path | None = None) -> Path:
         report = TextbookPublicationAuditor(self.database_path).audit(version_id)
         if not report.ready:
             codes = ", ".join(sorted({
@@ -102,6 +103,11 @@ class TextbookMarkdownExporter:
                         f"{kind} block {block['id']} requires an accessible description"
                     )
                 body = f"> **{kind.title()} description:** {plain(description)}"
+                linked=resolve_block_assets(
+                    self.database_path,asset_dir,version["source_id"],block
+                )
+                for relative,caption in copy_markdown_assets(linked,Path(output_path)):
+                    body += f"\n\n![{plain(caption or description)}]({relative})"
             else:
                 raise ValueError(f"Unsupported Markdown block type: {kind}")
 
@@ -111,10 +117,9 @@ class TextbookMarkdownExporter:
                     "SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"
                 }:
                     continue
-                citations.append(
-                    f"- Source evidence · {evidence['start_ms'] / 1000:.1f}s · "
-                    f"{evidence['provenance']}"
-                )
+                locator=evidence_locator_label(evidence)
+                provenance=evidence.get("provenance") or evidence.get("evidence_provenance") or "SOURCE"
+                citations.append(f"- Source evidence · {locator} · {provenance}")
             if citations:
                 body += "\n\n" + "\n".join(citations)
             if block["provenance"] in {"DERIVED", "EXTERNAL"}:
