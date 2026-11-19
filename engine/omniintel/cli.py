@@ -119,6 +119,12 @@ def main() -> None:
     quality_list = sub.add_parser("quality-list", help="List saved local quality benchmark runs")
     quality_list.add_argument("database", type=Path)
     quality_list.add_argument("--suite", default=None)
+    execute_plan = sub.add_parser("execute-plan", help="Register planned local files after explicit approval")
+    execute_plan.add_argument("database", type=Path)
+    execute_plan.add_argument("asset_dir", type=Path)
+    execute_plan.add_argument("plan_json", type=Path)
+    execute_plan.add_argument("stages_json", type=Path)
+    execute_plan.add_argument("--approve", action="store_true", help="Explicitly approve local source registration")
     init = sub.add_parser("init", help="Initialize or migrate a local OmniIntel database")
     init.add_argument("database", type=Path)
     check = sub.add_parser("check", help="Run SQLite integrity checks")
@@ -471,6 +477,32 @@ def main() -> None:
             QualityBenchmarkStore(args.database).list_runs(args.suite),
             ensure_ascii=False,indent=2,
         ))
+    elif args.command == "execute-plan":
+        from .execution import PlanExecutor
+        from .local_files import import_local_file
+
+        plan=json.loads(args.plan_json.read_text(encoding="utf-8"))
+        stages=json.loads(args.stages_json.read_text(encoding="utf-8"))
+
+        def register_sources(paths, context):
+            registered=[]
+            for path in paths:
+                result=import_local_file(
+                    args.database,args.asset_dir,path,
+                    max_bytes=max(250*1024*1024,path.stat().st_size),
+                )
+                registered.append({
+                    "source_id":result.source_id,"asset_id":result.asset.id,
+                    "sha256":result.asset.sha256,"modality":result.modality,
+                    "title":result.title,
+                })
+            return {"registered_sources":registered}
+
+        result=PlanExecutor(args.database).approve_and_run(
+            plan,stages,user_approved=args.approve,
+            handlers={"REGISTER_SOURCE":register_sources},
+        )
+        print(json.dumps(result,ensure_ascii=False,indent=2))
     if args.command == "plan-inputs":
         from .input_plan import plan_local_inputs
 
