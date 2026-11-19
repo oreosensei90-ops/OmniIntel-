@@ -121,3 +121,13 @@ def test_personal_note_keys_include_textbook_version_and_chapter_scope() -> None
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     assert "const chapterId = state.chapters[state.index]?.chapter?.id" in app
     assert 'return versionId + ":" + chapterId + ":"' in app
+
+
+def test_web_reader_bounds_imported_chapter_block_and_evidence_counts() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "data.chapters.length > 500" in app
+    assert "totalBlocks > 25000" in app
+    assert "block.evidence.length > 100" in app
+    assert "item.transcript_excerpt?.length || 0) > 40" in app
+    assert "item.document_elements?.length || 0) > 100" in app
+    assert "validateReaderPayload(data);" in app
