@@ -37,7 +37,9 @@ claim status.
 - Default render resolution is 144 DPI, configurable only from 72–300 DPI.
 - Each page is limited to 20 million estimated pixels and 25 MiB encoded PNG.
 - A run is limited to 200 pages and 200 million estimated rendered pixels.
-- Each page has a bounded OCR timeout.
+- Each page has a bounded OCR timeout and 100,000-character default output limit.
+- Total recognized text is capped at 5,000,000 characters per run.
+- Tesseract TSV output is written to a temporary file and capped at 25 MiB before parsing.
 - PDF bytes are resolved from local content-addressed storage and hash-verified first.
 - No URL fetching, remote fallback, shell interpolation or arbitrary OCR configuration is used.
 - OCR confidence is a signal, not proof of correctness; handwriting, rotation, tables and math
