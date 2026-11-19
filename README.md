@@ -61,6 +61,14 @@ The audit command prints a JSON report and exits non-zero when publication gates
 
 Core persistence initially uses the Python standard library. Optional publishing dependencies are installed with `python -m pip install -e '.[publishing]'`.
 
+Import a local SRT or WebVTT caption file into the source/evidence store:
+
+```bash
+omniintel import-captions ./omniintel.db ./lecture.vtt --title "Lecture 01" --language en
+```
+
+The initial caption adapter preserves cue timestamps and optional WebVTT voice labels. It does not download media or fetch caption URLs. See `docs/CAPTION_INGESTION.md` for supported syntax and boundaries.
+
 ## Rights and source access
 
 Only process media and documents the user is authorized to access and use. Public availability does not automatically grant download, reproduction or redistribution rights. Respect platform terms, copyright and access controls. OmniIntel will not implement DRM or access-control circumvention.
