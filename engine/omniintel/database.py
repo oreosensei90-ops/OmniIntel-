@@ -2081,6 +2081,61 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0032_visual_timeline_alignment",
+        """
+        CREATE TABLE visual_events (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            frame_id TEXT NOT NULL UNIQUE REFERENCES video_frames(id) ON DELETE RESTRICT,
+            timestamp_ms INTEGER NOT NULL CHECK(timestamp_ms>=0),
+            event_kind TEXT NOT NULL CHECK(event_kind='FRAME_SAMPLE'),
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_visual_events_source_time
+            ON visual_events(source_id,timestamp_ms);
+        CREATE TABLE visual_transcript_alignments (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            visual_event_id TEXT NOT NULL REFERENCES visual_events(id) ON DELETE CASCADE,
+            transcript_segment_id TEXT NOT NULL REFERENCES transcript_segments(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN ('OVERLAPS','NEAREST')),
+            delta_ms INTEGER NOT NULL,
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL,
+            UNIQUE(visual_event_id,transcript_segment_id)
+        );
+        CREATE INDEX idx_visual_alignment_event
+            ON visual_transcript_alignments(visual_event_id,relation,delta_ms);
+        CREATE TRIGGER visual_event_source_guard
+        BEFORE INSERT ON visual_events
+        WHEN
+            (SELECT source_id FROM source_assets WHERE id=NEW.source_asset_id) IS NULL
+            OR (SELECT source_id FROM source_assets WHERE id=NEW.source_asset_id) <> NEW.source_id
+            OR NOT EXISTS (
+                SELECT 1 FROM video_frames vf
+                WHERE vf.id=NEW.frame_id
+                  AND vf.source_asset_id=NEW.source_asset_id
+                  AND vf.timestamp_ms=NEW.timestamp_ms
+            )
+        BEGIN
+            SELECT RAISE(ABORT,'visual event must match a frame owned by the same source');
+        END;
+        CREATE TRIGGER visual_alignment_source_guard
+        BEFORE INSERT ON visual_transcript_alignments
+        WHEN
+            (SELECT source_id FROM visual_events WHERE id=NEW.visual_event_id) IS NULL
+            OR (SELECT source_id FROM visual_events WHERE id=NEW.visual_event_id) <> NEW.source_id
+            OR (SELECT source_id FROM transcript_segments WHERE id=NEW.transcript_segment_id) <> NEW.source_id
+        BEGIN
+            SELECT RAISE(ABORT,'visual/transcript alignment must stay within one source');
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
