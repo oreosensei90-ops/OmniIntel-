@@ -45,3 +45,12 @@ def test_web_manifest_is_valid_and_standalone() -> None:
     assert manifest["name"] == "OmniIntel Reader"
     assert manifest["display"] == "standalone"
     assert manifest["start_url"] == "./"
+
+
+def test_reader_stores_personal_notes_in_indexeddb_without_remote_sync() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'indexedDB.open("omniintel-reader-local", 1)' in app
+    assert 'createObjectStore("annotations"' in app
+    assert 'createObjectStore("bookmarks"' in app
+    assert "PERSONAL STUDY NOTES · THIS BROWSER ONLY" in app
+    assert "fetch(" not in app
