@@ -37,6 +37,14 @@
         <p class="privacy-note">Offline reader · no account · no network requests</p>
       </aside>
       <article class="reading-area">
+        <section class="media-dock" aria-label="Local source playback">
+          <div class="media-controls">
+            <div><p class="eyebrow">LOCAL SOURCE PLAYBACK</p><p class="media-help">Attach a course video or audio file from this device to enable source-specific timestamp jumps. Nothing is uploaded.</p></div>
+            <div class="media-pickers"><label for="media-source">Course source</label><select id="media-source" disabled><option value="">Open a textbook first</option></select><label class="import-button" for="media-file">Attach media</label><input id="media-file" type="file" accept="audio/*,video/*" disabled></div>
+          </div>
+          <video id="local-media" controls playsinline preload="metadata" hidden></video>
+          <p id="media-status" class="muted" role="status">No media attached.</p>
+        </section>
         <div class="reading-head"><div><p class="eyebrow" id="chapter-count"></p><h1 id="chapter-title"></h1></div><span id="progress" class="progress"></span></div>
         <div id="blocks" class="blocks" aria-live="polite"></div>
         <div class="chapter-controls"><button id="previous" class="quiet" type="button">← Previous</button><button id="next" class="primary-button" type="button">Next chapter →</button></div>
