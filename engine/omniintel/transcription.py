@@ -37,6 +37,7 @@ class TranscriptionRunResult:
     evidence_ref_ids: tuple[str, ...]
     reused_chunks: int
     processed_chunks: int
+    time_offset_ms: int = 0
 
 
 class TranscriptionAdapter(Protocol):
@@ -145,6 +146,7 @@ def _config_hash(
     language: str | None,
     chunk_seconds: int,
     max_chunk_bytes: int,
+    time_offset_ms: int,
 ) -> str:
     payload = {
         "adapter": adapter.name,
@@ -154,6 +156,7 @@ def _config_hash(
         "language": language,
         "chunk_seconds": chunk_seconds,
         "max_chunk_bytes": max_chunk_bytes,
+        "time_offset_ms": time_offset_ms,
         "timestamp_unit": "milliseconds",
         "schema_version": 1,
     }
@@ -252,6 +255,7 @@ def _get_or_create_run(
     channels: int,
     sample_width: int,
     duration_ms: int,
+    time_offset_ms: int,
 ) -> dict:
     now = utc_now()
     with connect(database_path) as conn:
@@ -284,21 +288,22 @@ def _get_or_create_run(
         ).fetchone()
         if source is None:
             raise ValueError("Source does not exist")
-        if source["duration_ms"] is not None and abs(source["duration_ms"] - duration_ms) > 1_000:
-            raise ValueError("WAV duration conflicts with the registered source duration")
+        timeline_end_ms = time_offset_ms + duration_ms
+        if source["duration_ms"] is not None and timeline_end_ms > source["duration_ms"] + 1_000:
+            raise ValueError("WAV audio extends beyond the registered source timeline")
         if source["duration_ms"] is None:
-            conn.execute("UPDATE sources SET duration_ms=? WHERE id=?", (duration_ms, source_id))
+            conn.execute("UPDATE sources SET duration_ms=? WHERE id=?", (timeline_end_ms, source_id))
         run_id = uuid7()
         conn.execute(
             """INSERT INTO transcription_runs
                (id,source_id,source_asset_id,input_sha256,config_sha256,
                 adapter_name,adapter_version,model_id,language,chunk_seconds,
-                sample_rate,channels,sample_width,duration_ms,status,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,'RUNNING',?,?)""",
+                sample_rate,channels,sample_width,time_offset_ms,duration_ms,status,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'RUNNING',?,?)""",
             (
                 run_id,source_id,asset_id,input_sha256,config_sha256,
                 adapter.name,adapter.version,adapter.model_id,language,chunk_seconds,
-                sample_rate,channels,sample_width,duration_ms,now,now,
+                sample_rate,channels,sample_width,time_offset_ms,duration_ms,now,now,
             ),
         )
         row = conn.execute("SELECT * FROM transcription_runs WHERE id=?", (run_id,)).fetchone()
@@ -414,14 +419,23 @@ def _complete_run(
     run: dict,
     chunks: list[tuple[int,int,ChunkTranscription]],
 ) -> tuple[tuple[str,...],tuple[str,...]]:
+    with connect(database_path) as conn:
+        source = conn.execute(
+            "SELECT duration_ms FROM sources WHERE id=?",(run["source_id"],)
+        ).fetchone()
+    if source is None:
+        raise ValueError("Source does not exist")
+    source_duration_ms = source["duration_ms"] or (
+        run["time_offset_ms"] + run["duration_ms"]
+    )
     segments: list[TranscriptSegmentInput] = []
     for start_ms,_,chunk in chunks:
         for segment in chunk.segments:
             segments.append(
                 TranscriptSegmentInput(
                     text=segment.text,
-                    start_ms=start_ms + segment.start_ms,
-                    end_ms=start_ms + segment.end_ms,
+                    start_ms=run["time_offset_ms"] + start_ms + segment.start_ms,
+                    end_ms=run["time_offset_ms"] + start_ms + segment.end_ms,
                     language=segment.language or chunk.language or run["language"],
                     speaker_id=segment.speaker_id,
                 )
@@ -431,7 +445,7 @@ def _complete_run(
         raise ValueError("No speech segments were produced; source remains available for another adapter")
     previous_start = -1
     for segment in segments:
-        segment.validate(run["duration_ms"])
+        segment.validate(source_duration_ms)
         if segment.start_ms < previous_start:
             raise ValueError("Combined transcript segments are not ordered")
         previous_start = segment.start_ms
@@ -492,6 +506,7 @@ def run_wav_transcription(
     max_chunks: int = 10_000,
     max_total_segments: int = 200_000,
     max_total_chars: int = 5_000_000,
+    time_offset_ms: int = 0,
 ) -> TranscriptionRunResult:
     """Transcribe a user-selected PCM WAV, persisting each completed chunk.
 
@@ -507,6 +522,8 @@ def run_wav_transcription(
         raise ValueError("max_duration_ms must be positive")
     if max_chunks < 1 or max_total_segments < 1 or max_total_chars < 1:
         raise ValueError("Transcription output limits must be positive")
+    if type(time_offset_ms) is not int or time_offset_ms < 0:
+        raise ValueError("time_offset_ms must be a non-negative integer")
     asset_store=AssetStore(database_path,asset_dir)
     audio_path=asset_store.resolve_path(asset_id)
     input_sha256=_sha256_file(audio_path)
@@ -514,13 +531,14 @@ def run_wav_transcription(
         audio_path,max_duration_ms=max_duration_ms
     )
     config_sha256=_config_hash(
-        adapter,language=language,chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes
+        adapter,language=language,chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
+        time_offset_ms=time_offset_ms,
     )
     run=_get_or_create_run(
         database_path,source_id=source_id,asset_id=asset_id,input_sha256=input_sha256,
         config_sha256=config_sha256,adapter=adapter,language=language,
         chunk_seconds=chunk_seconds,sample_rate=sample_rate,channels=channels,
-        sample_width=sample_width,duration_ms=duration_ms,
+        sample_width=sample_width,duration_ms=duration_ms,time_offset_ms=time_offset_ms,
     )
     if run["status"] == "COMPLETED":
         segment_ids=tuple(json.loads(run["segment_ids_json"] or "[]"))
@@ -532,7 +550,8 @@ def run_wav_transcription(
                 (json.dumps(reference_ids),utc_now(),run["id"]),
             )
         return TranscriptionRunResult(
-            run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,0,0
+            run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,0,0,
+            run["time_offset_ms"],
         )
 
     with connect(database_path) as conn:
@@ -591,7 +610,8 @@ def run_wav_transcription(
                 (json.dumps(reference_ids),utc_now(),run["id"]),
             )
         return TranscriptionRunResult(
-            run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,reused,processed
+            run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,reused,processed,
+            run["time_offset_ms"],
         )
     except Exception as error:
         with connect(database_path) as conn:
