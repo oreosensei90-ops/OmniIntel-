@@ -44,3 +44,8 @@ Android block notes and bookmarks are stored locally in Preferences DataStore, k
 
 
 The Android reader can filter the library view to bookmarked blocks across all chapters and search block text, evidence excerpts, source titles and saved private notes. Search results retain their chapter label and can jump back to the owning chapter. This is a local reader index, not a full-text database or semantic search engine.
+
+
+## Android library catalog
+
+The Android reader keeps a local Room catalog of imported textbook versions. It stores the version ID, display title, source/chapter counts, original Storage Access Framework document URI, import time and last-opened time. On import it requests a persistable read grant; entries that cannot retain access remain available for the current session but are not added as durable library entries. Users can reopen or remove catalog entries. Removing an entry releases the persisted URI grant; it does not delete the user's original document. Room stores catalog metadata only: the JSON export is still parsed on demand, and chapter/block content, media derivatives and annotation records are not yet normalized into Room. There is no cloud sync or backup yet.
