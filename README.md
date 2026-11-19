@@ -43,9 +43,12 @@ Audit a saved textbook version before export:
 
 ```bash
 omniintel audit-textbook ./omniintel.db VERSION_ID
+
+# Export a publication-ready PDF
+omniintel export-pdf ./omniintel.db VERSION_ID ./exports/textbook.pdf
 ```
 
-The command prints a JSON report and exits non-zero when publication gates fail. Passing the deterministic gate is not a substitute for semantic or human review.
+The audit command prints a JSON report and exits non-zero when publication gates fail. PDF export runs the same gate before rendering and refuses blocked editions. Passing deterministic checks is not a substitute for semantic or human review. Install `.[publishing]` for ReportLab and DOCX publishing dependencies.
 
 Core persistence initially uses the Python standard library. Optional publishing dependencies are installed with `python -m pip install -e '.[publishing]'`.
 
