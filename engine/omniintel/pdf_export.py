@@ -225,7 +225,7 @@ class TextbookPDFExporter:
                     raise ValueError(f"Unsupported PDF block type: {kind}")
 
                 citations = [
-                    evidence for evidence in block["evidence"]
+                    evidence for evidence in [*block["evidence"], *block.get("evidence_references", [])]
                     if evidence["relation"] in {"SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"}
                 ]
                 for evidence in citations:
