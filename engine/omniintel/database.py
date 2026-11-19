@@ -2292,8 +2292,134 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ON collection_sources(source_id,collection_id);
         """,
     ),
+    (
+        "0035_execution_alignment_course_textbooks",
+        """
+        CREATE TABLE approved_execution_plans (
+            id TEXT PRIMARY KEY,
+            plan_hash TEXT NOT NULL UNIQUE CHECK(length(plan_hash)=64),
+            plan_json TEXT NOT NULL CHECK(json_valid(plan_json)),
+            approved_at TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('APPROVED','RUNNING','PAUSED','COMPLETED','FAILED','CANCELLED'))
+        );
+        CREATE TABLE execution_stage_checkpoints (
+            id TEXT PRIMARY KEY,
+            plan_id TEXT NOT NULL REFERENCES approved_execution_plans(id) ON DELETE RESTRICT,
+            stage_key TEXT NOT NULL,
+            input_hash TEXT NOT NULL CHECK(length(input_hash)=64),
+            state TEXT NOT NULL CHECK(state IN ('QUEUED','RUNNING','COMPLETED','FAILED','SKIPPED')),
+            result_json TEXT CHECK(result_json IS NULL OR json_valid(result_json)),
+            error_text TEXT,
+            started_at TEXT,
+            completed_at TEXT,
+            UNIQUE(plan_id,stage_key,input_hash)
+        );
+        CREATE INDEX idx_execution_stage_state ON execution_stage_checkpoints(plan_id,state);
+        CREATE TABLE source_clock_alignments (
+            id TEXT PRIMARY KEY,
+            collection_id TEXT NOT NULL REFERENCES source_collections(id) ON DELETE RESTRICT,
+            source_a_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            source_b_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            offset_ms INTEGER NOT NULL,
+            sample_interval_ms INTEGER NOT NULL CHECK(sample_interval_ms>0),
+            correlation REAL NOT NULL CHECK(correlation>=-1 AND correlation<=1),
+            runner_up_correlation REAL NOT NULL CHECK(runner_up_correlation>=-1 AND runner_up_correlation<=1),
+            method TEXT NOT NULL,
+            algorithm_version TEXT NOT NULL,
+            input_hash TEXT NOT NULL CHECK(length(input_hash)=64),
+            rationale TEXT NOT NULL,
+            review_state TEXT NOT NULL CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            CHECK(source_a_id<>source_b_id),
+            UNIQUE(collection_id,source_a_id,source_b_id,input_hash)
+        );
+        CREATE INDEX idx_source_clock_alignment_collection
+            ON source_clock_alignments(collection_id,review_state);
+        CREATE TRIGGER source_clock_alignment_membership_guard
+        BEFORE INSERT ON source_clock_alignments
+        WHEN NOT EXISTS(
+            SELECT 1 FROM collection_sources ca
+            JOIN collection_sources cb ON cb.collection_id=ca.collection_id
+            WHERE ca.collection_id=NEW.collection_id
+              AND ca.source_id=NEW.source_a_id AND cb.source_id=NEW.source_b_id
+        )
+        BEGIN SELECT RAISE(ABORT,'both aligned sources must belong to the collection'); END;
+        CREATE TABLE course_textbooks (
+            id TEXT PRIMARY KEY,
+            collection_id TEXT NOT NULL REFERENCES source_collections(id) ON DELETE RESTRICT,
+            title TEXT NOT NULL CHECK(length(trim(title))>0),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE course_textbook_versions (
+            id TEXT PRIMARY KEY,
+            textbook_id TEXT NOT NULL REFERENCES course_textbooks(id) ON DELETE RESTRICT,
+            version_number INTEGER NOT NULL CHECK(version_number>0),
+            title TEXT NOT NULL CHECK(length(trim(title))>0),
+            status TEXT NOT NULL CHECK(status IN ('DRAFT','IN_REVIEW','READY','PUBLISHED','ARCHIVED')),
+            composition_mode TEXT NOT NULL CHECK(composition_mode IN ('SOURCE_ORDER','CONCEPTUAL','HYBRID')),
+            created_at TEXT NOT NULL,
+            UNIQUE(textbook_id,version_number)
+        );
+        CREATE TABLE course_textbook_chapters (
+            id TEXT PRIMARY KEY,
+            version_id TEXT NOT NULL REFERENCES course_textbook_versions(id) ON DELETE RESTRICT,
+            title TEXT NOT NULL CHECK(length(trim(title))>0),
+            summary TEXT NOT NULL DEFAULT '',
+            ordinal INTEGER NOT NULL CHECK(ordinal>=0),
+            source_id TEXT REFERENCES sources(id) ON DELETE RESTRICT,
+            created_at TEXT NOT NULL,
+            UNIQUE(version_id,ordinal)
+        );
+        CREATE TABLE course_textbook_blocks (
+            id TEXT PRIMARY KEY,
+            chapter_id TEXT NOT NULL REFERENCES course_textbook_chapters(id) ON DELETE RESTRICT,
+            ordinal INTEGER NOT NULL CHECK(ordinal>=0),
+            block_type TEXT NOT NULL,
+            content_json TEXT NOT NULL CHECK(json_valid(content_json)),
+            provenance TEXT NOT NULL CHECK(provenance IN ('SOURCE','EXPLANATION','DERIVED','EXTERNAL','UNCERTAIN')),
+            review_status TEXT NOT NULL CHECK(review_status IN ('DRAFT','NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            claim_id TEXT REFERENCES claims(id) ON DELETE RESTRICT,
+            created_at TEXT NOT NULL,
+            UNIQUE(chapter_id,ordinal)
+        );
+        CREATE TABLE course_textbook_block_evidence (
+            id TEXT PRIMARY KEY,
+            block_id TEXT NOT NULL REFERENCES course_textbook_blocks(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN ('SUPPORTS','ILLUSTRATES','CONTEXTUALIZES','CONTRADICTS')),
+            review_state TEXT NOT NULL CHECK(review_state IN ('PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW')),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(block_id,evidence_ref_id,relation)
+        );
+        CREATE TRIGGER course_textbook_chapter_source_guard
+        BEFORE INSERT ON course_textbook_chapters
+        WHEN NEW.source_id IS NOT NULL AND NOT EXISTS(
+            SELECT 1 FROM course_textbooks t JOIN collection_sources cs
+              ON cs.collection_id=t.collection_id
+            WHERE t.id=(SELECT textbook_id FROM course_textbook_versions WHERE id=NEW.version_id)
+              AND cs.source_id=NEW.source_id
+        )
+        BEGIN SELECT RAISE(ABORT,'chapter source must belong to the textbook collection'); END;
+        CREATE TRIGGER course_textbook_evidence_guard
+        BEFORE INSERT ON course_textbook_block_evidence
+        WHEN NOT EXISTS(
+            SELECT 1 FROM course_textbook_blocks b
+            JOIN course_textbook_chapters ch ON ch.id=b.chapter_id
+            JOIN course_textbook_versions v ON v.id=ch.version_id
+            JOIN course_textbooks t ON t.id=v.textbook_id
+            JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+            JOIN collection_sources cs ON cs.collection_id=t.collection_id AND cs.source_id=er.source_id
+            WHERE b.id=NEW.block_id
+              AND (ch.source_id IS NULL OR ch.source_id=er.source_id)
+        )
+        BEGIN SELECT RAISE(ABORT,'course textbook evidence must belong to the collection and chapter source'); END;
+        """
+    ),
 )
-
+ 
 class MigrationError(RuntimeError):
     pass
 
