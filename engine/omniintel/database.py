@@ -2418,6 +2418,23 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         BEGIN SELECT RAISE(ABORT,'course textbook evidence must belong to the collection and chapter source'); END;
         """
     ),
+    (
+        "0036_synchronized_reader_sessions",
+        """
+        CREATE TABLE reader_sessions (
+            id TEXT PRIMARY KEY,
+            version_id TEXT NOT NULL REFERENCES course_textbook_versions(id) ON DELETE RESTRICT,
+            anchor_source_id TEXT REFERENCES sources(id) ON DELETE RESTRICT,
+            current_source_id TEXT REFERENCES sources(id) ON DELETE RESTRICT,
+            position_ms INTEGER NOT NULL DEFAULT 0 CHECK(position_ms>=0),
+            chapter_id TEXT REFERENCES course_textbook_chapters(id) ON DELETE RESTRICT,
+            block_id TEXT REFERENCES course_textbook_blocks(id) ON DELETE RESTRICT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(version_id,id)
+        );
+        CREATE INDEX idx_reader_sessions_version ON reader_sessions(version_id,updated_at);
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
