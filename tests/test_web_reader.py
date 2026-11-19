@@ -82,3 +82,16 @@ def test_reader_exposes_positioned_pdf_elements_with_review_state() -> None:
     assert "part.review_state" in app
     assert "part.confidence" in app
     assert "item.document_elements.slice(0, 20)" in app
+
+
+def test_shared_reader_export_contract_is_versioned_and_source_clock_explicit() -> None:
+    import json
+
+    schema_path = Path(__file__).parents[1] / "schemas" / "reader-export.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    assert schema["$schema"].endswith("/2020-12/schema")
+    assert {"version", "sources", "chapters", "alignment_policy"} <= set(schema["required"])
+    evidence = schema["properties"]["chapters"]["items"]["properties"]["blocks"]["items"]["properties"]["evidence"]["items"]["properties"]
+    assert "local_start_ms" in evidence
+    assert "course_time_ms" in evidence
+    assert evidence["seek_available"]["type"] == "boolean"
