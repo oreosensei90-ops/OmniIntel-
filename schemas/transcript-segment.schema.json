@@ -90,5 +90,5 @@
     "origin",
     "confidence"
   ],
-  "additionalProperties": false
+  "unevaluatedProperties": false
 }
