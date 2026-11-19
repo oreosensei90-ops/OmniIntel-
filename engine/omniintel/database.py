@@ -379,6 +379,39 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0008_textbook_hierarchy_cycle_guards",
+        """
+        CREATE TRIGGER chapter_parent_no_cycle
+        BEFORE UPDATE OF parent_chapter_id ON textbook_chapters
+        WHEN NEW.parent_chapter_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN EXISTS(
+                WITH RECURSIVE descendants(id) AS (
+                    SELECT id FROM textbook_chapters WHERE parent_chapter_id=NEW.id
+                    UNION ALL
+                    SELECT c.id FROM textbook_chapters c
+                    JOIN descendants d ON c.parent_chapter_id=d.id
+                )
+                SELECT 1 FROM descendants WHERE id=NEW.parent_chapter_id
+            ) THEN RAISE(ABORT,'chapter hierarchy cannot contain a cycle') END;
+        END;
+        CREATE TRIGGER block_parent_no_cycle
+        BEFORE UPDATE OF parent_block_id ON chapter_blocks
+        WHEN NEW.parent_block_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN EXISTS(
+                WITH RECURSIVE descendants(id) AS (
+                    SELECT id FROM chapter_blocks WHERE parent_block_id=NEW.id
+                    UNION ALL
+                    SELECT b.id FROM chapter_blocks b
+                    JOIN descendants d ON b.parent_block_id=d.id
+                )
+                SELECT 1 FROM descendants WHERE id=NEW.parent_block_id
+            ) THEN RAISE(ABORT,'block hierarchy cannot contain a cycle') END;
+        END;
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
