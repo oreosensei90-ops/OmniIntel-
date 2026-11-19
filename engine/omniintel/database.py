@@ -340,6 +340,45 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0007_textbook_integrity_guards",
+        """
+        CREATE UNIQUE INDEX idx_chapter_blocks_root_order
+            ON chapter_blocks(chapter_id,ordinal) WHERE parent_block_id IS NULL;
+        CREATE UNIQUE INDEX idx_chapter_blocks_child_order
+            ON chapter_blocks(chapter_id,parent_block_id,ordinal) WHERE parent_block_id IS NOT NULL;
+        CREATE TRIGGER chapter_parent_same_version_update
+        BEFORE UPDATE OF version_id,parent_chapter_id ON textbook_chapters
+        WHEN NEW.parent_chapter_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM textbook_chapters p
+                WHERE p.id=NEW.parent_chapter_id AND p.version_id=NEW.version_id
+            ) THEN RAISE(ABORT,'parent chapter must belong to the same version') END;
+        END;
+        CREATE TRIGGER block_parent_same_chapter_update
+        BEFORE UPDATE OF chapter_id,parent_block_id ON chapter_blocks
+        WHEN NEW.parent_block_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks p
+                WHERE p.id=NEW.parent_block_id AND p.chapter_id=NEW.chapter_id
+            ) THEN RAISE(ABORT,'parent block must belong to the same chapter') END;
+        END;
+        CREATE TRIGGER block_evidence_same_source_update
+        BEFORE UPDATE OF block_id,evidence_id ON block_evidence
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks b
+                JOIN textbook_chapters c ON c.id=b.chapter_id
+                JOIN textbook_versions v ON v.id=c.version_id
+                JOIN textbooks t ON t.id=v.textbook_id
+                JOIN evidence_items e ON e.id=NEW.evidence_id
+                WHERE b.id=NEW.block_id AND t.source_id=e.source_id
+            ) THEN RAISE(ABORT,'block evidence must belong to the textbook source') END;
+        END;
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
