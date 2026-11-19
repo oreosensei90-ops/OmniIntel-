@@ -18,7 +18,6 @@ class TextbookDOCXExporter:
     def export(self, version_id: str, output_path: str | Path) -> Path:
         try:
             from docx import Document
-            from docx.enum.section import WD_SECTION
             from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
             from docx.enum.text import WD_ALIGN_PARAGRAPH
             from docx.oxml import OxmlElement
@@ -115,7 +114,7 @@ class TextbookDOCXExporter:
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
             for row_index, source_row in enumerate(rows):
                 if not isinstance(source_row, list):
-                    raise ValueError(f"Table block {block_id} contains an invalid row")
+                    raise TypeError(f"Table block {block_id} contains an invalid row")
                 cells = table.add_row().cells
                 for col_index in range(width):
                     value = source_row[col_index] if col_index < len(source_row) else ""
