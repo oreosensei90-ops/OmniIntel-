@@ -95,6 +95,7 @@ class ClaimEvidenceReferenceInput:
     relation: ClaimRelation
     relevance_score: float | None = None
     rationale: str | None = None
+    element_id: str | None = None
 
     def validate(self) -> None:
         if not self.claim_id or not self.evidence_ref_id:
