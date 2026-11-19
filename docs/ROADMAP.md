@@ -30,7 +30,7 @@ This roadmap is a plan, not a claim that every item exists.
 
 ## Knowledge and publishing
 - [x] Initial provider-neutral knowledge-unit, claim and relationship persistence.
-- [x] Initial source-linked draft knowledge candidates from accepted document elements (semantic claim extraction remains pending).
+- [x] Source-linked draft knowledge candidates with explicit review/validation and element lineage (semantic claim extraction remains pending).
 - [ ] Automated topic/concept discovery and claim extraction.
 - [x] Reviewed claim/evidence links with conservative publication gating.
 - [ ] Semantic relevance verifier and contradiction-scope analysis.
@@ -39,7 +39,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Page-native document topic hierarchy with reviewed unified evidence references and same-source guards.
 - [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).
 - [x] Deterministic video topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
-- [x] Deterministic document topic-to-chapter composition using shared accepted page/element citations, including reviewed native paragraphs, equations, tables and figure assets.
+- [x] Deterministic document topic-to-chapter composition using shared accepted page/element citations, including reviewed paragraphs, equations, tables and figure assets with retained provenance.
 - [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
 - [ ] Semantic block validation, source coverage and pedagogical quality scoring.
 - [x] Initial audited PDF exporter (math typesetting and actual diagram/image rendering remain pending).
