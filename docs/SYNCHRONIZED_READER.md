@@ -20,3 +20,8 @@ omniintel reader-resume ./omniintel.db SESSION_ID
 ## Page-native document reading
 
 When a course block cites a PDF page, the reader returns the extracted page text and up to 100 positioned document elements (including element type, normalized bounding box, confidence, provenance and review state). These remain page-native locators. They are not converted to media milliseconds, and pending OCR/structure elements remain visibly reviewable rather than being treated as accepted facts. The current reader API returns these records; a graphical page canvas and tap-to-highlight UI remain application-layer work.
+
+
+## Import safety and completeness
+
+The Web and Android prototypes cap reader JSON imports at 50 MiB. The Web reader additionally bounds the document to 500 chapters, 25,000 blocks, 100 evidence links per block, 40 transcript excerpts per evidence link and 100 positioned document elements per evidence link. The Android reader applies the same structural ceilings and rejects malformed nested records, duplicate/empty source IDs and evidence links to sources outside the export instead of silently dropping malformed content. These are prototype resource guards, not a substitute for a future streaming reader for very large textbooks.
