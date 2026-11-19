@@ -29,7 +29,7 @@ def test_plan_classifies_mixed_sources_without_writing(tmp_path: Path) -> None:
     assert any("which media source" in q for q in data["questions"])
     assert any("alignment" in warning for warning in data["warnings"])
     assert {p.name: p.read_bytes() for p in (pdf, video, captions)} == before
-    assert set(p.name for p in tmp_path.iterdir()) == set(before)
+    assert {p.name for p in tmp_path.iterdir()} == set(before)
 
 
 def test_plan_requires_confirmed_language_for_speech_and_accepts_it(tmp_path: Path) -> None:
@@ -66,7 +66,7 @@ def test_plan_rejects_empty_and_excessive_input_sets(tmp_path: Path) -> None:
 
 
 def test_plan_output_is_stable_json_data(tmp_path: Path) -> None:
-    note = _write(tmp_path / "notes.txt", "Learning notes".encode())
+    note = _write(tmp_path / "notes.txt", b"Learning notes")
     plan = plan_local_inputs([note])
     encoded = json.dumps(plan.to_dict(), sort_keys=True)
     assert '"schema_version": 1' in encoded
