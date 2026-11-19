@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import json
 
 from .assets import AssetRecord, AssetStore, detect_media_type
 from .store import OmniIntelStore
 from .models import utc_now
+from .database import connect
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +39,7 @@ def import_local_file(
     title: str | None = None,
     max_bytes: int = 250 * 1024 * 1024,
     expected_sha256: str | None = None,
+    source_id: str | None = None,
 ) -> LocalFileImportResult:
     """Register one explicitly selected local file; never fetch URLs or unpack archives.
 
@@ -58,17 +61,30 @@ def import_local_file(
         raise ValueError("Source title must not be empty")
 
     store = OmniIntelStore(database_path)
-    source_id = store.create_source(
-        title=source_title,
-        metadata={
-            "ingestion_method": "local_file",
-            "modality": modality,
-            "media_type": media_type,
-            "original_filename": path.name[:255],
-            "rights_status": "UNVERIFIED",
-            "imported_at": utc_now(),
-        },
-    )
+    metadata = {
+        "ingestion_method": "local_file",
+        "modality": modality,
+        "media_type": media_type,
+        "original_filename": path.name[:255],
+        "rights_status": "UNVERIFIED",
+        "imported_at": utc_now(),
+    }
+    if source_id is not None:
+        with connect(database_path) as conn:
+            existing=conn.execute(
+                "SELECT title,metadata_json FROM sources WHERE id=?",(source_id,)
+            ).fetchone()
+        if existing is None:
+            store.create_source(title=source_title,metadata=metadata,source_id=source_id)
+        else:
+            existing_metadata=json.loads(existing["metadata_json"])
+            if existing["title"]!=source_title or any(
+                existing_metadata.get(key)!=metadata.get(key)
+                for key in ("ingestion_method","modality","media_type","original_filename")
+            ):
+                raise ValueError("Reserved source ID already belongs to a different source")
+    else:
+        source_id = store.create_source(title=source_title,metadata=metadata)
     try:
         asset = AssetStore(
             database_path, storage_dir, max_bytes=max_bytes
