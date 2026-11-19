@@ -150,3 +150,48 @@ def test_review_ocr_page_cli(tmp_path: Path, monkeypatch, capsys) -> None:
     main()
     assert '"status": "ACCEPTED"' in capsys.readouterr().out
 
+
+
+def test_execute_plan_cli_requires_approval_and_registers_local_source(tmp_path: Path, monkeypatch, capsys) -> None:
+    import json
+    import wave
+
+    from omniintel.input_plan import plan_local_inputs
+    from omniintel.database import connect
+
+    wav=tmp_path/"lesson.wav"
+    with wave.open(str(wav),"wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(8000)
+        handle.writeframes(b"\x00\x00"*800)
+
+    plan=plan_local_inputs([wav],language="en").to_dict()
+    plan_path=tmp_path/"plan.json"
+    stages_path=tmp_path/"stages.json"
+    plan_path.write_text(json.dumps(plan),encoding="utf-8")
+    stages_path.write_text(json.dumps([
+        {"stage":"REGISTER_SOURCE","input_indices":[0],"network":"none"}
+    ]),encoding="utf-8")
+    db=tmp_path/"execute.db"
+    assets=tmp_path/"assets"
+
+    monkeypatch.setattr(
+        "sys.argv",["omniintel","execute-plan",str(db),str(assets),
+                    str(plan_path),str(stages_path)],
+    )
+    with pytest.raises(Exception,match="approval"):
+        main()
+    with connect(db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]==0
+
+    monkeypatch.setattr(
+        "sys.argv",["omniintel","execute-plan",str(db),str(assets),
+                    str(plan_path),str(stages_path),"--approve"],
+    )
+    main()
+    result=json.loads(capsys.readouterr().out)
+    assert result["status"]=="COMPLETED"
+    assert result["stages"][0]["result"]["registered_sources"][0]["modality"]=="AUDIO"
+    with connect(db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]==1
