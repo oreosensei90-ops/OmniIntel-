@@ -148,6 +148,21 @@ def _timestamp_ms(value: Any) -> int | None:
     return milliseconds
 
 
+def _timestamp_ms(value: Any) -> int | None:
+    if value is None or (isinstance(value,str) and value in {"","N/A"}):
+        return None
+    try:
+        seconds=Decimal(str(value))
+    except (InvalidOperation,ValueError):
+        return None
+    if not seconds.is_finite():
+        return None
+    milliseconds=int((seconds*1000).to_integral_value())
+    if abs(milliseconds)>2**63-1:
+        raise ValueError("Media stream start time is outside the supported range")
+    return milliseconds
+
+
 def _optional_int(value: Any, *, maximum: int) -> int | None:
     if value is None or (isinstance(value,str) and value in {"", "N/A"}):
         return None
