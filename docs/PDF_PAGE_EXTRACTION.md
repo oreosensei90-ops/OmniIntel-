@@ -35,3 +35,18 @@ Extraction errors abort before page records are written. Extraction is local-onl
 content-addressed asset hash check before parsing. File size is already bounded at ingestion.
 These limits reduce resource abuse but are not a substitute for sandboxing hostile documents
 in a production service.
+
+
+## Page search
+
+Extracted page text is indexed with SQLite FTS5. Search is local and returns the source ID,
+original asset ID, page ID, one-based page number and a short excerpt. Search terms are parsed
+and quoted before being passed to FTS, so raw user text is never treated as an FTS query program.
+
+\`\`\`bash
+omniintel search-pages ./omniintel.db "quantum entanglement"
+\`\`\`
+
+The index is maintained by database triggers and rebuilt from stored page text when the search
+migration is first applied. This is lexical retrieval, not semantic search and not proof that a
+page supports a particular claim.
