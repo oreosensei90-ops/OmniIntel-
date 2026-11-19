@@ -77,3 +77,39 @@ class OmniIntelStore:
                 (f"%{query.strip()}%",),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def create_source(
+        self,
+        *,
+        title: str,
+        source_uri: str | None = None,
+        language: str | None = None,
+        duration_ms: int | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> str:
+        """Create a source record before attaching its original assets or evidence."""
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("Source title must not be empty")
+        if duration_ms is not None and duration_ms <= 0:
+            raise ValueError("Source duration must be positive")
+        source_id = uuid7()
+        with connect(self.database_path) as conn:
+            conn.execute(
+                """INSERT INTO sources
+                   (id,title,source_uri,language,duration_ms,metadata_json,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (
+                    source_id, normalized_title, source_uri, language, duration_ms,
+                    json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True),
+                    utc_now(),
+                ),
+            )
+        return source_id
+
+    def delete_empty_source(self, source_id: str) -> None:
+        """Remove a just-created source only when no records depend on it."""
+        with connect(self.database_path) as conn:
+            cursor = conn.execute("DELETE FROM sources WHERE id=?", (source_id,))
+            if cursor.rowcount != 1:
+                return
