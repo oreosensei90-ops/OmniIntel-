@@ -14,7 +14,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .captions import parse_caption_text
-from .models import TranscriptImport
+from .database import connect
+from .models import TranscriptImport, TranscriptSegmentInput
 from .store import OmniIntelStore
 from .textbook import BlockInput, TextbookStore
 
@@ -237,6 +238,137 @@ def process_youtube_video(
     return compose_transcript_textbook(
         database_path, transcript, source_metadata=metadata, chapter_minutes=chapter_minutes,
     )
+
+
+def compose_registered_source(
+    database_path: str | Path,
+    source_id: str,
+    *,
+    chapter_minutes: int = 10,
+) -> dict:
+    """Compose a reader from an already-ingested caption or local-ASR source.
+
+    This is the handoff from the existing local WAV/faster-whisper pipeline:
+    source and transcript records remain the same; no duplicate source is created.
+    """
+    if not 1 <= chapter_minutes <= 30:
+        raise ValueError("chapter_minutes must be between 1 and 30")
+    with connect(database_path) as conn:
+        source = conn.execute("SELECT * FROM sources WHERE id=?", (source_id,)).fetchone()
+        rows = conn.execute(
+            """SELECT t.text,t.start_ms,t.end_ms,t.language,t.speaker_id,e.id AS evidence_id
+               FROM transcript_segments t
+               JOIN evidence_items e ON e.segment_id=t.id AND e.source_id=t.source_id
+               WHERE t.source_id=? ORDER BY t.ordinal,e.created_at,e.id""",
+            (source_id,),
+        ).fetchall()
+    if source is None:
+        raise ValueError("Source does not exist")
+    if not rows:
+        raise ValueError("Source has no transcript; import captions or complete local ASR first")
+    transcript = TranscriptImport(
+        title=source["title"],
+        source_uri=source["source_uri"],
+        language=source["language"],
+        duration_ms=source["duration_ms"],
+        segments=tuple(TranscriptSegmentInput(
+            row["text"], row["start_ms"], row["end_ms"], row["language"], row["speaker_id"]
+        ) for row in rows),
+        metadata=json.loads(source["metadata_json"] or "{}"),
+    )
+    transcript.validate()
+    evidence_ids = [row["evidence_id"] for row in rows]
+    store = TextbookStore(database_path)
+    textbook_id = store.create_textbook(source_id, transcript.title)
+    version_id = store.create_version(textbook_id, "Transcript reader draft", composition_mode="SOURCE_ORDER")
+    groups = _chapter_groups(transcript.segments, chapter_minutes * 60_000)
+    evidence_by_segment = {
+        id(segment): evidence_id
+        for segment, evidence_id in zip(transcript.segments, evidence_ids, strict=True)
+    }
+    for chapter_index, group in enumerate(groups):
+        first, last = group[0], group[-1]
+        start_label = f"{first.start_ms // 60000:02d}:{(first.start_ms // 1000) % 60:02d}"
+        end_label = f"{last.end_ms // 60000:02d}:{(last.end_ms // 1000) % 60:02d}"
+        chapter_id = store.add_chapter(
+            version_id, f"Chapter {chapter_index + 1} · {start_label}–{end_label}",
+            ordinal=chapter_index, summary=f"Source transcript coverage: {start_label} to {end_label}.",
+            source_start_ms=first.start_ms, source_end_ms=last.end_ms,
+        )
+        store.add_block(chapter_id, BlockInput(
+            "HEADING", {"text": f"Transcript · {start_label}–{end_label}"},
+            "SOURCE", "ACCEPTED", ordinal=0,
+        ))
+        for paragraph_index in range(0, len(group), 8):
+            passage = group[paragraph_index:paragraph_index + 8]
+            block_id = store.add_block(chapter_id, BlockInput(
+                "PARAGRAPH",
+                {"text": " ".join(segment.text.strip() for segment in passage),
+                 "start_ms": passage[0].start_ms, "end_ms": passage[-1].end_ms},
+                "SOURCE", "ACCEPTED", ordinal=paragraph_index + 1,
+            ))
+            for segment in passage:
+                store.link_evidence(
+                    block_id, evidence_by_segment[id(segment)],
+                    relation="SUPPORTS", review_state="ACCEPTED",
+                )
+            store.add_block(chapter_id, BlockInput(
+                "EXERCISE",
+                {"prompt": "Explain the main idea of this passage in your own words. "
+                           "Use the timestamped source evidence above to support your answer.",
+                 "answer_guidance": "Learner response; not generated from an external model."},
+                "EXPLANATION", "NEEDS_REVIEW", ordinal=paragraph_index + 2,
+            ))
+    term_counts: dict[str, int] = {}
+    for segment in transcript.segments:
+        for term in re.findall(r"\b[A-Z][A-Za-z0-9-]*(?:\s+[A-Z][A-Za-z0-9-]*){0,2}\b", segment.text):
+            if len(term) > 2 and term.lower() not in {"the", "this", "that", "when", "what", "how"}:
+                term_counts[term] = term_counts.get(term, 0) + 1
+    candidates = [term for term, count in sorted(
+        term_counts.items(), key=lambda item: (-item[1], item[0].casefold())
+    ) if count >= 2][:40]
+    if candidates:
+        glossary_chapter = store.add_chapter(
+            version_id, "Glossary · review candidates", ordinal=len(groups),
+            summary="Repeated capitalized terms surfaced from the transcript; definitions require human review.",
+        )
+        store.add_block(glossary_chapter, BlockInput(
+            "HEADING", {"text": "Glossary candidates"}, "EXPLANATION", "NEEDS_REVIEW", ordinal=0,
+        ))
+        for ordinal, term in enumerate(candidates, start=1):
+            store.add_block(glossary_chapter, BlockInput(
+                "DEFINITION",
+                {"term": term, "definition": "Definition not explicitly established by this automated pass. Add and verify a source-grounded definition.", "candidate_frequency": term_counts[term]},
+                "UNCERTAIN", "NEEDS_REVIEW", ordinal=ordinal,
+            ))
+    tree = store.get_version_tree(version_id)
+    if tree is None:
+        raise RuntimeError("Textbook draft could not be read after composition")
+    tree["source"] = {
+        "id": source_id, "title": transcript.title, "source_uri": transcript.source_uri,
+        "language": transcript.language, "duration_ms": transcript.duration_ms,
+        "metadata": transcript.metadata,
+    }
+    tree["pipeline"] = {
+        "status": "TRANSCRIPT_DRAFT_READY", "transcript_origin": transcript.metadata.get("transcript_origin", "unknown"),
+        "composition": "EXTRACTIVE_SOURCE_GROUNDED", "ai_generated_explanations": False,
+        "review_required": True,
+    }
+    return tree
+
+
+def compose_source_main() -> None:
+    parser = argparse.ArgumentParser(prog="omniintel-compose-source")
+    parser.add_argument("database", type=Path)
+    parser.add_argument("source_id")
+    parser.add_argument("--chapter-minutes", type=int, default=10)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    tree = compose_registered_source(args.database, args.source_id, chapter_minutes=args.chapter_minutes)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"status": tree["pipeline"]["status"], "title": tree["version"]["title"],
+                      "chapters": len(tree["chapters"]), "output": str(args.output)}, ensure_ascii=False))
 
 
 def main() -> None:

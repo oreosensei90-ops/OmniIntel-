@@ -3,9 +3,11 @@ from __future__ import annotations
 import pytest
 
 from omniintel.captions import parse_caption_text
+from omniintel.store import OmniIntelStore
 from omniintel.youtube_pipeline import (
     compose_transcript_textbook,
     normalize_youtube_url,
+    compose_registered_source,
 )
 
 
@@ -80,3 +82,24 @@ def test_composition_rejects_invalid_chapter_size(tmp_path):
     )
     with pytest.raises(ValueError):
         compose_transcript_textbook(tmp_path / "bad.db", transcript, chapter_minutes=0)
+
+
+def test_composes_existing_local_asr_transcript_without_creating_duplicate_source(tmp_path):
+    database = tmp_path / "local-asr.db"
+    transcript = parse_caption_text(
+        """WEBVTT
+
+00:00:00.000 --> 00:00:02.000
+Local audio transcription preserves source timestamps.
+
+00:00:02.100 --> 00:00:04.000
+Local audio transcription remains available offline.
+""",
+        title="Locally transcribed lecture", source_uri="file:///lecture.wav",
+        language="en", duration_ms=4_000,
+    )
+    imported = OmniIntelStore(database).import_transcript(transcript)
+    result = compose_registered_source(database, imported.source_id)
+    assert result["source"]["id"] == imported.source_id
+    assert result["version"]["source_id"] == imported.source_id
+    assert result["pipeline"]["transcript_origin"] == "caption"

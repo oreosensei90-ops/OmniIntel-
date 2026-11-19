@@ -353,4 +353,6 @@ omniintel-youtube ./omniintel.db 'https://www.youtube.com/watch?v=VIDEO_ID' \
 Open the resulting JSON in OmniIntel Android using **Import reader JSON**. This
 caption-first path creates timestamped, evidence-linked transcript chapters, review
 prompts and clearly marked glossary candidates. It does not download video/audio and
-does not fabricate AI explanations. See [the full pipeline guide](docs/YOUTUBE_PIPELINE.md).
+does not fabricate AI explanations. For a locally imported and transcribed WAV source,
+use `omniintel-compose-source DATABASE SOURCE_ID --output ./exports/local-reader.json`
+to create the same reader JSON without duplicating its source. See [the full pipeline guide](docs/YOUTUBE_PIPELINE.md).

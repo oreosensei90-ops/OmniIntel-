@@ -22,6 +22,7 @@ youtube = ["yt-dlp>=2025.1.15"]
 [project.scripts]
 omniintel = "omniintel.cli:main"
 omniintel-youtube = "omniintel.youtube_pipeline:main"
+omniintel-compose-source = "omniintel.youtube_pipeline:compose_source_main"
 
 [tool.setuptools]
 package-dir = {"" = "engine"}
