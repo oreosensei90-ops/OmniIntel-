@@ -87,6 +87,6 @@ def test_markdown_export_copies_linked_visual_asset(tmp_path: Path) -> None:
 
 def test_image_export_requires_asset_store_directory(tmp_path: Path) -> None:
     from omniintel.html_export import TextbookHTMLExporter
-    database,asset_dir,version=_image_book(tmp_path)
+    database,_asset_dir,version=_image_book(tmp_path)
     with pytest.raises(ValueError,match="supply asset_dir"):
         TextbookHTMLExporter(database).export(version,tmp_path/"book.html")
