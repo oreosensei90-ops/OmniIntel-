@@ -2011,6 +2011,76 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0031_video_frame_extraction",
+        """
+        CREATE TABLE frame_extractions (
+            id TEXT PRIMARY KEY,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            source_sha256 TEXT NOT NULL CHECK(length(source_sha256)=64),
+            config_sha256 TEXT NOT NULL CHECK(length(config_sha256)=64),
+            tool_name TEXT NOT NULL CHECK(tool_name='ffmpeg'),
+            tool_version TEXT NOT NULL CHECK(length(trim(tool_version))>0),
+            video_stream_index INTEGER NOT NULL CHECK(video_stream_index>=0),
+            sample_interval_ms INTEGER NOT NULL CHECK(sample_interval_ms>0),
+            frame_count INTEGER NOT NULL CHECK(frame_count>0),
+            total_bytes INTEGER NOT NULL CHECK(total_bytes>0),
+            total_pixels INTEGER NOT NULL CHECK(total_pixels>0),
+            metadata_json TEXT NOT NULL CHECK(json_valid(metadata_json)),
+            created_at TEXT NOT NULL,
+            UNIQUE(source_asset_id,config_sha256)
+        );
+        CREATE INDEX idx_frame_extractions_source
+            ON frame_extractions(source_asset_id,created_at);
+        CREATE TABLE video_frames (
+            id TEXT PRIMARY KEY,
+            extraction_id TEXT NOT NULL REFERENCES frame_extractions(id) ON DELETE RESTRICT,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            frame_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            frame_index INTEGER NOT NULL CHECK(frame_index>=0),
+            timestamp_ms INTEGER NOT NULL CHECK(timestamp_ms>=0),
+            width INTEGER NOT NULL CHECK(width>0),
+            height INTEGER NOT NULL CHECK(height>0),
+            byte_size INTEGER NOT NULL CHECK(byte_size>0),
+            sha256 TEXT NOT NULL CHECK(length(sha256)=64),
+            created_at TEXT NOT NULL,
+            UNIQUE(extraction_id,frame_index),
+            UNIQUE(extraction_id,timestamp_ms)
+        );
+        CREATE INDEX idx_video_frames_source_time
+            ON video_frames(source_asset_id,timestamp_ms);
+        CREATE INDEX idx_video_frames_asset ON video_frames(frame_asset_id);
+        CREATE TRIGGER frame_extraction_source_guard
+        BEFORE INSERT ON frame_extractions
+        WHEN NOT EXISTS(
+            SELECT 1 FROM source_assets sa
+            JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
+            WHERE sa.id=NEW.source_asset_id
+              AND sa.blob_sha256=NEW.source_sha256
+              AND ab.media_type LIKE 'video/%'
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'frame extraction must reference the verified video source asset');
+        END;
+        CREATE TRIGGER video_frame_source_guard
+        BEFORE INSERT ON video_frames
+        WHEN
+            (SELECT source_id FROM source_assets WHERE id=NEW.source_asset_id) IS NULL
+            OR
+            (SELECT source_id FROM source_assets WHERE id=NEW.source_asset_id) <>
+            (SELECT source_id FROM source_assets WHERE id=NEW.frame_asset_id)
+            OR
+            (SELECT role FROM source_assets WHERE id=NEW.frame_asset_id) <> 'FRAME'
+            OR
+            NOT EXISTS(
+                SELECT 1 FROM frame_extractions fe
+                WHERE fe.id=NEW.extraction_id AND fe.source_asset_id=NEW.source_asset_id
+            )
+        BEGIN
+            SELECT RAISE(ABORT,'video frame asset must belong to its source and extraction');
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
