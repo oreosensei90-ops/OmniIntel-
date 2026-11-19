@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. PDF/DOCX/HTML export, Android, web, media extraction and AI inference are not yet implemented.
+This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF and editable DOCX export are implemented. Android, web, HTML export, media extraction and AI inference are not yet implemented.
 
 ## Engineering principles
 
@@ -46,9 +46,12 @@ omniintel audit-textbook ./omniintel.db VERSION_ID
 
 # Export a publication-ready PDF
 omniintel export-pdf ./omniintel.db VERSION_ID ./exports/textbook.pdf
+
+# Export an editable Word document
+omniintel export-docx ./omniintel.db VERSION_ID ./exports/textbook.docx
 ```
 
-The audit command prints a JSON report and exits non-zero when publication gates fail. PDF export runs the same gate before rendering and refuses blocked editions. Passing deterministic checks is not a substitute for semantic or human review. Install `.[publishing]` for ReportLab and DOCX publishing dependencies.
+The audit command prints a JSON report and exits non-zero when publication gates fail. PDF export runs the same gate before rendering and refuses blocked editions. Passing deterministic checks is not a substitute for semantic or human review. Install `.[publishing]` for ReportLab and python-docx publishing dependencies.
 
 Core persistence initially uses the Python standard library. Optional publishing dependencies are installed with `python -m pip install -e '.[publishing]'`.
 
