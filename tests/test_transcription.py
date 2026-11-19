@@ -252,3 +252,38 @@ def test_faster_whisper_defaults_preserve_quiet_lecture_speech() -> None:
     with pytest.raises(RuntimeError,match="local CTranslate2 directory"):
         adapter.transcribe_chunk(Path("unused.wav"),language="en")
 
+def test_transcription_applies_extracted_stream_offset_to_source_timestamps(tmp_path: Path) -> None:
+    database,assets,imported = _import_audio(tmp_path,seconds=5)
+    result = run_wav_transcription(
+        database,assets,imported.source_id,imported.asset.id,FakeAdapter(),
+        language="en",chunk_seconds=2,time_offset_ms=250,
+    )
+    assert result.duration_ms == 5_000
+    assert result.time_offset_ms == 250
+    from omniintel.store import OmniIntelStore
+    segments = OmniIntelStore(database).get_transcript(imported.source_id)
+    assert [row["start_ms"] for row in segments] == [350,2350,4350]
+    assert [row["end_ms"] for row in segments] == [1050,3050,5050]
+    reference = get_evidence_reference(database,result.evidence_ref_ids[1])
+    assert reference is not None
+    assert reference["start_ms"] == 2350
+
+
+def test_transcription_rejects_negative_or_out_of-source_timeline_offsets(tmp_path: Path) -> None:
+    database,assets,imported = _import_audio(tmp_path,seconds=5)
+    with pytest.raises(ValueError,match="non-negative integer"):
+        run_wav_transcription(
+            database,assets,imported.source_id,imported.asset.id,FakeAdapter(),
+            time_offset_ms=-1,
+        )
+    from omniintel.database import connect
+    with connect(database) as conn:
+        conn.execute(
+            "UPDATE sources SET duration_ms=5000 WHERE id=?",(imported.source_id,)
+        )
+    with pytest.raises(ValueError,match="extends beyond the registered source timeline"):
+        run_wav_transcription(
+            database,assets,imported.source_id,imported.asset.id,FakeAdapter(),
+            time_offset_ms=2000,
+        )
+
