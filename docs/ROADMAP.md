@@ -6,9 +6,9 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Repository engineering rules and initial Python package metadata.
 - [x] Stable ID and transcript domain foundation.
 - [x] SQLite migration ledger with checksum verification.
-- [ ] Source/asset/evidence repositories and richer migrations.
-- [ ] Persistent resumable job scheduler.
-- [ ] Cross-platform JSON Schema contracts.
+- [x] Initial source/transcript/evidence persistence and knowledge schema migrations.\n- [ ] Asset repository, source adapters and richer evidence types.
+- [x] Persistent leased job queue with idempotency and bounded retries (initial slice; stage DAG/checkpoints remain pending).
+- [x] Initial cross-platform JSON Schema contracts and validation tests.
 
 ## Source and evidence intelligence
 - [ ] Authorized source adapters and metadata inspection.
@@ -18,8 +18,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Evidence coverage and uncertainty reports.
 
 ## Knowledge and publishing
-- [ ] Topic/concept/claim reconstruction.
-- [ ] Claim-evidence relevance review.
+- [x] Initial provider-neutral knowledge-unit, claim and relationship persistence.\n- [ ] Automated topic/concept discovery and claim extraction.
+- [x] Reviewed claim/evidence links with conservative publication gating.\n- [ ] Semantic relevance verifier and contradiction-scope analysis.
 - [ ] Knowledge graph and contradiction handling.
 - [ ] Structured textbook composition.
 - [ ] PDF, DOCX, HTML and Markdown exporters.
