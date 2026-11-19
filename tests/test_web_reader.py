@@ -49,7 +49,7 @@ def test_web_manifest_is_valid_and_standalone() -> None:
 
 def test_reader_stores_personal_notes_in_indexeddb_without_remote_sync() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
-    assert 'indexedDB.open("omniintel-reader-local", 1)' in app
+    assert 'indexedDB.open("omniintel-reader-local", 2)' in app
     assert 'createObjectStore("annotations"' in app
     assert 'createObjectStore("bookmarks"' in app
     assert "PERSONAL STUDY NOTES · THIS BROWSER ONLY" in app
