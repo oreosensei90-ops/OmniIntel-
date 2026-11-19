@@ -75,7 +75,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
 - [x] First interactive Web and Android reader UIs with chapter navigation and search; Web also has local source playback, notes and bookmarks, while Android supports source-specific local media playback and evidence jumps.
 - [x] Initial Android Room-backed offline library catalog with persistable SAF document references, reopen/remove actions and local metadata.
-- [ ] Normalize textbook chapters/blocks and annotations into Room; add database migrations, paragraph-level resume, background media controls, library-wide FTS and optional cross-device sync.
+- [x] Normalize textbook chapters/blocks and annotations into Room; add database migrations, paragraph-level resume and library-wide on-device search (background media controls, full-text indexing at scale and optional cross-device sync remain pending).
 - [ ] Flashcards, practice and study planning.
 
 ## Intelligence and operations

@@ -73,3 +73,31 @@ omniintel-study-guide ./omniintel.db "$SOURCE_ID" \
   --model qwen2.5:7b --approve-local-model \
   --output ./exports/ai-study-guide.json
 ```
+
+## End-to-end YouTube to AI-assisted reader
+
+First ingest public captions. The CLI prints the persistent `source_id` in its result:
+
+```bash
+omniintel-youtube ./omniintel.db 'https://www.youtube.com/watch?v=VIDEO_ID' \
+  --approve-network --language en --output ./exports/video-reader.json
+```
+
+Then pass that source ID to the local study-guide command:
+
+```bash
+omniintel-study-guide ./omniintel.db SOURCE_ID \
+  --model qwen2.5:7b --approve-local-model \
+  --output ./exports/ai-study-guide.json
+```
+
+The source ID is also included in the exported reader JSON at `source.id`. You can
+extract it without opening the database:
+
+```bash
+SOURCE_ID="$(python -c "import json; print(json.load(open('./exports/video-reader.json', encoding='utf-8'))['source']['id'])")"
+```
+
+Import `ai-study-guide.json` into Android using **Import reader JSON**. This requires
+Ollama to be installed and running on the same machine as the Python engine. The local
+adapter uses loopback only; it does not remotely run Ollama on the Android phone.

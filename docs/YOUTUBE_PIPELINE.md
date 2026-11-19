@@ -68,3 +68,10 @@ the required source catalog and reader-safe timestamp/page evidence objects. Imp
 with **Import reader JSON** in the native app.
 
 The caption CLI prints the persistent `source_id`; pass that ID to `omniintel-study-guide` to generate a local AI-assisted draft from the same ingested source.
+
+## Optional local-model learning draft
+
+The command prints the registered `source_id` and writes it to the reader JSON source
+object. If Ollama is installed locally, pass that ID to `omniintel-study-guide` as
+documented in [AI_STUDY_GUIDE.md](AI_STUDY_GUIDE.md). The generated draft is separate
+from caption ingestion and requires its own explicit approval.
