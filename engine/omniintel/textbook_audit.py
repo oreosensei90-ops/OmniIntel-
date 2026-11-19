@@ -73,7 +73,6 @@ class TextbookPublicationAuditor:
                    FROM block_evidence be
                    JOIN chapter_blocks b ON b.id=be.block_id
                    JOIN textbook_chapters c ON c.id=b.chapter_id
-                   JOIN block_evidence unused ON unused.id=be.id
                    JOIN evidence_items e ON e.id=be.evidence_id
                    WHERE c.version_id=? ORDER BY be.block_id,be.id""",
                 (version_id,),
@@ -104,6 +103,12 @@ class TextbookPublicationAuditor:
                 by_claim.setdefault(row["id"], []).append(dict(row))
 
         blocked_ids: set[str] = set()
+        if not blocks:
+            findings.append(PublicationFinding(
+                "ERROR", "EMPTY_TEXTBOOK", version_id,
+                "A textbook version must contain at least one content block.",
+            ))
+
         for chapter in chapters:
             if not any(block["chapter_id"] == chapter["id"] for block in blocks):
                 findings.append(PublicationFinding(
