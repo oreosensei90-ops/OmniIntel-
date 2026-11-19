@@ -152,8 +152,8 @@ class OllamaLocalVisionAdapter:
         )
         verdict=result.get("verdict")
         rationale=result.get("rationale")
-        if not isinstance(verdict,str) or not isinstance(rationale,str):
-            raise TypeError("Local cross-modal verifier returned invalid output")
+        if verdict not in {"SUPPORTS","CONTRADICTS","INSUFFICIENT","UNCERTAIN"} or not isinstance(rationale,str):
+            raise ValueError("Local cross-modal verifier returned an invalid verdict or rationale")
         return ClaimVerdict(verdict,rationale[:10000])
 
 def normalized_frame_difference(left: bytes, right: bytes, *, size: tuple[int,int]=(64,36)) -> float:
