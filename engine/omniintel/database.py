@@ -2435,6 +2435,20 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         CREATE INDEX idx_reader_sessions_version ON reader_sessions(version_id,updated_at);
         """
     ),
+    (
+        "0037_quality_benchmark_runs",
+        """
+        CREATE TABLE quality_benchmark_runs (
+            id TEXT PRIMARY KEY,
+            suite_name TEXT NOT NULL CHECK(length(trim(suite_name))>0),
+            dataset_version TEXT NOT NULL,
+            report_json TEXT NOT NULL CHECK(json_valid(report_json)),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_quality_benchmark_suite
+            ON quality_benchmark_runs(suite_name,created_at);
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
