@@ -8,7 +8,6 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] SQLite migration ledger with checksum verification.
 - [x] Initial source/transcript/evidence persistence and knowledge schema migrations.
 - [x] Initial content-addressed asset blob store, source-asset registry and source-safe IMAGE/DIAGRAM block links (local ingestion only; visual rendering implemented).
-- [x] Initial content-addressed asset blob store, source-asset registry and source-safe IMAGE/DIAGRAM block links (local ingestion only; visual rendering pending).
 - [x] Initial local-file source registration with content-addressed byte preservation and explicit unverified-rights metadata (content extraction pending).
 - [ ] Authorized source adapters and richer evidence types.
 - [x] Persistent leased job queue with idempotency and bounded retries (initial slice; stage DAG/checkpoints remain pending).
@@ -65,7 +64,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Flashcards, practice and study planning.
 
 ## Intelligence and operations
-- [ ] Local/self-hosted AI adapters.
+- [x] Initial loopback-only local Ollama vision adapter (general provider registry and task routing pending).
 - [ ] Optional approved provider registry and privacy controls.
 - [ ] Model benchmark and routing system.
 - [ ] Backup/restore and optional synchronization.
