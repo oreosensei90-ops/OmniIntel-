@@ -70,6 +70,7 @@ This roadmap is a plan, not a claim that every item exists.
 ## Intelligence and operations
 - [x] Separate course-textbook Markdown/HTML/PDF/DOCX exporters behind a course publication audit gate (full native math and visual editing remain pending).
 - [x] Explicitly approved local source-registration CLI stage with input revalidation, ingestion-time SHA-256 verification, durable reserved source IDs and retry-safe source/asset attachment.
+- [x] Shared JSON Schema contracts for local execution plans, reviewed source-clock alignments, reader sessions and quality benchmark reports.
 - [x] Deterministic offline benchmark metrics for transcript WER/CER, timestamp MAE and unmatched segment counts, OCR CER, evidence-ID precision/recall, section coverage and alignment offset error; versioned local report persistence (golden datasets and expert review still pending).
 - [x] Initial loopback-only local Ollama vision adapter (general provider registry and task routing pending).
 - [ ] Optional approved provider registry and privacy controls.
