@@ -26,7 +26,7 @@ def test_course_textbook_keeps_evidence_source_specific_and_auditable(tmp_path: 
     book=books.create(course,"Physics: Complete Course")
     version=books.create_version(book,"Draft")
     chapter_a=books.add_chapter(version,"Kinematics",ordinal=0,source_id=first.source_id)
-    chapter_b=books.add_chapter(version,"Dynamics",ordinal=1,source_id=second.source_id)
+    books.add_chapter(version,"Dynamics",ordinal=1,source_id=second.source_id)
     block_a=books.add_block(chapter_a,"PARAGRAPH",{"text":"Kinematics source note"},provenance="SOURCE")
     link=books.link_evidence(block_a,first.evidence_ref_ids[0])
     assert books.audit(version)["publishable"] is False
