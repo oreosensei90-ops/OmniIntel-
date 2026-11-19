@@ -61,6 +61,7 @@ def estimate_offset(
         "correlation": best,
         "runner_up_correlation": runner_up,
         "sample_interval_ms": sample_interval_ms,
+        "max_lag_samples": max_lag_samples,
     }
 
 
@@ -79,6 +80,10 @@ class AlignmentStore:
             raise AlignmentError("Two distinct sources and a rationale are required")
         offset = int(estimate["offset_ms"])
         interval = int(estimate["sample_interval_ms"])
+        max_lag = int(estimate["max_lag_samples"])
+        measured = estimate_offset(signal_a, signal_b, sample_interval_ms=interval, max_lag_samples=max_lag)
+        if any(measured[key] != estimate[key] for key in ("offset_ms","correlation","runner_up_correlation")):
+            raise AlignmentError("Estimate does not match the supplied feature envelopes")
         corr = float(estimate["correlation"])
         runner = float(estimate["runner_up_correlation"])
         if interval <= 0 or not -1 <= corr <= 1 or not -1 <= runner <= 1:
