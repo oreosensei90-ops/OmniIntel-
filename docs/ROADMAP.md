@@ -27,7 +27,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Knowledge graph and contradiction handling.
 - [x] Source-scoped topic hierarchy and reviewed topic/evidence alignment (initial slice).
 - [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).
-- [ ] Deterministic topic-to-chapter outline composition and claim placement.
+- [x] Deterministic topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
 - [ ] PDF, DOCX, HTML and Markdown exporters.
 
 ## Applications
