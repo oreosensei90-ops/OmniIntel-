@@ -186,6 +186,7 @@ class TextbookStore:
     def link_evidence_reference(
         self, block_id: str, evidence_ref_id: str, *, relation: str = "SUPPORTS",
         review_state: str = "PENDING", rationale: str | None = None,
+        element_id: str | None = None,
     ) -> str:
         """Attach a textbook block to a transcript interval or document page citation."""
         if relation not in {"SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES", "CONTRADICTS"}:
@@ -196,9 +197,9 @@ class TextbookStore:
         with connect(self.database_path) as conn:
             conn.execute(
                 """INSERT INTO block_evidence_refs
-                   (id,block_id,evidence_ref_id,relation,review_state,rationale,created_at)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (link_id,block_id,evidence_ref_id,relation,review_state,rationale,utc_now()),
+                   (id,block_id,evidence_ref_id,relation,review_state,rationale,created_at,element_id)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (link_id,block_id,evidence_ref_id,relation,review_state,rationale,utc_now(),element_id),
             )
         return link_id
 
@@ -236,11 +237,15 @@ class TextbookStore:
                         """SELECT ber.id,ber.relation,ber.review_state,ber.rationale,
                                   er.id AS evidence_ref_id,er.locator_kind,er.start_ms,
                                   er.end_ms,er.page_number,er.source_id,er.source_asset_id,
-                                  COALESCE(e.content,dp.text_content) AS content
+                                  COALESCE(e.content,NULLIF(dp.text_content,''),ocr.text_content) AS content,
+                                  ber.element_id,de.element_type,de.text_content AS element_text,
+                                  de.review_state AS element_review_state
                            FROM block_evidence_refs ber
                            JOIN evidence_refs er ON er.id=ber.evidence_ref_id
                            LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
                            LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                           LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
+                           LEFT JOIN document_elements de ON de.id=ber.element_id
                            WHERE ber.block_id=? ORDER BY ber.created_at,ber.id""",
                         (block["id"],),
                     ).fetchall()
@@ -419,13 +424,18 @@ class TextbookStore:
                 with connect(self.database_path) as conn:
                     rows = conn.execute(
                         """SELECT c.id AS claim_id,c.statement,c.provenance,c.knowledge_unit_id,
-                                  cer.evidence_ref_id
+                                  cer.evidence_ref_id,cer.element_id
                            FROM document_topic_evidence_refs te
                            JOIN claim_evidence_refs cer
                              ON cer.evidence_ref_id=te.evidence_ref_id
+                             AND cer.element_id IS te.element_id
                            JOIN claims c ON c.id=cer.claim_id
                            WHERE te.topic_id=? AND te.review_state='ACCEPTED'
                              AND cer.relation='SUPPORTS' AND cer.review_state='ACCEPTED'
+                             AND (cer.element_id IS NULL OR EXISTS (
+                               SELECT 1 FROM document_elements de
+                               WHERE de.id=cer.element_id AND de.review_state='ACCEPTED'
+                             ))
                              AND c.status='SUPPORTED'
                              AND NOT EXISTS (
                                SELECT 1 FROM claim_evidence cx
@@ -449,10 +459,12 @@ class TextbookStore:
                             "provenance": row["provenance"],
                             "knowledge_unit_id": row["knowledge_unit_id"],
                             "evidence_ref_ids": [],
+                            "evidence_elements": {},
                         },
                     )
                     if row["evidence_ref_id"] not in claim["evidence_ref_ids"]:
                         claim["evidence_ref_ids"].append(row["evidence_ref_id"])
+                    claim["evidence_elements"][row["evidence_ref_id"]] = row["element_id"]
                 for ordinal, (claim_id, claim) in enumerate(grouped.items()):
                     block_id = self.add_block(
                         chapter_id,
@@ -470,6 +482,7 @@ class TextbookStore:
                         self.link_evidence_reference(
                             block_id,evidence_ref_id,
                             relation="SUPPORTS",review_state="ACCEPTED",
+                            element_id=claim["evidence_elements"].get(evidence_ref_id),
                         )
                 del pending[topic["id"]]
         return version_id
