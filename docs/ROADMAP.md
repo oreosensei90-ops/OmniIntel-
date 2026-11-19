@@ -31,7 +31,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Reviewed claim/evidence links with conservative publication gating.
 - [ ] Semantic relevance verifier and contradiction-scope analysis.
 - [ ] Knowledge graph and contradiction handling.
-- [x] Source-scoped topic hierarchy and reviewed topic/evidence alignment (initial slice).
+- [x] Source-scoped video topic hierarchy and reviewed timestamp/evidence alignment (initial slice).
+- [x] Page-native document topic hierarchy with reviewed unified evidence references and same-source guards.
 - [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).
 - [x] Deterministic topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
 - [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
