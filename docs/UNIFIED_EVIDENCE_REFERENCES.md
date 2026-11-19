@@ -24,7 +24,7 @@ omniintel search-evidence ./omniintel.db "velocity direction"
 omniintel resolve-evidence ./omniintel.db EVIDENCE_REFERENCE_ID
 \`\`\`
 
-The existing \`search-pages\` command remains useful for PDF-only retrieval. Search is lexical;
+The existing \`search-pages\` command remains useful for PDF-only retrieval. Search uses a shared SQLite FTS5 index over transcript and document-page evidence. It is lexical;
 it does not establish semantic support for a claim.
 
 ## Lifecycle
