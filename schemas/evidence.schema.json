@@ -108,5 +108,5 @@
     "provenance",
     "confidence"
   ],
-  "additionalProperties": false
+  "unevaluatedProperties": false
 }
