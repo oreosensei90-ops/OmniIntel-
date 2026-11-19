@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from omniintel.database import MigrationError, connect, migrate
+from omniintel.database import MIGRATIONS, MigrationError, connect, migrate
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.store import OmniIntelStore
 
@@ -53,7 +53,7 @@ def test_migrations_are_idempotent(tmp_path: Path) -> None:
     with connect(tmp_path / "db.sqlite") as conn:
         migrate(conn)
         migrate(conn)
-        assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == len(__import__("omniintel.database", fromlist=["MIGRATIONS"]).MIGRATIONS)
+        assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == len(MIGRATIONS)
 
 
 def test_applied_migration_cannot_be_changed(tmp_path: Path) -> None:
