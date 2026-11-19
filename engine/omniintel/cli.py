@@ -89,6 +89,36 @@ def main() -> None:
     plan_inputs.add_argument("paths", nargs="+", type=Path, help="Files or directories selected by the user")
     plan_inputs.add_argument("--recursive", action="store_true", help="Include files in selected directories recursively")
     plan_inputs.add_argument("--language", default=None, help="Confirmed spoken language(s), e.g. en or en,hi")
+    reader_open = sub.add_parser("reader-open", help="Open a course textbook with source-synchronized evidence navigation")
+    reader_open.add_argument("database", type=Path)
+    reader_open.add_argument("version_id")
+    reader_open.add_argument("--anchor-source-id", default=None)
+    reader_save = sub.add_parser("reader-save-position", help="Persist a local synchronized-reader position")
+    reader_save.add_argument("database", type=Path)
+    reader_save.add_argument("session_id")
+    reader_save.add_argument("version_id")
+    reader_save.add_argument("position_ms", type=int)
+    reader_save.add_argument("--anchor-source-id", default=None)
+    reader_save.add_argument("--current-source-id", default=None)
+    reader_save.add_argument("--chapter-id", default=None)
+    reader_save.add_argument("--block-id", default=None)
+    reader_resume = sub.add_parser("reader-resume", help="Restore a saved local reader position")
+    reader_resume.add_argument("database", type=Path)
+    reader_resume.add_argument("session_id")
+    course_export = sub.add_parser("course-export", help="Export a publication-ready course textbook")
+    course_export.add_argument("database", type=Path)
+    course_export.add_argument("version_id")
+    course_export.add_argument("format", choices=["markdown","html","pdf","docx"])
+    course_export.add_argument("output", type=Path)
+    course_export.add_argument("--font", type=Path, default=None)
+    quality_eval = sub.add_parser("quality-evaluate", help="Evaluate a local JSON benchmark fixture suite")
+    quality_eval.add_argument("database", type=Path)
+    quality_eval.add_argument("suite_name")
+    quality_eval.add_argument("dataset_version")
+    quality_eval.add_argument("cases_json", type=Path)
+    quality_list = sub.add_parser("quality-list", help="List saved local quality benchmark runs")
+    quality_list.add_argument("database", type=Path)
+    quality_list.add_argument("--suite", default=None)
     init = sub.add_parser("init", help="Initialize or migrate a local OmniIntel database")
     init.add_argument("database", type=Path)
     check = sub.add_parser("check", help="Run SQLite integrity checks")
@@ -386,6 +416,59 @@ def main() -> None:
 
         print(json.dumps(
             AlignmentStore(args.database).list(args.collection_id),
+            ensure_ascii=False,indent=2,
+        ))
+    elif args.command == "reader-open":
+        from .reader import SynchronizedReader
+
+        print(json.dumps(
+            SynchronizedReader(args.database).open_version(
+                args.version_id,anchor_source_id=args.anchor_source_id,
+            ),ensure_ascii=False,indent=2,
+        ))
+    elif args.command == "reader-save-position":
+        from .reader import SynchronizedReader
+
+        SynchronizedReader(args.database).save_position(
+            args.session_id,args.version_id,anchor_source_id=args.anchor_source_id,
+            current_source_id=args.current_source_id,position_ms=args.position_ms,
+            chapter_id=args.chapter_id,block_id=args.block_id,
+        )
+        print(json.dumps({"session_id":args.session_id,"saved":True},indent=2))
+    elif args.command == "reader-resume":
+        from .reader import SynchronizedReader
+
+        result=SynchronizedReader(args.database).resume(args.session_id)
+        if result is None:
+            raise SystemExit("Reader session not found")
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+    elif args.command == "course-export":
+        from .course_export import CourseTextbookExporter
+
+        exporter=CourseTextbookExporter(args.database)
+        if args.format=="markdown":
+            output=exporter.export_markdown(args.version_id,args.output)
+        elif args.format=="html":
+            output=exporter.export_html(args.version_id,args.output)
+        elif args.format=="pdf":
+            output=exporter.export_pdf(args.version_id,args.output,font_path=args.font)
+        else:
+            output=exporter.export_docx(args.version_id,args.output)
+        print(f"Exported course textbook: {output}")
+    elif args.command == "quality-evaluate":
+        from .quality_eval import QualityBenchmarkStore,evaluate_suite
+
+        cases=json.loads(args.cases_json.read_text(encoding="utf-8"))
+        report=evaluate_suite(cases)
+        run_id=QualityBenchmarkStore(args.database).record(
+            args.suite_name,report,dataset_version=args.dataset_version,
+        )
+        print(json.dumps({"run_id":run_id,**report},ensure_ascii=False,indent=2))
+    elif args.command == "quality-list":
+        from .quality_eval import QualityBenchmarkStore
+
+        print(json.dumps(
+            QualityBenchmarkStore(args.database).list_runs(args.suite),
             ensure_ascii=False,indent=2,
         ))
     if args.command == "plan-inputs":
