@@ -2550,6 +2550,24 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ON execution_source_effects(source_id);
         """
     ),
+    (
+        "0041_textbook_review_audit",
+        """
+        CREATE TABLE textbook_review_events (
+            id TEXT PRIMARY KEY,
+            version_id TEXT NOT NULL REFERENCES textbook_versions(id) ON DELETE RESTRICT,
+            target_type TEXT NOT NULL CHECK(target_type IN ('BLOCK','EVIDENCE')),
+            target_id TEXT NOT NULL,
+            previous_state TEXT NOT NULL,
+            new_state TEXT NOT NULL,
+            reviewer TEXT NOT NULL CHECK(length(trim(reviewer))>0),
+            rationale TEXT NOT NULL CHECK(length(trim(rationale))>0),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_textbook_review_events_version
+            ON textbook_review_events(version_id,created_at,id);
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
