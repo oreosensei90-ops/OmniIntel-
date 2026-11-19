@@ -2566,6 +2566,12 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         );
         CREATE INDEX idx_textbook_review_events_version
             ON textbook_review_events(version_id,created_at,id);
+        CREATE TRIGGER textbook_review_events_no_update
+        BEFORE UPDATE ON textbook_review_events
+        BEGIN SELECT RAISE(ABORT,'textbook review history is immutable'); END;
+        CREATE TRIGGER textbook_review_events_no_delete
+        BEFORE DELETE ON textbook_review_events
+        BEGIN SELECT RAISE(ABORT,'textbook review history is immutable'); END;
         """
     ),
 )

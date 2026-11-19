@@ -1,4 +1,5 @@
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -90,3 +91,22 @@ def test_rejected_evidence_keeps_publication_blocked(tmp_path: Path):
     report = TextbookPublicationAuditor(db).audit(version)
     assert not report.ready
     assert any(item.code == "BLOCK_HAS_UNREVIEWED_EVIDENCE" for item in report.findings)
+
+
+def test_review_history_cannot_be_modified_or_deleted(tmp_path: Path):
+    db,version,block,_ = _fixture(tmp_path)
+    review = TextbookReviewStore(db)
+    review.review_block(
+        version,block,"REJECTED",reviewer="human",rationale="The block is inaccurate.",
+    )
+    with connect(db) as conn:
+        event_id = conn.execute(
+            "SELECT id FROM textbook_review_events WHERE version_id=?", (version,)
+        ).fetchone()["id"]
+        with pytest.raises(sqlite3.IntegrityError,match="immutable"):
+            conn.execute(
+                "UPDATE textbook_review_events SET rationale='changed' WHERE id=?",
+                (event_id,),
+            )
+        with pytest.raises(sqlite3.IntegrityError,match="immutable"):
+            conn.execute("DELETE FROM textbook_review_events WHERE id=?", (event_id,))
