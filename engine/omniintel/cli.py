@@ -95,6 +95,7 @@ def main() -> None:
     review_element.add_argument("element_id")
     review_element.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
     review_element.add_argument("--rationale", default=None)
+    review_element.add_argument("--provenance", choices=["SOURCE","DERIVED","UNCERTAIN"], default=None)
     list_elements = sub.add_parser("list-document-elements", help="List extracted page-level document elements")
     list_elements.add_argument("database", type=Path)
     list_elements.add_argument("--page-id", default=None)
@@ -264,6 +265,7 @@ def main() -> None:
             "element_id": args.element_id,
             "review_state": review_document_element(
                 args.database,args.element_id,args.state,rationale=args.rationale,
+                provenance=args.provenance,
             ),
         },ensure_ascii=False,indent=2))
     elif args.command == "list-document-elements":
