@@ -17,6 +17,6 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e '[dev,publishing,documents]'
+      - run: python -m pip install -e '.[dev,publishing,documents]'
       - run: pytest -q
       - run: ruff check engine tests
