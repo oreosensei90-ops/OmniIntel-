@@ -9,7 +9,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial source/transcript/evidence persistence and knowledge schema migrations.
 - [x] Initial content-addressed asset blob store, source-asset registry and source-safe IMAGE/DIAGRAM block links (local ingestion only; visual rendering implemented).
 - [x] Initial local-file source registration with content-addressed byte preservation and explicit unverified-rights metadata (content extraction pending).
-- [x] Read-only plan-first local input classification with resource/network declarations and explicit language/caption/clock questions.\n- [ ] Approved plan execution coordinator with TOCTOU revalidation and durable stage-job creation.\n- [ ] Authorized source adapters and richer evidence types.
+- [x] Read-only plan-first local input classification with resource/network declarations and explicit language/caption/clock questions.\n- [ ] Approved plan execution coordinator with TOCTOU revalidation and durable stage-job creation.\n- [x] Ordered source collections/courses with typed source roles and source identity preserved.\n- [ ] Multi-source textbook composition and reviewed cross-source timeline alignment.\n- [ ] Authorized source adapters and richer evidence types.
 - [x] Persistent leased job queue with idempotency and bounded retries (initial slice; stage DAG/checkpoints remain pending).
 - [x] Initial cross-platform JSON Schema contracts and validation tests.
 
