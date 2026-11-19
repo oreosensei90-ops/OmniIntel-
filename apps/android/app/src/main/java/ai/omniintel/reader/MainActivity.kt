@@ -1,0 +1,208 @@
+package ai.omniintel.reader
+
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+
+private val Ink = Color(0xFF111318)
+private val Panel = Color(0xFF1B1F27)
+private val Gold = Color(0xFFE2BD71)
+private val Muted = Color(0xFF9BA3B2)
+
+data class Evidence(val source: String, val locator: String, val excerpt: String)
+data class Block(val id: String, val type: String, val text: String, val provenance: String, val evidence: List<Evidence>)
+data class Chapter(val title: String, val blocks: List<Block>)
+data class Book(val title: String, val chapters: List<Chapter>)
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme(colorScheme = darkColorScheme(
+                primary = Gold, onPrimary = Ink, background = Ink, surface = Panel,
+                onBackground = Color(0xFFF1F2F4), onSurface = Color(0xFFF1F2F4)
+            )) {
+                Surface(Modifier.fillMaxSize(), color = Ink) {
+                    ReaderScreen { uri, callback ->
+                        lifecycleScope.launch {
+                            callback(withContext(Dispatchers.IO) { runCatching { parse(uri) } })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun parse(uri: Uri): Book {
+        val raw = contentResolver.openInputStream(uri).use { stream ->
+            requireNotNull(stream) { "Unable to open selected file." }
+            BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
+                val out = StringBuilder()
+                val buffer = CharArray(8192)
+                var size = 0
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    size += count
+                    require(size <= 50 * 1024 * 1024) { "Reader export exceeds 50 MiB." }
+                    out.append(buffer, 0, count)
+                }
+                out.toString()
+            }
+        }
+        val root = JSONObject(raw)
+        val version = root.optJSONObject("version") ?: error("Missing textbook version.")
+        val sourceTitles = mutableMapOf<String, String>()
+        val sources = root.optJSONArray("sources") ?: JSONArray()
+        for (i in 0 until sources.length()) {
+            val source = sources.optJSONObject(i) ?: continue
+            sourceTitles[source.optString("source_id")] = source.optString("title", "Course source")
+        }
+        val rawChapters = root.optJSONArray("chapters") ?: error("Missing chapters.")
+        val chapters = (0 until rawChapters.length()).mapNotNull { i ->
+            val entry = rawChapters.optJSONObject(i) ?: return@mapNotNull null
+            val chapter = entry.optJSONObject("chapter") ?: JSONObject()
+            val rawBlocks = entry.optJSONArray("blocks") ?: JSONArray()
+            val blocks = (0 until rawBlocks.length()).mapNotNull { j ->
+                val block = rawBlocks.optJSONObject(j) ?: return@mapNotNull null
+                val content = block.optJSONObject("content") ?: JSONObject()
+                val evidenceArray = block.optJSONArray("evidence") ?: JSONArray()
+                val evidence = (0 until evidenceArray.length()).mapNotNull { k ->
+                    val item = evidenceArray.optJSONObject(k) ?: return@mapNotNull null
+                    val page = item.optJSONObject("document_page")
+                    val excerpts = item.optJSONArray("transcript_excerpt") ?: JSONArray()
+                    val excerpt = (0 until excerpts.length()).mapNotNull { n ->
+                        excerpts.optJSONObject(n)?.optString("text")
+                    }.joinToString(" ")
+                    val sourceId = item.optString("source_id")
+                    val pageNo = if (page == null || page.isNull("page_number")) null else page.optInt("page_number")
+                    val start = if (item.isNull("local_start_ms")) null else item.optLong("local_start_ms")
+                    Evidence(
+                        sourceTitles[sourceId] ?: item.optJSONObject("source")?.optString("title") ?: "Course source",
+                        pageNo?.let { "page " + it } ?: start?.let { "%.1fs".format(it / 1000.0) } ?: "source reference",
+                        excerpt.ifBlank { page?.optString("text_content").orEmpty().take(700) }
+                    )
+                }
+                val text = listOf("text", "body", "definition", "description", "code", "latex", "expression", "term")
+                    .firstNotNullOfOrNull { key -> content.optString(key).takeIf { it.isNotBlank() } }.orEmpty()
+                Block(
+                    block.optString("id", "\${i}-\${j}"),
+                    block.optString("block_type", "PARAGRAPH"),
+                    text,
+                    block.optString("provenance", "UNSPECIFIED"),
+                    evidence
+                )
+            }
+            Chapter(chapter.optString("title", "Chapter \${i + 1}"), blocks)
+        }
+        require(chapters.isNotEmpty()) { "This textbook has no readable chapters." }
+        return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), chapters)
+    }
+}
+
+@Composable
+private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
+    var book by remember { mutableStateOf<Book?>(null) }
+    var chapterIndex by remember { mutableIntStateOf(0) }
+    var query by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) open(uri) { result ->
+            result.onSuccess { book = it; chapterIndex = 0; query = ""; error = null }
+                .onFailure { error = it.message ?: "Could not open reader export." }
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().background(Panel).padding(18.dp),
+            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("OMNIINTEL", color = Color.White, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text("OFFLINE READER", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
+            }
+            OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/*", "*/*")) }) {
+                Text(if (book == null) "Open textbook" else "Open another")
+            }
+        }
+        val current = book
+        if (current == null) {
+            Column(
+                Modifier.fillMaxSize().padding(28.dp),
+                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Your learning library.", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                Text("On your device.", fontSize = 32.sp, color = Gold, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(18.dp))
+                Text("Open an OmniIntel reader JSON export. It stays on this device; no account or network connection is required.", color = Muted)
+                Spacer(Modifier.height(20.dp))
+                Button(onClick = { picker.launch(arrayOf("application/json", "text/*", "*/*")) }) { Text("Choose reader export") }
+                error?.let { Text(it, color = Color(0xFFFF8C82), modifier = Modifier.padding(top = 12.dp)) }
+            }
+        } else {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(current.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("\${current.chapters.size} chapters", color = Muted, fontSize = 11.sp)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+                    singleLine = true, label = { Text("Search this chapter") }
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }, enabled = chapterIndex > 0) { Text("Previous") }
+                    OutlinedButton(onClick = { chapterIndex = (chapterIndex + 1).coerceAtMost(current.chapters.lastIndex) }, enabled = chapterIndex < current.chapters.lastIndex) { Text("Next") }
+                }
+                Text("CHAPTER \${chapterIndex + 1} / \${current.chapters.size}", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
+                Text(current.chapters[chapterIndex].title, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            }
+            val blocks = current.chapters[chapterIndex].blocks.filter { block ->
+                query.isBlank() || block.text.contains(query, true) ||
+                    block.evidence.any { it.excerpt.contains(query, true) || it.source.contains(query, true) }
+            }
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(blocks, key = { it.id }) { block ->
+                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
+                            Text(block.text, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 7.dp))
+                            Text("PROVENANCE · \${block.provenance}", color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 8.dp))
+                            block.evidence.forEach { evidence ->
+                                HorizontalDivider(color = Color(0xFF343945), modifier = Modifier.padding(vertical = 8.dp))
+                                Text("\${evidence.source} · \${evidence.locator}", color = Gold, fontSize = 11.sp)
+                                if (evidence.excerpt.isNotBlank()) Text(evidence.excerpt, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                            }
+                        }
+                    }
+                }
+                if (blocks.isEmpty()) item { Text("No matching blocks in this chapter.", color = Muted) }
+            }
+        }
+    }
+}
