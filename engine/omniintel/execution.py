@@ -60,8 +60,6 @@ class PlanExecutor:
                 raise PlanExecutionError(f"Input is not a regular file: {path.name}")
             stat = path.stat()
             size = stat.st_size
-            planned_mtime = item.get("modified_ns")
-            planned_inode = item.get("file_id")
             if (size <= 0 or size != item["byte_size"]
                     or (item.get("modified_ns") and stat.st_mtime_ns != item["modified_ns"])
                     or (item.get("file_id") and stat.st_ino != item["file_id"])):
