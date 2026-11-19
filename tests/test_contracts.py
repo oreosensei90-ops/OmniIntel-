@@ -104,3 +104,37 @@ def test_knowledge_contracts_preserve_provenance_and_review_states():
     assert link_validator.is_valid(link)
     link["review_state"] = "AUTO_APPROVED"
     assert not link_validator.is_valid(link)
+
+def test_unified_evidence_reference_contract_supports_native_locators():
+    validator = validator_for("evidence-reference.schema.json")
+    common = {
+        "id": "0190f2a1-1234-7123-8123-123456789abc",
+        "source_id": "0190f2a1-1234-7123-8123-123456789abd",
+        "created_at": "2026-11-19T08:00:00Z",
+    }
+    transcript = {
+        **common,
+        "locator_kind": "TRANSCRIPT_INTERVAL",
+        "evidence_item_id": "0190f2a1-1234-7123-8123-123456789abe",
+        "document_page_id": None,
+        "source_asset_id": None,
+        "start_ms": 1500,
+        "end_ms": 4200,
+        "page_number": None,
+    }
+    assert validator.is_valid(transcript)
+
+    page = {
+        **common,
+        "locator_kind": "DOCUMENT_PAGE",
+        "evidence_item_id": None,
+        "document_page_id": "0190f2a1-1234-7123-8123-123456789abf",
+        "source_asset_id": "0190f2a1-1234-7123-8123-123456789ab0",
+        "start_ms": None,
+        "end_ms": None,
+        "page_number": 7,
+    }
+    assert validator.is_valid(page)
+    page["start_ms"] = 0
+    assert not validator.is_valid(page)
+
