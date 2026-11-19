@@ -21,15 +21,16 @@ Install the optional parser dependency using \`pip install -e ".[documents]"\`.
 - Original PDF bytes remain unchanged in content-addressed storage.
 
 Page numbers are one-based and are not represented as fake video timestamps. Page text is stored
-separately from transcript segments. A future unified evidence-reference layer will connect
-document pages and transcript intervals to the same claim, topic and textbook evidence workflows.
+separately from transcript segments. Unified evidence references now connect document pages and
+transcript intervals to shared claim, topic and textbook evidence workflows. See DOCUMENT_OCR.md,
+DOCUMENT_STRUCTURE.md and DOCUMENT_PIPELINE.md for scanned-page OCR and structured extraction.
 
 ## Limits and security boundaries
 
 Defaults: 500 pages, 100,000 characters per page and 5,000,000 total extracted characters.
-Encrypted PDFs are rejected. The parser does not execute JavaScript, follow links, download
-resources, unpack attachments, OCR scanned pages, render images or validate the truth of extracted
-text. Empty pages are explicitly marked; they may be image-only/scanned pages.
+Encrypted PDFs are rejected. The text parser does not execute JavaScript, follow links, download
+resources or unpack attachments. OCR and raster rendering are separate optional local stages;
+see DOCUMENT_OCR.md. Empty pages are explicitly marked and can be sent to OCR.
 
 Extraction errors abort before page records are written. Extraction is local-only and uses the
 content-addressed asset hash check before parsing. File size is already bounded at ingestion.
