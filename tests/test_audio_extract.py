@@ -107,7 +107,14 @@ def _setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, ffmpeg_kwargs: di
             return str(encoder)
         return None
 
-    monkeypatch.setattr("shutil.which",which)
+    monkeypatch.setattr(
+        "omniintel.media_probe.shutil.which",
+        lambda name: str(probe) if name == "ffprobe" else None,
+    )
+    monkeypatch.setattr(
+        "omniintel.audio_extract.find_executable",
+        lambda name: str(encoder) if name == "ffmpeg" else None,
+    )
     return database, assets, imported, probe, encoder
 
 
@@ -151,7 +158,7 @@ def test_extract_audio_rejects_missing_audio_and_non_audio_stream(
     database, assets, imported, _, _ = _setup(tmp_path, monkeypatch)
     no_audio_probe = _ffprobe(tmp_path / "ffprobe-no-audio", audio=False)
     monkeypatch.setattr(
-        "shutil.which",
+        "omniintel.media_probe.shutil.which",
         lambda name: str(no_audio_probe) if name == "ffprobe" else None,
     )
     with pytest.raises(ValueError, match="no audio stream"):
@@ -163,8 +170,12 @@ def test_extract_audio_rejects_missing_audio_and_non_audio_stream(
     probe2 = _ffprobe(tmp_path / "ffprobe-other")
     encoder = _ffmpeg(tmp_path / "ffmpeg-other")
     monkeypatch.setattr(
-        "shutil.which",
-        lambda name: str(probe2) if name == "ffprobe" else str(encoder) if name == "ffmpeg" else None,
+        "omniintel.media_probe.shutil.which",
+        lambda name: str(probe2) if name == "ffprobe" else None,
+    )
+    monkeypatch.setattr(
+        "omniintel.audio_extract.find_executable",
+        lambda name: str(encoder) if name == "ffmpeg" else None,
     )
     with pytest.raises(ValueError, match="not an audio stream"):
         extract_audio(database2, assets2, imported2.asset.id, stream_index=0)
@@ -196,7 +207,7 @@ def test_extract_audio_enforces_timeout_and_negative_stream_offset(
 
     negative_probe = _ffprobe(tmp_path / "ffprobe-negative", start_time="-0.250", version="7.2")
     monkeypatch.setattr(
-        "shutil.which",
+        "omniintel.media_probe.shutil.which",
         lambda name: str(negative_probe) if name == "ffprobe" else str(encoder) if name == "ffmpeg" else None,
     )
     with pytest.raises(ValueError, match="Negative audio stream start"):
