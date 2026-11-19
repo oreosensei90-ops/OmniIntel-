@@ -322,11 +322,11 @@ class TextbookStore:
                 with connect(self.database_path) as conn:
                     source_elements = conn.execute(
                         """SELECT de.id,de.element_type,de.text_content,de.content_json,
-                                  de.asset_id,de.evidence_ref_id
+                                  de.asset_id,de.evidence_ref_id,de.provenance
                            FROM document_topic_evidence_refs te
                            JOIN document_elements de ON de.id=te.element_id
                            WHERE te.topic_id=? AND te.review_state='ACCEPTED'
-                             AND de.review_state='ACCEPTED' AND de.provenance='SOURCE'
+                             AND de.review_state='ACCEPTED'
                            ORDER BY de.ordinal,de.id""",
                         (topic["id"],),
                     ).fetchall()
@@ -363,7 +363,7 @@ class TextbookStore:
                         BlockInput(
                             block_type=block_type,
                             content=content,
-                            provenance="SOURCE",
+                            provenance=element["provenance"],
                             review_status="ACCEPTED",
                             ordinal=block_ordinal,
                         ),
