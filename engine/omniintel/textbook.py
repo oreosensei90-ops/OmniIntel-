@@ -482,6 +482,66 @@ class TextbookStore:
                 )
                 chapter_ids[topic["id"]] = chapter_id
                 with connect(self.database_path) as conn:
+                    source_elements = conn.execute(
+                        """SELECT de.id,de.element_type,de.text_content,de.content_json,
+                                  de.asset_id,de.evidence_ref_id,de.provenance
+                           FROM document_topic_evidence_refs te
+                           JOIN document_elements de ON de.id=te.element_id
+                           WHERE te.topic_id=? AND te.review_state='ACCEPTED'
+                             AND de.review_state='ACCEPTED'
+                           ORDER BY de.ordinal,de.id""",
+                        (topic["id"],),
+                    ).fetchall()
+                block_ordinal = 0
+                for element in source_elements:
+                    element_content = json.loads(element["content_json"])
+                    element_type = element["element_type"]
+                    if element_type == "HEADING":
+                        continue
+                    if element_type == "FIGURE":
+                        if not element["asset_id"]:
+                            continue
+                        block_type = "DIAGRAM"
+                        content = {
+                            "description": element_content.get(
+                                "description","Figure extracted from source document"
+                            ),
+                            "source_page_element_id": element["id"],
+                        }
+                    elif element_type == "TABLE":
+                        block_type = "TABLE"
+                        content = element_content
+                    elif element_type == "EQUATION":
+                        block_type = "EQUATION"
+                        content = element_content
+                    else:
+                        block_type = "PARAGRAPH"
+                        content = {
+                            "text": element["text_content"],
+                            "source_element_type": element_type,
+                        }
+                    block_id = self.add_block(
+                        chapter_id,
+                        BlockInput(
+                            block_type=block_type,
+                            content=content,
+                            provenance=element["provenance"],
+                            review_status="ACCEPTED",
+                            ordinal=block_ordinal,
+                        ),
+                    )
+                    self.link_evidence_reference(
+                        block_id,element["evidence_ref_id"],
+                        relation="SUPPORTS",review_state="ACCEPTED",
+                        element_id=element["id"],
+                    )
+                    if element_type == "FIGURE" and element["asset_id"]:
+                        self.link_asset(
+                            block_id,element["asset_id"],
+                            caption=element_content.get("description",""),
+                        )
+                    block_ordinal += 1
+                with connect(self.database_path) as conn:
                     rows = conn.execute(
                         """SELECT c.id AS claim_id,c.statement,c.provenance,c.knowledge_unit_id,
                                   cer.evidence_ref_id,cer.element_id
@@ -525,7 +585,7 @@ class TextbookStore:
                     if row["evidence_ref_id"] not in claim["evidence_ref_ids"]:
                         claim["evidence_ref_ids"].append(row["evidence_ref_id"])
                     claim["evidence_elements"][row["evidence_ref_id"]] = row["element_id"]
-                for ordinal, (claim_id, claim) in enumerate(grouped.items()):
+                for ordinal, (claim_id, claim) in enumerate(grouped.items(), start=block_ordinal):
                     block_id = self.add_block(
                         chapter_id,
                         BlockInput(
