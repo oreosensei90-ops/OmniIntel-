@@ -270,3 +270,13 @@ omniintel course-book-audit ./omniintel.db VERSION_ID
 ```
 
 Course textbook evidence remains source-specific. Clock alignment proposals use measured feature envelopes and remain NEEDS_REVIEW until reviewed. Existing single-source exporters are not yet connected to course textbook versions. See [docs/DEEP_RESEARCH_AUDIT_2026-11-19.md](docs/DEEP_RESEARCH_AUDIT_2026-11-19.md).
+
+For a measured source-clock proposal, prepare two numeric feature envelopes sampled at the same interval (for example, audio-energy envelopes). The CLI records a candidate only; it does not infer alignment from filenames or accept it automatically:
+
+```bash
+omniintel propose-source-alignment ./omniintel.db COLLECTION_ID SOURCE_A_ID SOURCE_B_ID ./signals.json --sample-interval-ms 100 --max-lag-samples 300 --rationale "Shared audio energy pattern"
+omniintel list-source-alignments ./omniintel.db COLLECTION_ID
+omniintel review-source-alignment ./omniintel.db ALIGNMENT_ID ACCEPTED
+```
+
+The JSON file contains `signal_a` and `signal_b` arrays. Feature extraction and resampling to a common interval are upstream responsibilities; use an appropriately reviewed signal pair. See the alignment caveats in the design document.
