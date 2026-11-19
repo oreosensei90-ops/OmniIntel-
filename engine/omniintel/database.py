@@ -1615,6 +1615,159 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0025_document_topic_element_multiplicity",
+        """
+        DROP TRIGGER document_topic_evidence_same_source_insert;
+        DROP TRIGGER document_topic_evidence_same_source_update;
+        DROP TRIGGER topic_element_reference_validate_insert;
+        DROP TRIGGER topic_element_reference_validate_update;
+        DROP TRIGGER topic_ocr_review_guard_insert;
+        DROP TRIGGER topic_ocr_review_guard_update;
+        DROP TRIGGER document_element_review_demotion;
+        DROP TRIGGER document_ocr_review_demotion;
+        ALTER TABLE document_topic_evidence_refs RENAME TO document_topic_evidence_refs_old;
+        CREATE TABLE document_topic_evidence_refs (
+            id TEXT PRIMARY KEY,
+            topic_id TEXT NOT NULL REFERENCES document_topics(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN (
+                'INTRODUCES','DEVELOPS','RECAPITULATES','DEMONSTRATES','CONTRASTS'
+            )),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            relevance_score REAL CHECK(relevance_score IS NULL OR
+                (relevance_score >= 0 AND relevance_score <= 1)),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            element_id TEXT REFERENCES document_elements(id) ON DELETE RESTRICT,
+            UNIQUE(topic_id,evidence_ref_id,element_id,relation)
+        );
+        INSERT INTO document_topic_evidence_refs(
+            id,topic_id,evidence_ref_id,relation,review_state,relevance_score,
+            rationale,created_at,reviewed_at,element_id
+        )
+        SELECT id,topic_id,evidence_ref_id,relation,review_state,relevance_score,
+               rationale,created_at,reviewed_at,NULL
+        FROM document_topic_evidence_refs_old;
+        DROP TABLE document_topic_evidence_refs_old;
+        CREATE UNIQUE INDEX idx_document_topic_evidence_page_unique
+            ON document_topic_evidence_refs(topic_id,evidence_ref_id,relation)
+            WHERE element_id IS NULL;
+        CREATE INDEX idx_document_topic_evidence_topic
+            ON document_topic_evidence_refs(topic_id,review_state);
+        CREATE TRIGGER document_topic_evidence_same_source_insert
+        BEFORE INSERT ON document_topic_evidence_refs
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_topics t
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE t.id=NEW.topic_id AND t.source_id=er.source_id
+            ) THEN RAISE(ABORT,'document topic evidence must belong to the topic source') END;
+        END;
+        CREATE TRIGGER document_topic_evidence_same_source_update
+        BEFORE UPDATE OF topic_id,evidence_ref_id ON document_topic_evidence_refs
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_topics t
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE t.id=NEW.topic_id AND t.source_id=er.source_id
+            ) THEN RAISE(ABORT,'document topic evidence must belong to the topic source') END;
+        END;
+        CREATE TRIGGER topic_element_reference_validate_insert
+        BEFORE INSERT ON document_topic_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'topic element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'topic element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER topic_element_reference_validate_update
+        BEFORE UPDATE OF element_id,evidence_ref_id,review_state ON document_topic_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'topic element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'topic element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER topic_ocr_review_guard_insert
+        BEFORE INSERT ON document_topic_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before topic evidence link');
+        END;
+        CREATE TRIGGER topic_ocr_review_guard_update
+        BEFORE UPDATE OF review_state,evidence_ref_id ON document_topic_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before topic evidence link');
+        END;
+        CREATE TRIGGER document_element_review_demotion
+        AFTER UPDATE OF review_state ON document_elements
+        WHEN NEW.review_state <> 'ACCEPTED'
+        BEGIN
+            UPDATE claim_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+            UPDATE block_evidence_refs SET review_state='NEEDS_REVIEW'
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+            UPDATE document_topic_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+            UPDATE knowledge_unit_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+        END;
+        CREATE TRIGGER document_ocr_review_demotion
+        AFTER UPDATE OF status ON document_ocr_pages
+        WHEN NEW.status <> 'ACCEPTED'
+        BEGIN
+            UPDATE claim_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+            UPDATE block_evidence_refs SET review_state='NEEDS_REVIEW'
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+            UPDATE document_topic_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+            UPDATE knowledge_unit_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
