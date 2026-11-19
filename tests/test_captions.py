@@ -65,7 +65,7 @@ def test_caption_duration_must_cover_all_cues() -> None:
 
 def test_import_caption_file_uses_filename_and_utf8_bom(tmp_path: Path) -> None:
     path = tmp_path / "sample.srt"
-    path.write_text("\\ufeff1\n00:00:00,000 --> 00:00:01,000\nनमस्ते", encoding="utf-8")
+    path.write_text("\ufeff1\n00:00:00,000 --> 00:00:01,000\nनमस्ते", encoding="utf-8")
     parsed = import_caption_file(path, language="hi")
     assert parsed.title == "sample"
     assert parsed.segments[0].text == "नमस्ते"
