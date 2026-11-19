@@ -14,6 +14,7 @@ from .html_export import TextbookHTMLExporter
 from .markdown_export import TextbookMarkdownExporter
 from .captions import import_caption_file
 from .local_files import import_local_file
+from .document_pdf import extract_pdf
 
 
 def main() -> None:
@@ -52,6 +53,13 @@ def main() -> None:
     import_file.add_argument("file", type=Path)
     import_file.add_argument("--title", default=None)
     import_file.add_argument("--max-bytes", type=int, default=250 * 1024 * 1024)
+    extract_pdf_cmd = sub.add_parser("extract-pdf", help="Extract bounded page text from an ingested local PDF asset")
+    extract_pdf_cmd.add_argument("database", type=Path)
+    extract_pdf_cmd.add_argument("asset_dir", type=Path)
+    extract_pdf_cmd.add_argument("asset_id")
+    extract_pdf_cmd.add_argument("--max-pages", type=int, default=500)
+    extract_pdf_cmd.add_argument("--max-chars-per-page", type=int, default=100_000)
+    extract_pdf_cmd.add_argument("--max-total-chars", type=int, default=5_000_000)
     export_markdown = sub.add_parser("export-markdown", help="Export a publication-ready textbook to portable Markdown")
     export_markdown.add_argument("database", type=Path)
     export_markdown.add_argument("version_id")
@@ -100,6 +108,27 @@ def main() -> None:
             "media_type": result.asset.media_type,
             "byte_size": result.asset.byte_size,
             "rights_status": "UNVERIFIED",
+        }, ensure_ascii=False, indent=2))
+    elif args.command == "extract-pdf":
+        result = extract_pdf(
+            args.database, args.asset_dir, args.asset_id,
+            max_pages=args.max_pages,
+            max_chars_per_page=args.max_chars_per_page,
+            max_total_chars=args.max_total_chars,
+        )
+        print(json.dumps({
+            "extraction_id": result.extraction_id,
+            "source_id": result.source_id,
+            "asset_id": result.asset_id,
+            "page_count": result.page_count,
+            "extracted_pages": result.extracted_pages,
+            "empty_pages": result.empty_pages,
+            "pages": [
+                {"page_id": page.id, "page_number": page.page_number,
+                 "char_count": page.char_count, "sha256": page.content_sha256,
+                 "status": page.status}
+                for page in result.pages
+            ],
         }, ensure_ascii=False, indent=2))
     elif args.command == "export-pdf":
         output = TextbookPDFExporter(args.database).export(
