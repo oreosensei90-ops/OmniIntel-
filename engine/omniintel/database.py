@@ -1968,6 +1968,49 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         CREATE INDEX idx_media_streams_type ON media_streams(probe_id,codec_type);
         """
     ),
+    (
+        "0030_audio_derivatives_and_timeline_offsets",
+        """
+        ALTER TABLE media_streams ADD COLUMN start_ms INTEGER;
+        ALTER TABLE transcription_runs ADD COLUMN time_offset_ms INTEGER NOT NULL DEFAULT 0
+            CHECK(time_offset_ms>=0);
+        CREATE TABLE media_derivatives (
+            id TEXT PRIMARY KEY,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            output_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            source_sha256 TEXT NOT NULL CHECK(length(source_sha256)=64),
+            output_sha256 TEXT NOT NULL CHECK(length(output_sha256)=64),
+            config_sha256 TEXT NOT NULL CHECK(length(config_sha256)=64),
+            operation TEXT NOT NULL CHECK(operation='AUDIO_PCM_WAV'),
+            tool_name TEXT NOT NULL CHECK(tool_name='ffmpeg'),
+            tool_version TEXT NOT NULL CHECK(length(trim(tool_version))>0),
+            stream_index INTEGER NOT NULL CHECK(stream_index>=0),
+            source_stream_start_ms INTEGER,
+            time_offset_ms INTEGER NOT NULL CHECK(time_offset_ms>=0),
+            duration_ms INTEGER NOT NULL CHECK(duration_ms>0),
+            sample_rate INTEGER NOT NULL CHECK(sample_rate=16000),
+            channels INTEGER NOT NULL CHECK(channels=1),
+            sample_width INTEGER NOT NULL CHECK(sample_width=2),
+            byte_size INTEGER NOT NULL CHECK(byte_size>0),
+            metadata_json TEXT NOT NULL CHECK(json_valid(metadata_json)),
+            created_at TEXT NOT NULL,
+            UNIQUE(source_asset_id,config_sha256)
+        );
+        CREATE INDEX idx_media_derivatives_output ON media_derivatives(output_asset_id);
+        CREATE TRIGGER media_derivative_source_guard
+        BEFORE INSERT ON media_derivatives
+        WHEN
+            (SELECT source_id FROM source_assets WHERE id=NEW.source_asset_id) IS NULL
+            OR
+            (SELECT source_id FROM source_assets WHERE id=NEW.source_asset_id) <>
+            (SELECT source_id FROM source_assets WHERE id=NEW.output_asset_id)
+            OR
+            (SELECT role FROM source_assets WHERE id=NEW.output_asset_id) <> 'AUDIO'
+        BEGIN
+            SELECT RAISE(ABORT,'media derivative assets must share a source and output role must be AUDIO');
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
