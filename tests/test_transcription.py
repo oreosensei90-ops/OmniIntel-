@@ -269,7 +269,7 @@ def test_transcription_applies_extracted_stream_offset_to_source_timestamps(tmp_
     assert reference["start_ms"] == 2350
 
 
-def test_transcription_rejects_negative_or_out_of-source_timeline_offsets(tmp_path: Path) -> None:
+def test_transcription_rejects_negative_or_out_of_source_timeline_offsets(tmp_path: Path) -> None:
     database,assets,imported = _import_audio(tmp_path,seconds=5)
     with pytest.raises(ValueError,match="non-negative integer"):
         run_wav_transcription(
