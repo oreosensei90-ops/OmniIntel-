@@ -140,9 +140,10 @@ class CourseTextbookStore:
                 for block in blocks:
                     links=conn.execute(
                         """SELECT l.*,er.source_id,er.locator_kind,er.start_ms,er.end_ms,
-                                  er.page_number,er.id AS citation_id
+                                  er.page_number,er.id AS citation_id,s.title AS source_title
                            FROM course_textbook_block_evidence l
                            JOIN evidence_refs er ON er.id=l.evidence_ref_id
+                           JOIN sources s ON s.id=er.source_id
                            WHERE l.block_id=? ORDER BY l.created_at,l.id""",(block["id"],)
                     ).fetchall()
                     item=dict(block); item["content"]=json.loads(item.pop("content_json"))
