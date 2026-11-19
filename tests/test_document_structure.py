@@ -82,12 +82,23 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     assert review_document_element(database,paragraph.id,"ACCEPTED") == "ACCEPTED"
 
     candidates = create_knowledge_candidates_from_document_elements(database,imported.source_id)
+    repeated_candidates = create_knowledge_candidates_from_document_elements(
+        database,imported.source_id
+    )
+    assert candidates.candidate_unit_ids == repeated_candidates.candidate_unit_ids
     assert len(candidates.candidate_unit_ids) == 1
     candidate_id = candidates.candidate_unit_ids[0]
     candidate_bundle = KnowledgeStore(database).get_unit_bundle(candidate_id)
     assert candidate_bundle["unit"]["status"] == "NEEDS_REVIEW"
     assert candidate_bundle["unit"]["source_element_id"] == paragraph.id
     assert candidate_bundle["evidence_references"][0]["element_id"] == paragraph.id
+    other_element = next(item for item in result.elements if item.id != paragraph.id)
+    import sqlite3
+    import pytest
+    with pytest.raises(sqlite3.IntegrityError,match="must match its source element"):
+        KnowledgeStore(database).link_unit_evidence_reference(
+            candidate_id,paragraph.evidence_ref_id,element_id=other_element.id,
+        )
     KnowledgeStore(database).review_unit_evidence_reference(
         candidate_bundle["evidence_references"][0]["link_id"],"ACCEPTED"
     )
