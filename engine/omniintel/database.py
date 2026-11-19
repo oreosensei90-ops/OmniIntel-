@@ -2260,6 +2260,38 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         BEGIN SELECT RAISE(ABORT,'visual claim verification must remain within one source'); END;
         """
     ),
+    (
+        "0034_source_collections",
+        """
+        CREATE TABLE source_collections (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+            collection_type TEXT NOT NULL CHECK(collection_type IN (
+                'COURSE','PLAYLIST','PROJECT','RESEARCH_SET'
+            )),
+            description TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+                CHECK(json_valid(metadata_json)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_source_collections_type_updated
+            ON source_collections(collection_type,updated_at);
+        CREATE TABLE collection_sources (
+            collection_id TEXT NOT NULL REFERENCES source_collections(id) ON DELETE CASCADE,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            role TEXT NOT NULL DEFAULT 'LEARNING_SOURCE' CHECK(role IN (
+                'LEARNING_SOURCE','SLIDE_DECK','CAPTIONS','REFERENCE','NOTES'
+            )),
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            added_at TEXT NOT NULL,
+            PRIMARY KEY(collection_id,source_id),
+            UNIQUE(collection_id,ordinal)
+        );
+        CREATE INDEX idx_collection_sources_source
+            ON collection_sources(source_id,collection_id);
+        """,
+    ),
 )
 
 class MigrationError(RuntimeError):
