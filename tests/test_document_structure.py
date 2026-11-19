@@ -7,7 +7,6 @@ from reportlab.pdfgen import canvas
 from omniintel.document_pdf import extract_pdf
 from omniintel.document_structure import (
     extract_document_structure,
-    list_document_elements,
     review_document_element,
     search_document_elements,
 )
@@ -59,6 +58,7 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     assets = tmp_path / "assets"
     imported = import_local_file(database,assets,pdf,title="Momentum lesson")
     extracted = extract_pdf(database,assets,imported.asset.id)
+    assert extracted.page_count == 1
     result = extract_document_structure(database,assets,imported.asset.id)
 
     kinds = {item.element_type for item in result.elements}
