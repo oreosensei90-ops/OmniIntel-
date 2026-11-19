@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -154,6 +156,7 @@ class MainActivity : ComponentActivity() {
                 val text = listOf("text", "body", "definition", "description", "code", "latex", "expression", "term")
                     .firstNotNullOfOrNull { key -> content.optString(key).takeIf { it.isNotBlank() } }.orEmpty()
                 val requestedId = block.optString("id").takeIf { it.isNotBlank() } ?: "${i}-${j}"
+                require(requestedId.length <= 128) { "A textbook block ID exceeds 128 characters." }
                 var stableId = requestedId
                 var suffix = 1
                 while (!seenBlockIds.add(stableId)) {
@@ -182,6 +185,10 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     var book by remember { mutableStateOf<Book?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
+    var notesByBlock by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var bookmarkedBlocks by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var editingBlockId by remember { mutableStateOf<String?>(null) }
+    var noteDraft by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedSourceId by remember { mutableStateOf<String?>(null) }
     var mediaUri by remember { mutableStateOf<Uri?>(null) }
@@ -268,6 +275,21 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 mediaStatus = "The selected audio file could not be opened."
             }
         }
+    }
+    LaunchedEffect(book?.versionId) {
+        val currentBook = book ?: return@LaunchedEffect
+        runCatching {
+            val preferences = context.readerProgressStore.data.first()
+            val prefix = "${currentBook.versionId}:"
+            notesByBlock = preferences.asMap().mapNotNull { (key, value) ->
+                val name = key.name
+                if (name.startsWith("note:$prefix") && value is String) name.removePrefix("note:$prefix") to value else null
+            }.toMap()
+            bookmarkedBlocks = preferences.asMap().mapNotNull { (key, value) ->
+                val name = key.name
+                if (name.startsWith("bookmark:$prefix") && value == true) name.removePrefix("bookmark:$prefix") else null
+            }.toSet()
+        }.onFailure { error = "Could not restore local notes and bookmarks." }
     }
     LaunchedEffect(book?.versionId, chapterIndex) {
         val currentBook = book ?: return@LaunchedEffect
@@ -440,8 +462,32 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                                     query = ""
                                 }) { Text("Open chapter", color = Gold) }
                             }
-                            Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
+                                TextButton(onClick = {
+                                    val key = booleanPreferencesKey("bookmark:${current.versionId}:${block.id}")
+                                    val next = block.id !in bookmarkedBlocks
+                                    scope.launch {
+                                        runCatching {
+                                            context.readerProgressStore.edit { prefs -> prefs[key] = next }
+                                            bookmarkedBlocks = if (next) bookmarkedBlocks + block.id else bookmarkedBlocks - block.id
+                                        }.onFailure { error = "Could not save bookmark." }
+                                    }
+                                }) { Text(if (block.id in bookmarkedBlocks) "★ Saved" else "☆ Bookmark", color = Gold) }
+                            }
                             Text(block.text, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 7.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = {
+                                    editingBlockId = block.id
+                                    noteDraft = notesByBlock[block.id].orEmpty()
+                                }) { Text(if (notesByBlock[block.id].isNullOrBlank()) "Add note" else "Edit note", color = Gold) }
+                                if (!notesByBlock[block.id].isNullOrBlank()) {
+                                    Text("NOTE SAVED", color = Muted, fontSize = 9.sp)
+                                }
+                            }
+                            notesByBlock[block.id]?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                            }
                             Text("PROVENANCE · ${block.provenance}", color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 8.dp))
                             block.evidence.forEach { evidence ->
                                 HorizontalDivider(color = Color(0xFF343945), modifier = Modifier.padding(vertical = 8.dp))
@@ -474,6 +520,44 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 }
                 if (blocks.isEmpty()) item { Text("No matching blocks in this textbook.", color = Muted) }
             }
+        }
+        editingBlockId?.let { blockId ->
+            AlertDialog(
+                onDismissRequest = { editingBlockId = null },
+                title = { Text("Your private note") },
+                text = {
+                    OutlinedTextField(
+                        value = noteDraft,
+                        onValueChange = { if (it.length <= 5000) noteDraft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 8,
+                        label = { Text("Note · up to 5,000 characters") }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val currentBook = book
+                        if (currentBook != null) {
+                            val key = stringPreferencesKey("note:${currentBook.versionId}:$blockId")
+                            val saved = noteDraft.trim()
+                            scope.launch {
+                                runCatching {
+                                    context.readerProgressStore.edit { prefs ->
+                                        if (saved.isBlank()) prefs.remove(key) else prefs[key] = saved
+                                    }
+                                    notesByBlock = if (saved.isBlank()) notesByBlock - blockId else notesByBlock + (blockId to saved)
+                                    editingBlockId = null
+                                }.onFailure { error = "Could not save local note." }
+                            }
+                        }
+                    }) { Text("Save note") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { editingBlockId = null }) { Text("Cancel") }
+                },
+                containerColor = Panel
+            )
         }
     }
 }
