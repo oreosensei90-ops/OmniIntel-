@@ -260,7 +260,7 @@ def _native_specs(page: pdfplumber.page.Page) -> list[dict[str, Any]]:
             min(bbox[2],image[2])-max(bbox[0],image[0]) > 0
             and min(bbox[3],image[3])-max(bbox[1],image[1]) > 0
             for image in image_boxes
-        ) if "image_boxes" in locals() else False
+        )
         if overlaps_raster:
             continue
         specs.append({
@@ -339,13 +339,14 @@ def extract_document_structure(
     max_chars_per_element: int = 100_000,
     max_total_chars: int = 5_000_000,
     max_figure_pixels: int = 20_000_000,
+    max_total_figure_pixels: int = 100_000_000,
     max_figure_bytes: int = 25 * 1024 * 1024,
     extract_figure_assets: bool = True,
 ) -> DocumentStructureResult:
     """Extract positioned text, tables, equations and figure regions from a local PDF."""
     if min(
         max_pages,max_elements,max_chars_per_element,max_total_chars,
-        max_figure_pixels,max_figure_bytes,
+        max_figure_pixels,max_total_figure_pixels,max_figure_bytes,
     ) <= 0:
         raise ValueError("Document structure limits must be positive")
     store = AssetStore(database_path,asset_dir)
@@ -382,11 +383,23 @@ def extract_document_structure(
             planned: list[tuple[Any, pdfplumber.page.Page, list[dict[str, Any]]]] = []
             total_chars = 0
             total_elements = 0
+            total_figure_pixels = 0
             for row,page in zip(page_rows,pdf.pages,strict=True):
                 specs = _native_specs(page)
                 if not specs and not row["text_content"].strip():
                     specs = _ocr_specs(dict(row),page.width,page.height,database_path)
                 for spec in specs:
+                    if spec["type"] == "FIGURE" and spec.get("bbox") and extract_figure_assets:
+                        figure_width = max(1,int((spec["bbox"][2]-spec["bbox"][0])*120/72))
+                        figure_height = max(1,int((spec["bbox"][3]-spec["bbox"][1])*120/72))
+                        figure_pixels = figure_width * figure_height
+                        can_render = (
+                            figure_pixels <= max_figure_pixels
+                            and total_figure_pixels + figure_pixels <= max_total_figure_pixels
+                        )
+                        spec["render_asset"] = can_render
+                        if can_render:
+                            total_figure_pixels += figure_pixels
                     if len(spec["text"]) > max_chars_per_element:
                         raise ValueError("Document element exceeds configured character limit")
                     payload_chars = len(spec["text"]) + len(
@@ -404,11 +417,8 @@ def extract_document_structure(
                 for ordinal,spec in enumerate(specs):
                     asset_id_for_element = None
                     bbox = spec.get("bbox")
-                    if spec["type"] == "FIGURE" and bbox and extract_figure_assets:
-                        width_px = max(1,int((bbox[2]-bbox[0])*120/72))
-                        height_px = max(1,int((bbox[3]-bbox[1])*120/72))
-                        if width_px * height_px <= max_figure_pixels:
-                            try:
+                    if spec["type"] == "FIGURE" and bbox and spec.get("render_asset"):
+                        try:
                                 image = page.crop(bbox).to_image(
                                     resolution=120,antialias=False
                                 ).original
