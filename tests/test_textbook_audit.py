@@ -41,7 +41,7 @@ def test_publication_gate_blocks_unreviewed_and_uncertain_blocks(tmp_path: Path)
     ))
     store.add_block(chapter, BlockInput(
         "PARAGRAPH", {"text": "Uncertain."}, "UNCERTAIN",
-        review_status="ACCEPTED",
+        review_status="ACCEPTED", ordinal=1,
     ))
     report = TextbookPublicationAuditor(path).audit(version)
     assert not report.ready
