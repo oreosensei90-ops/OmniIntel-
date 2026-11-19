@@ -550,8 +550,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             VALUES(NEW.rowid,NEW.text_content);
         END;
         """
-    )
-
+    ),
     (
         "0013_unified_evidence_references",
         """
