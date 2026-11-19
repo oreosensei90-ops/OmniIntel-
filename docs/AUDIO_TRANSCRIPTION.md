@@ -31,7 +31,7 @@ omniintel import-file ./omniintel.db ./assets ./lecture.wav
 omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
 ~~~
 
-Use the source and asset IDs returned by import-file. By default the selected model must be an existing local CTranslate2 model directory. To explicitly permit a download, pass a model name and add --allow-model-download. This is a network operation and must be a deliberate user choice. Verify model license and resource requirements.
+Use the source and asset IDs returned by import-file. By default the selected model must be an existing local CTranslate2 model directory. Voice activity detection is off by default to preserve quiet speech; pass --vad only when you prefer VAD's speed/segmentation trade-off. To explicitly permit a download, pass a model name and add --allow-model-download. This is a network operation and must be a deliberate user choice. Verify model license and resource requirements.
 
 ## Adapter contract
 
@@ -41,7 +41,7 @@ An adapter provides a stable name, version, model ID, configuration fingerprint 
 
 - MP3, M4A, FLAC, OGG and video audio extraction are not yet wired to a decoder. Convert through a separately reviewed local decoder stage or use PCM WAV for this initial slice.
 - No word-level timing, diarization, speaker identity inference, language translation, transcript correction or semantic quality scoring yet.
-- The faster-whisper adapter is optional and CPU-int8 by default; it is not claimed to run efficiently on Android.
+- The faster-whisper adapter is optional and CPU-int8 by default; VAD filtering is disabled by default because voice-activity detection can drop quiet technical speech in lectures. Use the explicit --vad option only when its speed trade-off is acceptable. The adapter is not claimed to run efficiently on Android.
 - Mobile ASR requires a separately implemented native Android adapter and device benchmarks. CoursePilot's sherpa-onnx work is a research reference, not a dependency adopted here.
 - Transcript reprocessing/version history is not yet implemented. Existing source history is protected from overwrite.
 - Transcript presence and timestamp integrity do not establish ASR correctness; quality review remains a later stage.
