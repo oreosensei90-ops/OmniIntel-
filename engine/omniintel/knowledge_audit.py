@@ -66,6 +66,14 @@ class KnowledgeAuditor:
                    JOIN sources s ON s.id=e.source_id
                    ORDER BY ce.claim_id,ce.id"""
             ).fetchall()
+            reference_links = conn.execute(
+                """SELECT cer.claim_id,cer.relation,cer.review_state,
+                          er.id AS evidence_id,er.start_ms,er.end_ms,s.duration_ms
+                   FROM claim_evidence_refs cer
+                   JOIN evidence_refs er ON er.id=cer.evidence_ref_id
+                   JOIN sources s ON s.id=er.source_id
+                   ORDER BY cer.claim_id,cer.id"""
+            ).fetchall()
             bounds = conn.execute(
                 """SELECT e.id,e.start_ms,e.end_ms,s.duration_ms
                    FROM evidence_items e JOIN sources s ON s.id=e.source_id
@@ -78,7 +86,7 @@ class KnowledgeAuditor:
             ).fetchall()
 
         by_claim: dict[str, list[dict[str, Any]]] = {}
-        for row in links:
+        for row in [*links, *reference_links]:
             by_claim.setdefault(row["claim_id"], []).append(dict(row))
 
         with_support = 0
