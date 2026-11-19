@@ -19,6 +19,10 @@ from .local_files import import_local_file
 def main() -> None:
     parser = argparse.ArgumentParser(prog="omniintel")
     sub = parser.add_subparsers(dest="command", required=True)
+    plan_inputs = sub.add_parser("plan-inputs", help="Create a read-only plan for selected local learning sources")
+    plan_inputs.add_argument("paths", nargs="+", type=Path, help="Files or directories selected by the user")
+    plan_inputs.add_argument("--recursive", action="store_true", help="Include files in selected directories recursively")
+    plan_inputs.add_argument("--language", default=None, help="Confirmed spoken language(s), e.g. en or en,hi")
     init = sub.add_parser("init", help="Initialize or migrate a local OmniIntel database")
     init.add_argument("database", type=Path)
     check = sub.add_parser("check", help="Run SQLite integrity checks")
@@ -222,6 +226,22 @@ def main() -> None:
     export_markdown.add_argument("output", type=Path)
     export_markdown.add_argument("--asset-dir", type=Path, default=None)
     args = parser.parse_args()
+    if args.command == "plan-inputs":
+        from .input_plan import plan_local_inputs
+
+        selected = []
+        for item in args.paths:
+            if item.is_symlink() and item.is_dir():
+                raise SystemExit(f"Refusing to recursively scan a symbolic-link directory: {item}")
+            if item.is_dir():
+                iterator = item.rglob("*") if args.recursive else item.iterdir()
+                selected.extend(path for path in iterator if path.is_file())
+            else:
+                selected.append(item)
+        plan = plan_local_inputs(selected, language=args.language)
+        print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+        if not plan.to_dict()["ready_for_execution"]:
+            raise SystemExit(2)
     if args.command == "init":
         OmniIntelStore(args.database)
         print(f"Initialized database: {args.database}")
