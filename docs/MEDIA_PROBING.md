@@ -47,4 +47,4 @@ Install FFmpeg tools so ffprobe is available on PATH. OmniIntel does not bundle 
 - A successful metadata probe does not prove that the media fully decodes or is free of malformed-stream behavior.
 - ffprobe is an external native parser and is not a hostile-media sandbox. Keep it updated and run it with least privilege.
 
-The next media stages are bounded audio extraction and timestamp-preserving transcription, followed by frame/slide evidence extraction and transcript-to-visual grounding.
+Bounded local audio extraction and timestamp-preserving resumable transcription are now implemented as separate stages; see docs/AUDIO_EXTRACTION.md and docs/AUDIO_TRANSCRIPTION.md. The next media stages are frame/slide evidence extraction and transcript-to-visual grounding.
