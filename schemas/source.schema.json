@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/source.schema.json",
+  "title": "OmniIntel Source",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/envelope"
+    }
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/uuid7"
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "deleted_at": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_type": {
+      "enum": [
+        "youtube_video",
+        "local_video",
+        "local_audio",
+        "direct_media",
+        "imported_transcript",
+        "document",
+        "presentation"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_uri": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri-reference"
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 2
+    },
+    "duration_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "source_type",
+    "title",
+    "source_uri",
+    "language",
+    "duration_ms",
+    "metadata"
+  ],
+  "additionalProperties": false
+}
