@@ -14,7 +14,7 @@ This roadmap is a plan, not a claim that every item exists.
 
 ## Source and evidence intelligence
 - [ ] Authorized source adapters and metadata inspection.
-- [ ] Caption/transcript ingestion and timestamp alignment.
+- [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [ ] Local audio transcription adapter.
 - [ ] Video scene/slide extraction and OCR.
 - [x] Deterministic claim/evidence audit and uncertainty counters (initial slice).
