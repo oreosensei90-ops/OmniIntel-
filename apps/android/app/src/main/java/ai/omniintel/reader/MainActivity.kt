@@ -393,6 +393,27 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadBook(uri)
     }
+    val queueExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val stream = context.contentResolver.openOutputStream(uri)
+                            ?: error("Unable to write the selected queue file.")
+                        stream.bufferedWriter(Charsets.UTF_8).use { writer ->
+                            writer.write(videoQueueJson(videoImports))
+                        }
+                    }
+                }.onSuccess {
+                    videoImportMessage = "Queue exported. Transfer the JSON to the local OmniIntel engine to process captions."
+                }.onFailure {
+                    videoImportMessage = "Queue export failed: " + (it.message ?: "storage error")
+                }
+            }
+        }
+    }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         if (selectedSourceId == null) {
@@ -561,6 +582,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                         color = Gold, fontSize = 10.sp, letterSpacing = 2.sp,
                         modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
                     )
+                    OutlinedButton(
+                        onClick = { queueExporter.launch("omniintel-video-queue.json") }
+                    ) { Text("Export processing queue") }
                     videoImports.take(4).forEach { item ->
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -568,7 +592,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                         ) {
                             Column(Modifier.padding(10.dp)) {
                                 Text(item.url, color = Color.White, fontSize = 11.sp)
-                                Text("QUEUED · awaiting processing integration", color = Muted, fontSize = 9.sp)
+                                Text("QUEUED · export JSON for local processing", color = Muted, fontSize = 9.sp)
                             }
                         }
                     }

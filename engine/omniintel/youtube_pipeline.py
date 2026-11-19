@@ -241,6 +241,93 @@ def process_youtube_video(
     )
 
 
+
+def process_youtube_queue(
+    database_path: str | Path,
+    queue_path: str | Path,
+    output_dir: str | Path,
+    *,
+    user_approved_network: bool,
+    language: str | None = None,
+    chapter_minutes: int = 10,
+) -> dict:
+    """Process an Android-exported queue sequentially; failures never hide successes."""
+    if user_approved_network is not True:
+        raise PermissionError("Explicit approval is required before contacting YouTube")
+    payload = json.loads(Path(queue_path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise ValueError("Unsupported YouTube queue schema")
+    if payload.get("queue_type") != "OMNIINTEL_YOUTUBE_QUEUE":
+        raise ValueError("File is not an OmniIntel YouTube queue")
+    items = payload.get("items")
+    if not isinstance(items, list) or not 1 <= len(items) <= 200:
+        raise ValueError("Queue must contain between 1 and 200 video items")
+    normalized = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Queue entries must be JSON objects")
+        canonical, video_id = normalize_youtube_url(item.get("url", ""))
+        declared_id = item.get("video_id")
+        if declared_id is not None and declared_id != video_id:
+            raise ValueError("Queue video ID does not match its URL")
+        if video_id in seen:
+            raise ValueError("Queue contains duplicate video IDs")
+        seen.add(video_id)
+        normalized.append((video_id, canonical))
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    results = []
+    for video_id, url in normalized:
+        output = destination / f"{video_id}-reader.json"
+        try:
+            tree = process_youtube_video(
+                database_path, url, user_approved_network=True,
+                language=language, chapter_minutes=chapter_minutes,
+            )
+            output.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
+            results.append({
+                "video_id": video_id, "status": "COMPLETED",
+                "source_id": tree["source"]["id"], "output": str(output),
+            })
+        except Exception as error:
+            results.append({
+                "video_id": video_id, "status": "FAILED",
+                "error": f"{type(error).__name__}: {error}"[:1000],
+            })
+    report = {
+        "queue_type": "OMNIINTEL_YOUTUBE_QUEUE_RESULT",
+        "total": len(results),
+        "completed": sum(item["status"] == "COMPLETED" for item in results),
+        "failed": sum(item["status"] == "FAILED" for item in results),
+        "items": results,
+    }
+    (destination / "queue-results.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return report
+
+
+def queue_main() -> None:
+    parser = argparse.ArgumentParser(prog="omniintel-youtube-queue")
+    parser.add_argument("database", type=Path)
+    parser.add_argument("queue_json", type=Path)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--approve-network", action="store_true",
+                        help="Approve public metadata/caption requests for every queued video")
+    parser.add_argument("--language", default=None)
+    parser.add_argument("--chapter-minutes", type=int, default=10)
+    args = parser.parse_args()
+    report = process_youtube_queue(
+        args.database,args.queue_json,args.output_dir,
+        user_approved_network=args.approve_network,
+        language=args.language,chapter_minutes=args.chapter_minutes,
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if report["failed"]:
+        raise SystemExit(1)
+
+
 def compose_registered_source(
     database_path: str | Path,
     source_id: str,
