@@ -286,9 +286,42 @@ function resetLocalMedia() {
   state.mediaUrl = null;
   $("#media-status").textContent = "No media attached.";
 }
+function validateReaderPayload(data) {
+  if (!data || typeof data !== "object" || !data.version || typeof data.version !== "object" ||
+      !Array.isArray(data.chapters) || !Array.isArray(data.sources)) {
+    throw new Error("This is not a valid OmniIntel reader export (expected version, sources and chapters).");
+  }
+  if (data.chapters.length < 1 || data.chapters.length > 500) {
+    throw new Error("Reader export must contain between 1 and 500 chapters.");
+  }
+  let totalBlocks = 0;
+  for (const chapter of data.chapters) {
+    if (!chapter || typeof chapter !== "object" || !chapter.chapter || typeof chapter.chapter !== "object" ||
+        !Array.isArray(chapter.blocks)) throw new Error("A chapter has an invalid structure.");
+    totalBlocks += chapter.blocks.length;
+    if (totalBlocks > 25000) throw new Error("Reader export exceeds the 25,000 block safety limit.");
+    for (const block of chapter.blocks) {
+      if (!block || typeof block !== "object" || typeof block.block_type !== "string" ||
+          !block.content || typeof block.content !== "object" || Array.isArray(block.content) ||
+          !Array.isArray(block.evidence)) throw new Error("A textbook block has an invalid structure.");
+      if (block.evidence.length > 100) throw new Error("A textbook block exceeds the 100 evidence-reference safety limit.");
+      for (const item of block.evidence) {
+        if (!item || typeof item !== "object" || typeof item.source_id !== "string" ||
+            typeof item.locator_kind !== "string") throw new Error("An evidence reference has an invalid structure.");
+        if ((item.transcript_excerpt?.length || 0) > 40 || (item.document_elements?.length || 0) > 100) {
+          throw new Error("An evidence reference exceeds the reader rendering safety limits.");
+        }
+      }
+    }
+  }
+  for (const source of data.sources) {
+    if (!source || typeof source !== "object" || typeof source.source_id !== "string") {
+      throw new Error("A course source has an invalid structure.");
+    }
+  }
+}
 function renderBook(data, filename) {
-  if (!data || !Array.isArray(data.chapters) || !data.version) throw new Error("This is not a valid OmniIntel reader export (expected version and chapters).");
-  if (!data.chapters.length) throw new Error("This course textbook has no chapters to read yet.");
+  validateReaderPayload(data);
   state.book = data;
   state.chapters = data.chapters;
   state.index = 0;
