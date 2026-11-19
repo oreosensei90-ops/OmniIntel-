@@ -120,3 +120,17 @@ def test_execution_reuses_completed_stages_when_later_stage_fails(tmp_path: Path
     result=executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
     assert result["status"]=="COMPLETED"
     assert calls==["register","transcribe","transcribe"]
+
+
+def test_execution_reserves_stable_source_effect_ids(tmp_path: Path) -> None:
+    plan=make_plan(tmp_path/"effect.wav")
+    executor=PlanExecutor(tmp_path/"db.sqlite")
+    result=executor.approve_and_run(
+        plan,[{"stage":"REGISTER_SOURCE","input_indices":[0]}],
+        user_approved=True,handlers={"REGISTER_SOURCE":lambda *_:{"ok":True}},
+    )
+    first=executor.reserve_source_id(result["plan_id"],"0:REGISTER_SOURCE","a"*64)
+    again=executor.reserve_source_id(result["plan_id"],"0:REGISTER_SOURCE","a"*64)
+    other=executor.reserve_source_id(result["plan_id"],"0:REGISTER_SOURCE","b"*64)
+    assert first==again
+    assert first!=other
