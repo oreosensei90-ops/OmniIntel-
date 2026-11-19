@@ -4,7 +4,7 @@ OmniIntel now has an adapter-driven local WAV transcription stage with persisten
 
 ## Current scope
 
-- Accepts a user-selected, already-ingested, uncompressed PCM WAV asset.
+- Accepts an already-ingested PCM WAV asset, including a normalized derivative created by the local extract-audio stage.
 - Verifies the source-asset relationship and content-addressed SHA-256 blob before processing.
 - Enforces audio duration, channel, sample-rate, sample-width, chunk-duration and chunk-byte limits.
 - Writes bounded temporary WAV chunks and processes them sequentially.
@@ -27,8 +27,9 @@ python -m pip install -e '.[asr]'
 Example:
 
 ~~~bash
-omniintel import-file ./omniintel.db ./assets ./lecture.wav
-omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
+omniintel import-file ./omniintel.db ./assets ./lecture.mp4
+omniintel extract-audio ./omniintel.db ./assets SOURCE_ASSET_ID
+omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en --time-offset-ms 250
 ~~~
 
 Use the source and asset IDs returned by import-file. By default the selected model must be an existing local CTranslate2 model directory. Voice activity detection is off by default to preserve quiet speech; pass --vad only when you prefer VAD's speed/segmentation trade-off. To explicitly permit a download, pass a model name and add --allow-model-download. This is a network operation and must be a deliberate user choice. Verify model license and resource requirements.
@@ -39,9 +40,9 @@ An adapter provides a stable name, version, model ID, configuration fingerprint 
 
 ## Current limitations
 
-- MP3, M4A, FLAC, OGG and video audio extraction are not yet wired to a decoder. Convert through a separately reviewed local decoder stage or use PCM WAV for this initial slice.
+- Audio extraction currently normalizes one selected stream to mono 16 kHz PCM WAV. Embedded subtitle extraction, multi-stream transcription and stereo preservation are not yet implemented.
 - No word-level timing, diarization, speaker identity inference, language translation, transcript correction or semantic quality scoring yet.
 - The faster-whisper adapter is optional and CPU-int8 by default; VAD filtering is disabled by default because voice-activity detection can drop quiet technical speech in lectures. Use the explicit --vad option only when its speed trade-off is acceptable. The adapter is not claimed to run efficiently on Android.
 - Mobile ASR requires a separately implemented native Android adapter and device benchmarks. CoursePilot's sherpa-onnx work is a research reference, not a dependency adopted here.
-- Transcript reprocessing/version history is not yet implemented. Existing source history is protected from overwrite.
+- Transcript reprocessing/version history is not yet implemented. Existing source history is protected from overwrite. Stream start offsets are stored in the run configuration and applied to source evidence timestamps.
 - Transcript presence and timestamp integrity do not establish ASR correctness; quality review remains a later stage.
