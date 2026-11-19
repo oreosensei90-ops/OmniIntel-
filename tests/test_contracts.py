@@ -68,3 +68,39 @@ def test_transcript_contract_rejects_nonpositive_end_timestamp():
         "confidence": 0.9,
     }
     assert not validator.is_valid(segment)
+
+
+def test_knowledge_contracts_preserve_provenance_and_review_states():
+    unit_validator = validator_for("knowledge-unit.schema.json")
+    unit = {
+        "id": "0190f2a1-1234-7123-8123-123456789abc",
+        "schema_version": 1,
+        "created_at": "2026-11-19T08:00:00Z",
+        "updated_at": "2026-11-19T08:00:00Z",
+        "revision": 1,
+        "deleted_at": None,
+        "unit_type": "concept",
+        "title": "Energy",
+        "body": "A physical quantity.",
+        "provenance": "EXPLANATION",
+        "status": "DRAFT",
+    }
+    assert unit_validator.is_valid(unit)
+    unit["provenance"] = "SOURCE"
+    assert not unit_validator.is_valid(unit)
+
+    link_validator = validator_for("claim-evidence.schema.json")
+    link = {
+        "id": "0190f2a1-1234-7123-8123-123456789abd",
+        "claim_id": "0190f2a1-1234-7123-8123-123456789abe",
+        "evidence_id": "0190f2a1-1234-7123-8123-123456789abf",
+        "relation": "SUPPORTS",
+        "review_state": "PENDING",
+        "relevance_score": 0.9,
+        "rationale": None,
+        "created_at": "2026-11-19T08:00:00Z",
+        "reviewed_at": None,
+    }
+    assert link_validator.is_valid(link)
+    link["review_state"] = "AUTO_APPROVED"
+    assert not link_validator.is_valid(link)
