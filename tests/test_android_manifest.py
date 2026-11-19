@@ -124,3 +124,20 @@ def test_android_reader_restores_chapter_progress_per_textbook_version() -> None
     assert "chapterIndex = savedChapter.coerceIn" in code
     assert "LaunchedEffect(book?.versionId, chapterIndex)" in code
     assert "preferences[progressKey] = chapterIndex" in code
+
+
+def test_android_reader_persists_block_notes_and_bookmarks_locally() -> None:
+    root = Path(__file__).parents[1]
+    source = root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert "stringPreferencesKey" in code
+    assert "booleanPreferencesKey" in code
+    assert 'note:${currentBook.versionId}:' in code
+    assert 'bookmark:${current.versionId}:' in code
+    assert "Your private note" in code
+    assert "it.length <= 5000" in code
+    assert "prefs.remove(key)" in code
+    assert "notesByBlock = preferences.asMap()" in code
+    assert "bookmarkedBlocks = preferences.asMap()" in code
+    assert "sourceId.length <= 128" in code
+    assert "requestedId.length <= 128" in code
