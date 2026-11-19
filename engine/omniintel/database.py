@@ -723,6 +723,79 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0016_document_topic_maps",
+        """
+        CREATE TABLE document_topics (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            parent_topic_id TEXT REFERENCES document_topics(id) ON DELETE RESTRICT,
+            title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+            description TEXT NOT NULL DEFAULT '',
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            provenance TEXT NOT NULL CHECK(provenance IN ('EXPLANATION','DERIVED','UNCERTAIN')),
+            status TEXT NOT NULL CHECK(status IN ('DRAFT','NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            confidence REAL CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(source_id,ordinal),
+            CHECK(parent_topic_id IS NULL OR parent_topic_id <> id)
+        );
+        CREATE INDEX idx_document_topics_source_order
+            ON document_topics(source_id,ordinal);
+        CREATE TABLE document_topic_evidence_refs (
+            id TEXT PRIMARY KEY,
+            topic_id TEXT NOT NULL REFERENCES document_topics(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN (
+                'INTRODUCES','DEVELOPS','RECAPITULATES','DEMONSTRATES','CONTRASTS'
+            )),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            relevance_score REAL CHECK(relevance_score IS NULL OR
+                (relevance_score >= 0 AND relevance_score <= 1)),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            UNIQUE(topic_id,evidence_ref_id,relation)
+        );
+        CREATE INDEX idx_document_topic_evidence_topic
+            ON document_topic_evidence_refs(topic_id,review_state);
+        CREATE TRIGGER document_topic_parent_same_source_insert
+        BEFORE INSERT ON document_topics
+        WHEN NEW.parent_topic_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_topics p
+                WHERE p.id=NEW.parent_topic_id AND p.source_id=NEW.source_id
+            ) THEN RAISE(ABORT,'parent document topic must belong to the same source') END;
+        END;
+        CREATE TRIGGER document_topic_parent_no_cycle
+        BEFORE UPDATE OF parent_topic_id ON document_topics
+        WHEN NEW.parent_topic_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN EXISTS(
+                WITH RECURSIVE descendants(id) AS (
+                    SELECT id FROM document_topics WHERE parent_topic_id=NEW.id
+                    UNION ALL
+                    SELECT t.id FROM document_topics t
+                    JOIN descendants d ON t.parent_topic_id=d.id
+                )
+                SELECT 1 FROM descendants WHERE id=NEW.parent_topic_id
+            ) THEN RAISE(ABORT,'document topic hierarchy cannot contain a cycle') END;
+        END;
+        CREATE TRIGGER document_topic_evidence_same_source_insert
+        BEFORE INSERT ON document_topic_evidence_refs
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_topics t
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE t.id=NEW.topic_id AND t.source_id=er.source_id
+            ) THEN RAISE(ABORT,'document topic evidence must belong to the topic source') END;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
