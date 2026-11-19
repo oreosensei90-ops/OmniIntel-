@@ -203,6 +203,7 @@ def _iter_wav_chunks(
     chunk_seconds: int,
     max_chunk_bytes: int,
 ):
+    frame_bytes = channels * sample_width
     frames_per_chunk = _frames_per_chunk(
         sample_rate=sample_rate,channels=channels,sample_width=sample_width,
         chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
