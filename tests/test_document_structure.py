@@ -138,6 +138,22 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     assert all(item["review_state"] == "ACCEPTED" for item in outline_links)
     assert all(item["element_review_state"] == "ACCEPTED" for item in outline_links)
     assert all(item["element_provenance"] == "SOURCE" for item in outline_links)
+    assert {item["element_type"] for item in outline_links} == {
+        item.element_type for item in result.elements if item.element_type != "HEADING"
+    }
+    from omniintel.database import connect
+    with connect(database) as conn:
+        stored_topic_elements = conn.execute(
+            """SELECT de.id,de.element_type,te.review_state,de.review_state,de.provenance
+               FROM document_topic_evidence_refs te
+               JOIN document_elements de ON de.id=te.element_id
+               WHERE te.topic_id=?""",
+            (topic,),
+        ).fetchall()
+    assert len(stored_topic_elements) == len(topic_links)
+    assert {row["element_type"] for row in stored_topic_elements} == {
+        item.element_type for item in result.elements if item.element_type != "HEADING"
+    }
 
     textbooks = TextbookStore(database)
     version = textbooks.compose_from_accepted_document_topics(
