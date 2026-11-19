@@ -490,8 +490,37 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     )
+    (
+        "0011_pdf_page_extraction",
+        """
+        CREATE TABLE document_extractions (
+            id TEXT PRIMARY KEY,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            parser_name TEXT NOT NULL,
+            parser_version TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('COMPLETED','COMPLETED_WITH_EMPTY_PAGES')),
+            page_count INTEGER NOT NULL CHECK(page_count > 0),
+            extracted_at TEXT NOT NULL,
+            UNIQUE(source_asset_id,parser_name,parser_version)
+        );
+        CREATE TABLE document_pages (
+            id TEXT PRIMARY KEY,
+            extraction_id TEXT NOT NULL REFERENCES document_extractions(id) ON DELETE RESTRICT,
+            page_number INTEGER NOT NULL CHECK(page_number > 0),
+            text_content TEXT NOT NULL,
+            char_count INTEGER NOT NULL CHECK(char_count >= 0),
+            content_sha256 TEXT NOT NULL CHECK(length(content_sha256)=64),
+            extraction_status TEXT NOT NULL CHECK(extraction_status IN ('TEXT_EXTRACTED','EMPTY')),
+            created_at TEXT NOT NULL,
+            UNIQUE(extraction_id,page_number),
+            CHECK(char_count=length(text_content))
+        );
+        CREATE INDEX idx_document_pages_extraction_order
+            ON document_pages(extraction_id,page_number);
+        """
+    ),
 )
- 
+
 class MigrationError(RuntimeError):
     pass
 
