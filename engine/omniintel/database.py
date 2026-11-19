@@ -681,6 +681,48 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0015_unified_evidence_full_text_search",
+        """
+        CREATE VIRTUAL TABLE evidence_refs_fts USING fts5(
+            evidence_ref_id UNINDEXED,
+            content,
+            locator_kind UNINDEXED,
+            tokenize='unicode61 remove_diacritics 2'
+        );
+        INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+        SELECT er.id,COALESCE(e.content,dp.text_content),er.locator_kind
+        FROM evidence_refs er
+        LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
+        LEFT JOIN document_pages dp ON dp.id=er.document_page_id;
+        CREATE TRIGGER evidence_refs_fts_insert
+        AFTER INSERT ON evidence_refs
+        BEGIN
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT NEW.id,COALESCE(e.content,dp.text_content),NEW.locator_kind
+            FROM evidence_refs er
+            LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
+            LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.id;
+        END;
+        CREATE TRIGGER evidence_refs_fts_delete
+        AFTER DELETE ON evidence_refs
+        BEGIN
+            DELETE FROM evidence_refs_fts WHERE evidence_ref_id=OLD.id;
+        END;
+        CREATE TRIGGER evidence_refs_fts_page_update
+        AFTER UPDATE OF text_content ON document_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,NEW.text_content,er.locator_kind
+            FROM evidence_refs er WHERE er.document_page_id=NEW.id;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
