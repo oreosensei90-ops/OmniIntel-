@@ -38,3 +38,6 @@ The Web Reader displays an accepted course-clock time and alignment status separ
 ## Android reading progress
 
 The native Android prototype stores the last-opened chapter index in Preferences DataStore, keyed by the immutable textbook version ID. Reopening that version restores the saved chapter, clamped to the current chapter range. This is local device state only; it does not yet store a paragraph-level scroll offset, selected text, annotations, bookmarks or cross-device sync. A Room-backed source/library and richer reader-session model remain planned.
+
+
+Android block notes and bookmarks are stored locally in Preferences DataStore, keyed by textbook version and stable block ID. Notes are limited to 5,000 characters per block and can be cleared by saving an empty note. Bookmark state is independent per block. These are device-local reader conveniences, not yet a full annotation model: there is no paragraph-level anchoring, highlight ranges, export/import of annotations, conflict handling or cross-device sync. Replacing a textbook version does not silently merge notes into a different version.
