@@ -11,6 +11,7 @@ from .textbook_audit import TextbookPublicationAuditor
 from .pdf_export import TextbookPDFExporter
 from .docx_export import TextbookDOCXExporter
 from .html_export import TextbookHTMLExporter
+from .markdown_export import TextbookMarkdownExporter
 
 
 def main() -> None:
@@ -36,6 +37,10 @@ def main() -> None:
     export_html.add_argument("database", type=Path)
     export_html.add_argument("version_id")
     export_html.add_argument("output", type=Path)
+    export_markdown = sub.add_parser("export-markdown", help="Export a publication-ready textbook to portable Markdown")
+    export_markdown.add_argument("database", type=Path)
+    export_markdown.add_argument("version_id")
+    export_markdown.add_argument("output", type=Path)
     args = parser.parse_args()
     if args.command == "init":
         OmniIntelStore(args.database)
@@ -64,3 +69,6 @@ def main() -> None:
     elif args.command == "export-html":
         output = TextbookHTMLExporter(args.database).export(args.version_id, args.output)
         print(f"Exported HTML: {output}")
+    elif args.command == "export-markdown":
+        output = TextbookMarkdownExporter(args.database).export(args.version_id, args.output)
+        print(f"Exported Markdown: {output}")
