@@ -33,14 +33,14 @@ class TextbookPDFExporter:
     ) -> Path:
         try:
             from reportlab.lib import colors
-            from reportlab.lib.enums import TA_CENTER, TA_LEFT
+            from reportlab.lib.enums import TA_LEFT
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
             from reportlab.lib.units import mm
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
             from reportlab.platypus import (
-                HRFlowable, KeepTogether, PageBreak, Paragraph, Preformatted,
+                KeepTogether, PageBreak, Paragraph, Preformatted,
                 SimpleDocTemplate, Spacer, Table, TableStyle,
             )
         except ImportError as exc:
