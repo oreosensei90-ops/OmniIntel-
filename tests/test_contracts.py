@@ -243,3 +243,62 @@ def test_knowledge_unit_evidence_reference_contract_supports_element_lineage():
     }
     assert validator_for("knowledge-unit-evidence-reference.schema.json").is_valid(link)
 
+
+
+def test_source_alignment_contract_requires_explicit_review_and_sign_convention():
+    validator=validator_for("source-clock-alignment.schema.json")
+    alignment={
+        "id":"0190f2a1-1234-7123-8123-123456789abc",
+        "schema_version":1,
+        "collection_id":"0190f2a1-1234-7123-8123-123456789abd",
+        "source_a_id":"0190f2a1-1234-7123-8123-123456789abe",
+        "source_b_id":"0190f2a1-1234-7123-8123-123456789abf",
+        "offset_ms":1250,"sample_interval_ms":100,
+        "correlation":0.95,"runner_up_correlation":0.2,
+        "method":"normalized-cross-correlation","algorithm_version":"1",
+        "input_sha256":"a"*64,"rationale":"Shared measured audio envelope",
+        "sign_convention":"time_A_ms = time_B_ms + offset_ms",
+        "review_state":"NEEDS_REVIEW",
+        "created_at":"2026-11-19T08:00:00Z","reviewed_at":None,
+    }
+    assert validator.is_valid(alignment)
+    alignment["review_state"]="AUTO_ACCEPTED"
+    assert not validator.is_valid(alignment)
+
+
+def test_reader_session_and_execution_plan_contracts_preserve_locality():
+    reader={
+        "id":"0190f2a1-1234-7123-8123-123456789abc","schema_version":1,
+        "version_id":"0190f2a1-1234-7123-8123-123456789abd",
+        "anchor_source_id":None,"current_source_id":"0190f2a1-1234-7123-8123-123456789abe",
+        "position_ms":0,"chapter_id":None,"block_id":None,
+        "updated_at":"2026-11-19T08:00:00Z",
+    }
+    assert validator_for("reader-session.schema.json").is_valid(reader)
+    reader["position_ms"]=-1
+    assert not validator_for("reader-session.schema.json").is_valid(reader)
+
+    plan={
+        "schema_version":1,"read_only":True,"ready_for_execution":True,
+        "total_bytes":16,"questions":[],"warnings":[],
+        "inputs":[{
+            "path":"/private/lesson.pdf","display_name":"lesson.pdf",
+            "modality":"DOCUMENT","media_type":"application/pdf","byte_size":16,
+            "modified_ns":1,"file_id":2,"action":"EXTRACT_PDF",
+            "resource_class":"MEDIUM","network":"none","requires_user_review":False,
+        }],
+    }
+    assert validator_for("execution-plan.schema.json").is_valid(plan)
+    plan["inputs"][0]["network"]="internet"
+    assert not validator_for("execution-plan.schema.json").is_valid(plan)
+
+
+def test_quality_benchmark_contract_is_versioned_and_nonempty():
+    report={
+        "schema_version":1,"case_count":1,
+        "aggregates":{"wer":{"mean":0.1,"count":1}},
+        "cases":[{"case_id":"lecture-1","metrics":{"wer":0.1}}],
+    }
+    assert validator_for("quality-benchmark-report.schema.json").is_valid(report)
+    report["case_count"]=0
+    assert not validator_for("quality-benchmark-report.schema.json").is_valid(report)
