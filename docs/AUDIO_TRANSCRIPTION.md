@@ -29,10 +29,10 @@ Example:
 ~~~bash
 omniintel import-file ./omniintel.db ./assets ./lecture.mp4
 omniintel extract-audio ./omniintel.db ./assets SOURCE_ASSET_ID
-omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en --time-offset-ms 250
+omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
 ~~~
 
-Use the source and asset IDs returned by import-file. By default the selected model must be an existing local CTranslate2 model directory. Voice activity detection is off by default to preserve quiet speech; pass --vad only when you prefer VAD's speed/segmentation trade-off. To explicitly permit a download, pass a model name and add --allow-model-download. This is a network operation and must be a deliberate user choice. Verify model license and resource requirements.
+Use the source and asset IDs returned by import-file and extract-audio. The derivative's stored stream offset is applied automatically; manual offset override is rarely needed. By default the selected model must be an existing local CTranslate2 model directory. Voice activity detection is off by default to preserve quiet speech; pass --vad only when you prefer VAD's speed/segmentation trade-off. To explicitly permit a download, pass a model name and add --allow-model-download. This is a network operation and must be a deliberate user choice. Verify model license and resource requirements.
 
 ## Adapter contract
 
