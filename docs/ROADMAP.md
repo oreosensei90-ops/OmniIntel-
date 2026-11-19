@@ -34,7 +34,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Source-scoped video topic hierarchy and reviewed timestamp/evidence alignment (initial slice).
 - [x] Page-native document topic hierarchy with reviewed unified evidence references and same-source guards.
 - [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).
-- [x] Deterministic topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
+- [x] Deterministic video topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
+- [x] Deterministic document topic-to-chapter composition using shared accepted page citations.
 - [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
 - [ ] Semantic block validation, source coverage and pedagogical quality scoring.
 - [x] Initial audited PDF exporter (math typesetting and actual diagram/image rendering remain pending).
