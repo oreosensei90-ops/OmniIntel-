@@ -88,8 +88,12 @@ class SynchronizedReader:
                     source_id=link["source_id"]
                     start=link["start_ms"]
                     mapped=None
-                    if start is not None and offsets.get(source_id) is not None:
-                        mapped=start+int(offsets[source_id])
+                    mapped_end=None
+                    offset=offsets.get(source_id)
+                    if start is not None and offset is not None:
+                        mapped=start+int(offset)
+                        if link["end_ms"] is not None:
+                            mapped_end=int(link["end_ms"])+int(offset)
                     excerpt=[]
                     if link["locator_kind"]=="TRANSCRIPT_INTERVAL":
                         with connect(self.database_path) as conn:
@@ -106,9 +110,11 @@ class SynchronizedReader:
                         "local_start_ms":start,
                         "local_end_ms":link["end_ms"],
                         "course_time_ms":mapped,
+                        "course_end_time_ms":mapped_end,
+                        "clock_offset_ms":offset,
                         "seek_available":start is not None,
-                        "alignment_status":"ALIGNED" if mapped is not None else (
-                            "ANCHOR" if source_id==anchor_source_id else "UNALIGNED_OR_AMBIGUOUS"
+                        "alignment_status":"ANCHOR" if source_id==anchor_source_id else (
+                            "ALIGNED" if mapped is not None else "UNALIGNED_OR_AMBIGUOUS"
                         ),
                         "transcript_excerpt":excerpt,
                     })
