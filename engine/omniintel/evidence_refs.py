@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Literal
 
 from .database import connect, migrate
@@ -117,26 +118,26 @@ def get_evidence_reference(
 def search_evidence_references(
     database_path: str | Path, query: str, *, limit: int = 50
 ) -> list[dict[str, object]]:
-    """Search transcript and PDF-page evidence through one citation result shape."""
+    """Search transcript and PDF-page evidence through one indexed result shape."""
     if not 1 <= limit <= 200:
         raise ValueError("Search limit must be between 1 and 200")
-    terms = [term for term in query.split() if term]
+    terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
     if not terms:
         return []
-    pattern = "%" + "%".join(terms) + "%"
+    match_query = " AND ".join(f'"{term}"' for term in terms)
     with connect(database_path) as conn:
         rows = conn.execute(
             """SELECT er.id,er.source_id,s.title,er.locator_kind,
                       er.evidence_item_id,er.document_page_id,er.source_asset_id,
                       er.start_ms,er.end_ms,er.page_number,
-                      COALESCE(e.content,dp.text_content) AS content
-               FROM evidence_refs er
+                      snippet(evidence_refs_fts,1,'[',']','…',24) AS excerpt,
+                      bm25(evidence_refs_fts) AS rank
+               FROM evidence_refs_fts
+               JOIN evidence_refs er ON er.id=evidence_refs_fts.evidence_ref_id
                JOIN sources s ON s.id=er.source_id
-               LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
-               LEFT JOIN document_pages dp ON dp.id=er.document_page_id
-               WHERE COALESCE(e.content,dp.text_content) LIKE ?
-               ORDER BY s.created_at DESC,er.locator_kind,er.start_ms,er.page_number
+               WHERE evidence_refs_fts MATCH ?
+               ORDER BY rank,s.created_at DESC,er.locator_kind,er.start_ms,er.page_number
                LIMIT ?""",
-            (pattern,limit),
+            (match_query,limit),
         ).fetchall()
     return [dict(row) for row in rows]
