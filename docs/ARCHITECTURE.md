@@ -56,7 +56,7 @@ AI providers are optional adapters. Deterministic core operations must remain av
 
 ## Current local media metadata slice
 
-A registered local audio/video asset can be inspected by the optional ffprobe executable. The adapter verifies the content-addressed original asset, invokes ffprobe without a shell and with local-only protocol restrictions, enforces time/stream/output limits, stores immutable container and stream metadata, and records duration on the source only when no duration was already present. It does not decode, transcode, extract audio or frames, inspect subtitles, or create evidence references. See MEDIA_PROBING.md.
+A registered local audio/video asset is inspected by the optional ffprobe executable. The adapter verifies the content-addressed original asset, invokes ffprobe without a shell and with local-only protocol restrictions, enforces time/stream/output limits, stores immutable container and stream metadata (including each stream's source start time), and records duration on the source only when no duration was already present. The optional FFmpeg stage can extract one selected audio stream to a normalized mono 16 kHz PCM WAV derivative. It stores both asset hashes, tool/configuration identity and the source stream offset; the transcription stage applies that offset to every segment and evidence locator. Original media remains immutable. Video frame extraction, subtitle stream extraction and transcript-to-visual grounding remain pending. See MEDIA_PROBING.md, AUDIO_EXTRACTION.md and AUDIO_TRANSCRIPTION.md.
 
 ## Current local PDF processing slice
 
