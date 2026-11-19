@@ -2506,6 +2506,35 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         BEGIN SELECT RAISE(ABORT,'collection source is referenced by alignments or course textbook evidence'); END;
         """
     ),
+    (
+        "0039_course_chapter_update_evidence_guard",
+        """
+        CREATE TRIGGER course_textbook_chapter_existing_evidence_update_guard
+        BEFORE UPDATE OF source_id,version_id ON course_textbook_chapters
+        WHEN EXISTS(
+            SELECT 1 FROM course_textbook_blocks b
+            JOIN course_textbook_block_evidence l ON l.block_id=b.id
+            JOIN evidence_refs er ON er.id=l.evidence_ref_id
+            JOIN course_textbook_versions v ON v.id=NEW.version_id
+            JOIN course_textbooks t ON t.id=v.textbook_id
+            JOIN collection_sources cs ON cs.collection_id=t.collection_id AND cs.source_id=er.source_id
+            WHERE b.chapter_id=NEW.id
+              AND (NEW.source_id IS NULL OR er.source_id<>NEW.source_id)
+        ) OR EXISTS(
+            SELECT 1 FROM course_textbook_blocks b
+            JOIN course_textbook_block_evidence l ON l.block_id=b.id
+            JOIN evidence_refs er ON er.id=l.evidence_ref_id
+            JOIN course_textbook_versions v ON v.id=NEW.version_id
+            JOIN course_textbooks t ON t.id=v.textbook_id
+            WHERE b.chapter_id=NEW.id
+              AND NOT EXISTS(
+                  SELECT 1 FROM collection_sources cs
+                  WHERE cs.collection_id=t.collection_id AND cs.source_id=er.source_id
+              )
+        )
+        BEGIN SELECT RAISE(ABORT,'chapter update would invalidate existing course evidence'); END;
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
