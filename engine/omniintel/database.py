@@ -215,6 +215,29 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """,
     ),
+    (
+        "0005_topic_evidence_time_alignment",
+        """
+        CREATE TRIGGER topic_evidence_validate_overlap_insert
+        BEFORE INSERT ON topic_evidence
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM topics t JOIN evidence_items e ON e.id=NEW.evidence_id
+                WHERE t.id=NEW.topic_id AND t.source_id=e.source_id
+                  AND e.start_ms < t.end_ms AND e.end_ms > t.start_ms
+            ) THEN RAISE(ABORT,'topic evidence must overlap the topic time range') END;
+        END;
+        CREATE TRIGGER topic_evidence_validate_overlap_update
+        BEFORE UPDATE OF topic_id,evidence_id ON topic_evidence
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM topics t JOIN evidence_items e ON e.id=NEW.evidence_id
+                WHERE t.id=NEW.topic_id AND t.source_id=e.source_id
+                  AND e.start_ms < t.end_ms AND e.end_ms > t.start_ms
+            ) THEN RAISE(ABORT,'topic evidence must overlap the topic time range') END;
+        END;
+        """,
+    ),
 )
 
  
