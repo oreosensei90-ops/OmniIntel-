@@ -112,7 +112,7 @@ class TextbookMarkdownExporter:
                 raise ValueError(f"Unsupported Markdown block type: {kind}")
 
             citations = []
-            for evidence in block["evidence"]:
+            for evidence in [*block["evidence"], *block.get("evidence_references", [])]:
                 if evidence["relation"] not in {
                     "SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"
                 }:
