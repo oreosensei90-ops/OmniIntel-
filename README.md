@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Android, web, media extraction adapters and AI inference are not yet implemented.
+The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Compressed audio/video decoding, native Android ASR, web apps, automated knowledge generation and general AI orchestration remain pending.
 
 ## Engineering principles
 
@@ -59,7 +59,7 @@ omniintel export-markdown ./omniintel.db VERSION_ID ./exports/textbook.md
 
 The audit command prints a JSON report and exits non-zero when publication gates fail. PDF export runs the same gate before rendering and refuses blocked editions. Passing deterministic checks is not a substitute for semantic or human review. Install `.[publishing]` for ReportLab and python-docx publishing dependencies.
 
-Core persistence initially uses the Python standard library. Optional publishing dependencies are installed with `python -m pip install -e '.[publishing]'`.
+Core persistence uses the Python standard library. Publishing and document parsing dependencies are optional; local faster-whisper transcription is separately installed with `python -m pip install -e '.[asr]'`.
 
 Import a local SRT or WebVTT caption file into the source/evidence store:
 
@@ -68,6 +68,17 @@ omniintel import-captions ./omniintel.db ./lecture.vtt --title "Lecture 01" --la
 ```
 
 The initial caption adapter preserves cue timestamps and optional WebVTT voice labels. It does not download media or fetch caption URLs. See `docs/CAPTION_INGESTION.md` for supported syntax and boundaries.
+
+## Local audio transcription (initial WAV adapter)
+
+Register a user-selected PCM WAV file, then transcribe it locally with a CTranslate2 model directory already on disk:
+
+~~~bash
+omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.wav --title "Lecture 01"
+omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
+~~~
+
+Install the optional adapter with python -m pip install -e '.[asr]'. Model downloads are disabled by default; explicitly add --allow-model-download if you authorize faster-whisper to fetch a model by name. Completed chunks are checkpointed by audio content and configuration, so an interrupted run can resume without retranscribing completed chunks. Existing source transcripts are never silently overwritten. This first adapter accepts uncompressed PCM WAV only; compressed audio and video decoding, mobile-native ASR, word timestamps and diarization remain future work. See docs/AUDIO_TRANSCRIPTION.md.
 
 ## Rights and source access
 
@@ -80,9 +91,9 @@ The repository's existing MIT license is retained. Third-party code, model weigh
 
 Register an explicitly selected local file while preserving its original bytes:
 
-\`\`\`bash
+```bash
 omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.pdf --title "Lecture 01"
-\`\`\`
+```
 
 This records the source, detected media type, content hash and an asset reference. It does not
 extract PDF text, OCR, transcribe or decode media. The source rights status remains UNVERIFIED.
@@ -91,40 +102,40 @@ See `docs/LOCAL_FILE_INGESTION.md` for supported types and limitations.
 
 Extract bounded text from an already-ingested local PDF, preserving page numbers and page hashes:
 
-\`\`\`bash
+```bash
 omniintel extract-pdf ./omniintel.db ./omniintel-assets ASSET_ID
-\`\`\`
+```
 
-Install the optional PDF parser with \`pip install -e ".[documents]"\`. Extraction is local-only,
+Install the optional PDF parser with `pip install -e ".[documents]"`. Extraction is local-only,
 rejects encrypted PDFs, enforces page and character limits, and stores per-page text separately
-from video transcript segments. Scanned pages are marked empty until the optional OCR stage is run. See \`docs/PDF_PAGE_EXTRACTION.md\` and \`docs/DOCUMENT_OCR.md\`.
+from video transcript segments. Scanned pages are marked empty until the optional OCR stage is run. See `docs/PDF_PAGE_EXTRACTION.md` and `docs/DOCUMENT_OCR.md`.
 
 
 Search extracted PDF pages locally:
 
-\`\`\`bash
+```bash
 omniintel search-pages ./omniintel.db "quantum entanglement"
-\`\`\`
+```
 
 
 Search and resolve evidence using one citation model across transcript intervals and PDF pages:
 
-\`\`\`bash
+```bash
 omniintel search-evidence ./omniintel.db "velocity direction"
 omniintel resolve-evidence ./omniintel.db EVIDENCE_REFERENCE_ID
-\`\`\`
+```
 
 Transcript imports and PDF extraction now create stable evidence-reference IDs. Transcript citations
 retain millisecond intervals; PDF citations retain one-based page numbers and the original asset ID.
 The unified locator does not fabricate timestamps for documents. Claims, topic maps and textbook blocks can now use these shared references, including optional exact document element IDs. See
-\`docs/UNIFIED_EVIDENCE_REFERENCES.md\`.
+`docs/UNIFIED_EVIDENCE_REFERENCES.md`.
 
 
-PDF pages can also be organized into a page-native topic hierarchy without inventing timestamps. Accepted source elements can be carried into deterministic textbook chapters; accepted claims must use the same exact page/element citation as the topic alignment. Source-linked draft knowledge units can be reviewed and validated separately. See \`docs/DOCUMENT_TOPIC_MAPS.md\` and \`docs/DOCUMENT_KNOWLEDGE.md\`.
+PDF pages can also be organized into a page-native topic hierarchy without inventing timestamps. Accepted source elements can be carried into deterministic textbook chapters; accepted claims must use the same exact page/element citation as the topic alignment. Source-linked draft knowledge units can be reviewed and validated separately. See `docs/DOCUMENT_TOPIC_MAPS.md` and `docs/DOCUMENT_KNOWLEDGE.md`.
 
 
 ## Local PDF intelligence
 
-See \`docs/DOCUMENT_PIPELINE.md\` for the end-to-end workflow, \`docs/DOCUMENT_OCR.md\` for
-local OCR, \`docs/DOCUMENT_STRUCTURE.md\` for positioned document elements, and
-\`docs/DOCUMENT_KNOWLEDGE.md\` for the reviewed handoff into knowledge reconstruction.
+See `docs/DOCUMENT_PIPELINE.md` for the end-to-end workflow, `docs/DOCUMENT_OCR.md` for
+local OCR, `docs/DOCUMENT_STRUCTURE.md` for positioned document elements, and
+`docs/DOCUMENT_KNOWLEDGE.md` for the reviewed handoff into knowledge reconstruction.
