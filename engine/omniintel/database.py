@@ -2253,8 +2253,9 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             OR (NEW.description_id IS NOT NULL AND
                 (SELECT source_id FROM visual_descriptions WHERE id=NEW.description_id) <> NEW.source_id)
             OR NOT EXISTS (
-                SELECT 1 FROM textbooks t WHERE t.source_id=NEW.source_id
-                JOIN claims c ON c.id=NEW.claim_id
+                SELECT 1 FROM claim_evidence_refs cer
+                JOIN evidence_refs er ON er.id=cer.evidence_ref_id
+                WHERE cer.claim_id=NEW.claim_id AND er.source_id=NEW.source_id
             )
         BEGIN SELECT RAISE(ABORT,'visual claim verification must remain within one source'); END;
         """
