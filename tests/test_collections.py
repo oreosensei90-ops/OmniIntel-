@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -86,5 +87,5 @@ def test_collection_membership_order_is_unique(tmp_path: Path) -> None:
     store = CollectionStore(database)
     course = store.create("Course")
     store.add_source(course, first, ordinal=3)
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.IntegrityError):
         store.add_source(course, second, ordinal=3)
