@@ -2535,6 +2535,21 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         BEGIN SELECT RAISE(ABORT,'chapter update would invalidate existing course evidence'); END;
         """
     ),
+    (
+        "0040_execution_source_effects",
+        """
+        CREATE TABLE execution_source_effects (
+            plan_id TEXT NOT NULL REFERENCES approved_execution_plans(id) ON DELETE RESTRICT,
+            stage_key TEXT NOT NULL,
+            input_hash TEXT NOT NULL CHECK(length(input_hash)=64),
+            source_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(plan_id,stage_key,input_hash)
+        );
+        CREATE INDEX idx_execution_source_effect_source
+            ON execution_source_effects(source_id);
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
