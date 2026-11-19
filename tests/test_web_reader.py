@@ -69,7 +69,9 @@ def test_local_media_seeking_is_source_scoped_and_never_applies_unreviewed_offse
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     assert 'state.mediaSourceId !== item.source_id' in app
     assert 'media.currentTime = Number(item.local_start_ms) / 1000' in app
-    assert "item.course_time_ms" not in app
+    assert 'media.currentTime = Number(item.local_start_ms) / 1000' in app
+    assert '"COURSE CLOCK · "' in app
+    assert 'item.alignment_status' in app
     assert 'URL.createObjectURL(file)' in app
     assert 'URL.revokeObjectURL(state.mediaUrl)' in app
     assert 'file.type.startsWith("audio/")' in app
