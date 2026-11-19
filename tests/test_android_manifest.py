@@ -46,3 +46,12 @@ def test_android_reader_media_jumps_are_bound_to_the_selected_source() -> None:
     assert "MediaPlayer()" in code
     assert "VideoView(viewContext)" in code
     assert "Timestamps remain source-local." in code
+
+
+def test_android_reader_surfaces_media_readiness_and_playback_errors() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert "view.setOnPreparedListener" in code
+    assert "view.setOnErrorListener" in code
+    assert "view.setOnCompletionListener" in code
+    assert "The selected video could not be played" in code
