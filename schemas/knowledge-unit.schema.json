@@ -36,6 +36,12 @@
         }
       ]
     },
+    "source_element_id": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/uuid7" },
+        { "type": "null" }
+      ]
+    },
     "unit_type": {
       "enum": [
         "concept",
