@@ -22,7 +22,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Claim and textbook block evidence links support unified references, with review and publication gates spanning both locator types.
 - [ ] Authorized source adapters and metadata inspection.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
-- [ ] Local audio transcription adapter.
+- [x] Initial local PCM WAV transcription adapter with sequential, content-addressed chunk checkpoints and source-linked timestamp evidence (compressed audio/video decoding, native Android ASR and transcript versioning pending).
 - [ ] Video scene/slide extraction and OCR.
 - [x] Document structure elements carry page/element citations, review state and same-source guards.
 - [x] Deterministic claim/evidence audit and uncertainty counters (initial slice).
