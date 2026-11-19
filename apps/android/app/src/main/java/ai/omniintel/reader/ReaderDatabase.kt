@@ -10,6 +10,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Entity(tableName = "library_books")
 data class LibraryBookEntity(
@@ -37,11 +39,49 @@ interface LibraryBookDao {
     suspend fun delete(versionId: String)
 }
 
-@Database(entities = [LibraryBookEntity::class], version = 1, exportSchema = false)
+@Entity(tableName = "video_imports")
+data class VideoImportEntity(
+    @PrimaryKey val videoId: String,
+    val url: String,
+    val createdAtEpochMs: Long,
+    val status: String
+)
+
+@Dao
+interface VideoImportDao {
+    @Query("SELECT * FROM video_imports ORDER BY createdAtEpochMs DESC")
+    suspend fun getAll(): List<VideoImportEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(item: VideoImportEntity): Long
+
+    @Query("DELETE FROM video_imports WHERE videoId = :videoId")
+    suspend fun delete(videoId: String)
+}
+
+@Database(
+    entities = [LibraryBookEntity::class, VideoImportEntity::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class ReaderDatabase : RoomDatabase() {
     abstract fun libraryBooks(): LibraryBookDao
+    abstract fun videoImports(): VideoImportDao
 
     companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS video_imports (
+                        videoId TEXT NOT NULL PRIMARY KEY,
+                        url TEXT NOT NULL,
+                        createdAtEpochMs INTEGER NOT NULL,
+                        status TEXT NOT NULL
+                    )"""
+                )
+            }
+        }
+
         @Volatile private var instance: ReaderDatabase? = null
 
         fun get(context: Context): ReaderDatabase =
@@ -50,7 +90,8 @@ abstract class ReaderDatabase : RoomDatabase() {
                     context.applicationContext,
                     ReaderDatabase::class.java,
                     "omniintel_reader.db"
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2)
+                    .build().also { instance = it }
             }
     }
 }

@@ -59,15 +59,17 @@ data class Book(val title: String, val versionId: String, val sources: List<Read
 data class ReaderChapter(val title: String, val blocks: List<Block>)
 
 class MainActivity : ComponentActivity() {
+    private var sharedVideoUrl by mutableStateOf<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedVideoUrl = extractYouTubeUrl(intent)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Gold, onPrimary = Ink, background = Ink, surface = Panel,
                 onBackground = Color(0xFFF1F2F4), onSurface = Color(0xFFF1F2F4)
             )) {
                 Surface(Modifier.fillMaxSize(), color = Ink) {
-                    ReaderScreen { uri, callback ->
+                    ReaderScreen(sharedUrl = sharedVideoUrl) { uri, callback ->
                         lifecycleScope.launch {
                             callback(withContext(Dispatchers.IO) { runCatching { parse(uri) } })
                         }
@@ -75,6 +77,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        sharedVideoUrl = extractYouTubeUrl(intent)
     }
 
     private fun parse(uri: Uri): Book {
@@ -179,13 +187,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
+private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var book by remember { mutableStateOf<Book?>(null) }
     val libraryDatabase = remember { ReaderDatabase.get(context) }
     var libraryBooks by remember { mutableStateOf<List<LibraryBookEntity>>(emptyList()) }
+    var videoImports by remember { mutableStateOf<List<VideoImportEntity>>(emptyList()) }
+    var videoUrlDraft by remember { mutableStateOf("") }
+    var videoImportMessage by remember { mutableStateOf<String?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var showBookmarksOnly by remember { mutableStateOf(false) }
@@ -210,6 +221,17 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
         }.getOrElse {
             error = "The on-device library could not be loaded."
             emptyList()
+        }
+    }
+    LaunchedEffect(Unit) {
+        videoImports = runCatching {
+            withContext(Dispatchers.IO) { libraryDatabase.videoImports().getAll() }
+        }.getOrDefault(emptyList())
+    }
+    LaunchedEffect(sharedUrl) {
+        if (!sharedUrl.isNullOrBlank()) {
+            videoUrlDraft = sharedUrl
+            videoImportMessage = "YouTube link received. Review it and add it to your queue."
         }
     }
     fun loadBook(uri: Uri) {
@@ -402,6 +424,70 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Text("Open an OmniIntel reader JSON export. It stays on this device; no account or network connection is required.", color = Muted)
                 Spacer(Modifier.height(20.dp))
                 Button(onClick = { picker.launch(arrayOf("application/json")) }) { Text("Choose reader export") }
+                Spacer(Modifier.height(24.dp))
+                Text("LEARN FROM VIDEO", color = Gold, fontSize = 11.sp, letterSpacing = 2.sp)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = videoUrlDraft,
+                    onValueChange = { videoUrlDraft = it; videoImportMessage = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("YouTube video URL") },
+                    placeholder = { Text("Paste a YouTube link") }
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        val parsed = parseYouTubeUrl(videoUrlDraft)
+                        if (parsed == null) {
+                            videoImportMessage = "That link isn't a supported YouTube video URL."
+                        } else {
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        libraryDatabase.videoImports().insertIfAbsent(
+                                            VideoImportEntity(
+                                                videoId = parsed.videoId,
+                                                url = parsed.url,
+                                                createdAtEpochMs = System.currentTimeMillis(),
+                                                status = "QUEUED"
+                                            )
+                                        )
+                                        libraryDatabase.videoImports().getAll()
+                                    }
+                                }.onSuccess { saved ->
+                                    videoImports = saved
+                                    videoUrlDraft = ""
+                                    videoImportMessage = "Saved on this device. Video processing is not connected yet."
+                                }.onFailure {
+                                    videoImportMessage = "Could not save this video to the on-device queue."
+                                }
+                            }
+                        }
+                    },
+                    enabled = videoUrlDraft.isNotBlank()
+                ) { Text("Add video to queue") }
+                videoImportMessage?.let {
+                    Text(it, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+                if (videoImports.isNotEmpty()) {
+                    Text(
+                        "VIDEO QUEUE · ${videoImports.size}",
+                        color = Gold, fontSize = 10.sp, letterSpacing = 2.sp,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                    )
+                    videoImports.take(4).forEach { item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                            colors = CardDefaults.cardColors(containerColor = Panel)
+                        ) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text(item.url, color = Color.White, fontSize = 11.sp)
+                                Text("QUEUED · awaiting processing integration", color = Muted, fontSize = 9.sp)
+                            }
+                        }
+                    }
+                }
                 error?.let { Text(it, color = Color(0xFFFF8C82), modifier = Modifier.padding(top = 12.dp)) }
                 if (libraryBooks.isNotEmpty()) {
                     Text("ON THIS DEVICE", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
