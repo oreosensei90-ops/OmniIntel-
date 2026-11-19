@@ -1888,6 +1888,51 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0029_resumable_audio_transcription",
+        """
+        CREATE TABLE transcription_runs (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            source_asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            input_sha256 TEXT NOT NULL CHECK(length(input_sha256)=64),
+            config_sha256 TEXT NOT NULL CHECK(length(config_sha256)=64),
+            adapter_name TEXT NOT NULL,
+            adapter_version TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            language TEXT,
+            chunk_seconds INTEGER NOT NULL CHECK(chunk_seconds > 0),
+            sample_rate INTEGER NOT NULL CHECK(sample_rate > 0),
+            channels INTEGER NOT NULL CHECK(channels > 0),
+            sample_width INTEGER NOT NULL CHECK(sample_width > 0),
+            duration_ms INTEGER NOT NULL CHECK(duration_ms > 0),
+            status TEXT NOT NULL CHECK(status IN ('RUNNING','PARTIAL','COMPLETED')),
+            segment_ids_json TEXT CHECK(segment_ids_json IS NULL OR json_valid(segment_ids_json)),
+            evidence_ids_json TEXT CHECK(evidence_ids_json IS NULL OR json_valid(evidence_ids_json)),
+            evidence_ref_ids_json TEXT CHECK(evidence_ref_ids_json IS NULL OR json_valid(evidence_ref_ids_json)),
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT,
+            UNIQUE(source_id,source_asset_id,input_sha256,config_sha256)
+        );
+        CREATE INDEX idx_transcription_runs_source ON transcription_runs(source_id,created_at);
+        CREATE TABLE transcription_chunks (
+            id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES transcription_runs(id) ON DELETE CASCADE,
+            chunk_index INTEGER NOT NULL CHECK(chunk_index >= 0),
+            audio_sha256 TEXT NOT NULL CHECK(length(audio_sha256)=64),
+            start_ms INTEGER NOT NULL CHECK(start_ms >= 0),
+            end_ms INTEGER NOT NULL CHECK(end_ms > start_ms),
+            status TEXT NOT NULL CHECK(status IN ('RUNNING','COMPLETED')),
+            result_json TEXT CHECK(result_json IS NULL OR json_valid(result_json)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(run_id,chunk_index)
+        );
+        CREATE INDEX idx_transcription_chunks_run ON transcription_chunks(run_id,chunk_index);
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
