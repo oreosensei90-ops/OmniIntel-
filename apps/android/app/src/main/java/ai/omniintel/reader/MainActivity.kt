@@ -178,13 +178,14 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     var videoView by remember { mutableStateOf<VideoView?>(null) }
     var audioPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var audioReady by remember { mutableStateOf(false) }
+    var videoReady by remember { mutableStateOf(false) }
     var audioPlaying by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) open(uri) { result ->
             result.onSuccess {
                 book = it; chapterIndex = 0; query = ""; error = null
                 selectedSourceId = null; mediaUri = null; mediaMime = null
-                audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false
+                audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
                 videoView?.stopPlayback(); videoView = null
                 mediaStatus = "Select the exact course source, then attach only the matching local media file."
             }.onFailure { error = it.message ?: "Could not open reader export." }
@@ -203,6 +204,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 audioPlayer = null
                 audioReady = false
                 audioPlaying = false
+                videoReady = false
                 mediaUri = uri
                 mediaMime = mime
                 mediaStatus = "Attached locally to the selected source. Timestamps remain source-local."
@@ -269,7 +271,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Spacer(Modifier.height(18.dp))
                 Text("Open an OmniIntel reader JSON export. It stays on this device; no account or network connection is required.", color = Muted)
                 Spacer(Modifier.height(20.dp))
-                Button(onClick = { picker.launch(arrayOf("application/json", "text/*", "*/*")) }) { Text("Choose reader export") }
+                Button(onClick = { picker.launch(arrayOf("application/json")) }) { Text("Choose reader export") }
                 error?.let { Text(it, color = Color(0xFFFF8C82), modifier = Modifier.padding(top = 12.dp)) }
             }
         } else {
@@ -291,7 +293,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                                         selectedSourceId = source.id
                                         mediaUri = null
                                         mediaMime = null
-                                        audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false
+                                        audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
                                         videoView?.stopPlayback(); videoView = null
                                         mediaStatus = "Selected ${source.title}. Attach only the matching local media file."
                                     }
@@ -316,9 +318,11 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                                     view.setMediaController(controller)
                                 }
                                 view.setOnPreparedListener {
+                                    videoReady = true
                                     mediaStatus = "Video ready · selected source only."
                                 }
                                 view.setOnErrorListener { _, what, extra ->
+                                    videoReady = false
                                     mediaStatus = "The selected video could not be played (error $what/$extra)."
                                     true
                                 }
@@ -382,7 +386,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                                 Text("${evidence.source} · ${evidence.locator}", color = Gold, fontSize = 11.sp)
                                 if (evidence.startMs != null) {
                                     val canSeek = mediaUri != null && selectedSourceId == evidence.sourceId &&
-                                        (mediaMime?.startsWith("video/") == true || audioReady)
+                                        (mediaMime?.startsWith("video/") == true && videoReady || audioReady)
                                     OutlinedButton(
                                         enabled = canSeek,
                                         onClick = {
