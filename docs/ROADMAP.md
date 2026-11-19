@@ -45,7 +45,7 @@ This roadmap is a plan, not a claim that every item exists.
 ## Knowledge and publishing
 - [x] Initial provider-neutral knowledge-unit, claim and relationship persistence.
 - [x] Source-linked draft knowledge candidates with explicit review/validation and element lineage (semantic claim extraction remains pending).
-- [ ] Automated topic/concept discovery and claim extraction.
+- [x] Initial local-model-assisted concept, definition, worked-example and review-question candidate generation with strict source-citation allowlists (all links remain pending review; semantic entailment and automatic topic hierarchy remain pending).
 - [x] Reviewed claim/evidence links with conservative publication gating.
 - [ ] Semantic relevance verifier and contradiction-scope analysis.
 - [ ] Knowledge graph and contradiction handling.
@@ -84,7 +84,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Shared JSON Schema contracts for local execution plans, reviewed source-clock alignments, reader sessions and quality benchmark reports.
 - [x] Deterministic offline benchmark metrics for transcript WER/CER, timestamp MAE and unmatched segment counts, OCR CER, evidence-ID precision/recall, section coverage and alignment offset error; versioned local report persistence (golden datasets and expert review still pending).
 - [x] Initial loopback-only local Ollama vision adapter (general provider registry and task routing pending).
-- [ ] Optional approved provider registry and privacy controls.
+- [x] Explicitly approved loopback-only Ollama study-guide adapter with bounded source context, strict JSON output validation and pending evidence-link review (general provider registry and remote-provider privacy controls remain pending).
 - [ ] Model benchmark and routing system.
 - [ ] Backup/restore and optional synchronization.
 - [x] Python CI with tests/lint/JS syntax checks and independent Android debug APK CI with packaged network-permission verification (SBOM, security certification and release validation pending).

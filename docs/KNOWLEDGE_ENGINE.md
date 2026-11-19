@@ -43,3 +43,13 @@ Its accepted-support ratio is explicitly a property of the stored claim set. It 
 Topics are stored separately from claims and concepts. Each topic belongs to one source, may have a parent topic from the same source, and has a timestamp interval. Topic/evidence links must reference evidence from the same source and overlap the topic interval. Links start PENDING; accepting a link is a review action, not an automatic model decision.
 
 The topic store is an intake and persistence boundary for future topic-discovery adapters. It does not yet discover topics automatically, infer chapter boundaries, or prove that the outline covers the full source.
+
+
+## Local AI-assisted study-guide generation
+
+`omniintel.study_generation` provides an opt-in local Ollama adapter. It converts bounded
+source evidence into a strict structured draft with concepts, glossary candidates,
+hypothetical worked examples and review questions. Every generated item must cite an exact
+source evidence reference. Output is stored as EXPLANATION/DERIVED knowledge, with
+NEEDS_REVIEW blocks and PENDING evidence links. The adapter cannot approve or publish its
+own claims. See `docs/AI_STUDY_GUIDE.md`.
