@@ -49,6 +49,8 @@ class PlanExecutor:
 
     @staticmethod
     def _snapshot(plan: dict[str, Any]) -> dict[str, Any]:
+        if plan.get("schema_version") != 1:
+            raise PlanExecutionError("Unsupported input plan schema version")
         if plan.get("read_only") is not True or plan.get("questions"):
             raise PlanExecutionError("Plan must be read-only and have all user questions resolved")
         inputs = plan.get("inputs")
