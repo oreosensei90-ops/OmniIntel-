@@ -1,6 +1,6 @@
 "use strict";
 const $ = (selector) => document.querySelector(selector);
-const state = { book: null, chapters: [], index: 0, query: "" };
+const state = { book: null, chapters: [], index: 0, query: "", mediaSourceId: null, mediaUrl: null };
 const fileInput = $("#reader-file");
 const escapeText = (value) => String(value ?? "");
 const element = (tag, className, text) => {
@@ -23,6 +23,19 @@ function renderEvidence(items) {
     const row = element("div", "citation");
     const tag = element("span", "tag", item.relation || "EVIDENCE");
     row.append(tag, document.createTextNode(evidenceLabel(item)));
+    if (item.local_start_ms !== null && item.local_start_ms !== undefined) {
+      const seek = element("button", "seek-button", "▶ " + (Number(item.local_start_ms) / 1000).toFixed(1) + "s");
+      seek.type = "button";
+      seek.disabled = !state.mediaSourceId || state.mediaSourceId !== item.source_id;
+      seek.title = seek.disabled ? "Attach this exact course source to enable seeking" : "Seek in attached local source";
+      seek.addEventListener("click", () => {
+        const media = $("#local-media");
+        if (!media.src || state.mediaSourceId !== item.source_id) return;
+        media.currentTime = Number(item.local_start_ms) / 1000;
+        media.play().catch(() => {});
+      });
+      row.append(seek);
+    }
     if (item.transcript_excerpt?.length) {
       for (const segment of item.transcript_excerpt) {
         const excerpt = element("p", "excerpt", "“" + segment.text + "”");
@@ -227,6 +240,29 @@ function renderChapter() {
   [...$("#chapter-nav").querySelectorAll("button")].forEach((button, index) => button.classList.toggle("active", index === state.index));
   saveProgress();
 }
+function configureMediaSources() {
+  const select = $("#media-source");
+  select.replaceChildren();
+  for (const source of state.book?.sources || []) {
+    const option = element("option", "", source.title || source.source_id);
+    option.value = source.source_id;
+    select.append(option);
+  }
+  select.disabled = !(state.book?.sources || []).length;
+  $("#media-file").disabled = select.disabled;
+  state.mediaSourceId = select.value || null;
+  $("#media-status").textContent = select.disabled ? "This reader export has no course sources." : "Choose a course source, then attach its matching local media file.";
+}
+function resetLocalMedia() {
+  const media = $("#local-media");
+  media.pause();
+  media.removeAttribute("src");
+  media.load();
+  media.hidden = true;
+  if (state.mediaUrl) URL.revokeObjectURL(state.mediaUrl);
+  state.mediaUrl = null;
+  $("#media-status").textContent = "No media attached.";
+}
 function renderBook(data, filename) {
   if (!data || !Array.isArray(data.chapters) || !data.version) throw new Error("This is not a valid OmniIntel reader export (expected version and chapters).");
   if (!data.chapters.length) throw new Error("This course textbook has no chapters to read yet.");
@@ -253,6 +289,8 @@ function renderBook(data, filename) {
   $("#welcome").hidden = true;
   $("#reader").hidden = false;
   $("#clear-button").disabled = false;
+  configureMediaSources();
+  resetLocalMedia();
   renderChapter();
 }
 fileInput.addEventListener("change", async () => {
@@ -267,8 +305,31 @@ fileInput.addEventListener("change", async () => {
   } finally { fileInput.value = ""; }
 });
 $("#clear-button").addEventListener("click", () => {
+  resetLocalMedia();
   state.book = null; state.chapters = []; state.index = 0;
   $("#reader").hidden = true; $("#welcome").hidden = false; $("#clear-button").disabled = true;
+});
+$("#media-source").addEventListener("change", (event) => {
+  resetLocalMedia();
+  state.mediaSourceId = event.target.value || null;
+  $("#media-status").textContent = "Selected source changed. Attach the matching media file.";
+});
+$("#media-file").addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (!file || !state.mediaSourceId) return;
+  if (!file.type.startsWith("video/") && !file.type.startsWith("audio/")) {
+    $("#media-status").textContent = "Choose a browser-supported audio or video file.";
+    event.target.value = "";
+    return;
+  }
+  resetLocalMedia();
+  state.mediaUrl = URL.createObjectURL(file);
+  const media = $("#local-media");
+  media.src = state.mediaUrl;
+  media.hidden = false;
+  media.load();
+  $("#media-status").textContent = "Attached locally: " + file.name + ". Timestamps are source-local; no cross-source offset is applied.";
+  event.target.value = "";
 });
 $("#search").addEventListener("input", (event) => {
   state.query = event.target.value.trim();
