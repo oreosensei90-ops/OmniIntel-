@@ -33,7 +33,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial audited PDF exporter (math typesetting and actual diagram/image rendering remain pending).
 - [x] Initial editable DOCX exporter (native equation objects and embedded diagram/image rendering remain pending).
 - [x] Initial self-contained, escaped HTML exporter.
-- [ ] Markdown exporter and richer embedded visual assets.
+- [x] Initial portable Markdown exporter.
+- [ ] Rich embedded visual assets and native math rendering across formats.
 
 ## Applications
 - [ ] Web PWA and offline library.
