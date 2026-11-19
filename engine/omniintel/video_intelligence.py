@@ -10,9 +10,7 @@ from itertools import pairwise
 import json
 import math
 import base64
-import urllib.error
-import urllib.request
-from urllib.request import HTTPRedirectHandler
+import http.client
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -65,11 +63,6 @@ class CrossModalVerifier(Protocol):
 
 
 
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, request, response, code, message, headers, new_url):
-        raise urllib.error.HTTPError(request.full_url,code,"Redirects are disabled",headers,None)
-
-
 class OllamaLocalVisionAdapter:
     """Opt-in local Ollama vision adapter; connects only to loopback, never a hosted endpoint."""
 
@@ -92,16 +85,22 @@ class OllamaLocalVisionAdapter:
             if len(image_bytes)>20*1024*1024:
                 raise ValueError("Vision input exceeds 20 MiB")
             payload["images"]=[base64.b64encode(image_bytes).decode("ascii")]
-        request=urllib.request.Request(
-            self.endpoint,data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type":"application/json"},method="POST",
+        connection=http.client.HTTPConnection(
+            "127.0.0.1",11434,timeout=self.timeout_seconds,
         )
         try:
-            opener=urllib.request.build_opener(_NoRedirect)
-            with opener.open(request,timeout=self.timeout_seconds) as response:
-                raw=response.read(2*1024*1024+1)
-        except (urllib.error.URLError,TimeoutError,OSError) as exc:
+            connection.request(
+                "POST","/api/generate",body=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type":"application/json"},
+            )
+            response=connection.getresponse()
+            if response.status != 200:
+                raise RuntimeError(f"Local Ollama returned HTTP {response.status}")
+            raw=response.read(2*1024*1024+1)
+        except (TimeoutError,OSError,http.client.HTTPException) as exc:
             raise RuntimeError("Local Ollama vision service is unavailable") from exc
+        finally:
+            connection.close()
         if len(raw)>2*1024*1024:
             raise ValueError("Local model response exceeds 2 MiB")
         envelope=json.loads(raw.decode("utf-8"))
