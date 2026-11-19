@@ -66,6 +66,13 @@ def main() -> None:
     transcribe_wav.add_argument("--vad", action="store_true", help="Enable VAD filtering; may omit quiet lecture speech")
     transcribe_wav.add_argument("--language", default=None)
     transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
+    extract_audio = sub.add_parser("extract-audio", help="Extract a selected local audio stream to resumable-transcription WAV")
+    extract_audio.add_argument("database", type=Path)
+    extract_audio.add_argument("asset_dir", type=Path)
+    extract_audio.add_argument("asset_id")
+    extract_audio.add_argument("--stream-index", type=int, default=None)
+    extract_audio.add_argument("--timeout", type=float, default=600.0)
+    extract_audio.add_argument("--max-output-bytes", type=int, default=512 * 1024 * 1024)
     probe_media = sub.add_parser("probe-media", help="Inspect a registered local audio/video asset with ffprobe")
     probe_media.add_argument("database", type=Path)
     probe_media.add_argument("asset_dir", type=Path)
@@ -214,6 +221,15 @@ def main() -> None:
             "reused_chunks":result.reused_chunks,
             "processed_chunks":result.processed_chunks,
         },ensure_ascii=False,indent=2))
+    elif args.command == "extract-audio":
+        from .audio_extract import audio_extraction_dict, extract_audio
+
+        result = extract_audio(
+            args.database,args.asset_dir,args.asset_id,
+            stream_index=args.stream_index,timeout_seconds=args.timeout,
+            max_output_bytes=args.max_output_bytes,
+        )
+        print(json.dumps(audio_extraction_dict(result),ensure_ascii=False,indent=2))
     elif args.command == "probe-media":
         from .media_probe import media_probe_dict, probe_local_media
 
