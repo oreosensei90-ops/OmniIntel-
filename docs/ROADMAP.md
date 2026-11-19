@@ -60,7 +60,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Native math rendering across formats.
 
 ## Applications
-- [ ] Web PWA and offline library.
+- [x] First dependency-free offline Web Reader prototype: local reader JSON import, chapter navigation, search, evidence display, local progress and cached static shell (full Web platform/IndexedDB library pending).
 - [ ] Native Android app and Room persistence.
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
