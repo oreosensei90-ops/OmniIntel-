@@ -2,6 +2,16 @@
 
 A native Kotlin + Jetpack Compose reader for local OmniIntel synchronized-reader JSON exports. It renders chapters, blocks, provenance, transcript excerpts and PDF page citations.
 
+## Create a reader export
+
+From a machine with the OmniIntel Python engine installed:
+
+```bash
+omniintel reader-open ./omniintel.db VERSION_ID > ./course-reader.json
+```
+
+Transfer that JSON file to the Android device, then open it from the system document picker.
+
 ## Build
 
 With JDK 17, Android SDK platform/build-tools 35, and Gradle 8.9:
