@@ -93,7 +93,7 @@ def test_image_export_requires_asset_store_directory(tmp_path: Path) -> None:
 
 
 def test_all_exporters_render_pdf_page_citations(tmp_path: Path) -> None:
-    reportlab=pytest.importorskip("reportlab")
+    pytest.importorskip("reportlab")
     from reportlab.pdfgen import canvas
     from pypdf import PdfReader
 
@@ -127,13 +127,13 @@ def test_all_exporters_render_pdf_page_citations(tmp_path: Path) -> None:
     )
 
     pdf=TextbookPDFExporter(database).export(version,tmp_path/"out.pdf",asset_dir=asset_dir)
-    docx=TextbookDOCXExporter(database).export(version,tmp_path/"out.docx",asset_dir=asset_dir)
+    docx_path=TextbookDOCXExporter(database).export(version,tmp_path/"out.docx",asset_dir=asset_dir)
     html=TextbookHTMLExporter(database).export(version,tmp_path/"out.html",asset_dir=asset_dir)
     markdown=TextbookMarkdownExporter(database).export(version,tmp_path/"out.md",asset_dir=asset_dir)
 
     assert "PDF page 1" in (PdfReader(str(pdf)).pages[0].extract_text() or "")
-    import docx
-    docx_text="\n".join(p.text for p in docx.Document(docx).paragraphs)
+    import docx as docx_module
+    docx_text="\n".join(p.text for p in docx_module.Document(docx_path).paragraphs)
     assert "PDF page 1" in docx_text
     assert "PDF page 1" in html.read_text(encoding="utf-8")
     assert "PDF page 1" in markdown.read_text(encoding="utf-8")
