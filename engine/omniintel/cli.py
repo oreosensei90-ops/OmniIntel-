@@ -84,6 +84,26 @@ def main() -> None:
     extract_frames.add_argument("--max-width", type=int, default=1280)
     extract_frames.add_argument("--max-height", type=int, default=720)
     extract_frames.add_argument("--timeout", type=float, default=600.0)
+    describe_video = sub.add_parser("describe-video-frames", help="Describe frames with an explicitly selected local Ollama vision model")
+    describe_video.add_argument("database", type=Path)
+    describe_video.add_argument("asset_dir", type=Path)
+    describe_video.add_argument("source_id")
+    describe_video.add_argument("--model", required=True)
+    describe_video.add_argument("--max-frames", type=int, default=100)
+    semantic_video = sub.add_parser("align-video-semantics", help="Score visual-frame and transcript relevance with local Ollama")
+    semantic_video.add_argument("database", type=Path)
+    semantic_video.add_argument("asset_dir", type=Path)
+    semantic_video.add_argument("source_id")
+    semantic_video.add_argument("--model", required=True)
+    semantic_video.add_argument("--max-pairs", type=int, default=500)
+    verify_visual_claim_cmd = sub.add_parser("verify-visual-claim", help="Run a local visual/transcript claim check")
+    verify_visual_claim_cmd.add_argument("database", type=Path)
+    verify_visual_claim_cmd.add_argument("source_id")
+    verify_visual_claim_cmd.add_argument("claim_id")
+    verify_visual_claim_cmd.add_argument("visual_event_id")
+    verify_visual_claim_cmd.add_argument("description_id")
+    verify_visual_claim_cmd.add_argument("--transcript-segment-id", default=None)
+    verify_visual_claim_cmd.add_argument("--model", required=True)
     detect_scenes = sub.add_parser("detect-scenes", help="Detect reviewable scene-change candidates from sampled frames")
     detect_scenes.add_argument("database", type=Path)
     detect_scenes.add_argument("asset_dir", type=Path)
@@ -283,6 +303,30 @@ def main() -> None:
             timeout_seconds=args.timeout,
         )
         print(json.dumps(frame_extraction_dict(result),ensure_ascii=False,indent=2))
+    elif args.command == "describe-video-frames":
+        from .video_intelligence import OllamaLocalVisionAdapter, describe_visual_events
+
+        adapter=OllamaLocalVisionAdapter(args.model)
+        print(json.dumps(describe_visual_events(
+            args.database,args.asset_dir,args.source_id,adapter,max_frames=args.max_frames,
+        ),ensure_ascii=False,indent=2))
+    elif args.command == "align-video-semantics":
+        from .video_intelligence import OllamaLocalVisionAdapter, align_visual_semantics
+
+        adapter=OllamaLocalVisionAdapter(args.model)
+        print(json.dumps(align_visual_semantics(
+            args.database,args.asset_dir,args.source_id,adapter,max_pairs=args.max_pairs,
+        ),ensure_ascii=False,indent=2))
+    elif args.command == "verify-visual-claim":
+        from .video_intelligence import OllamaLocalVisionAdapter, verify_visual_claim
+
+        adapter=OllamaLocalVisionAdapter(args.model)
+        record_id=verify_visual_claim(
+            args.database,args.source_id,args.claim_id,args.visual_event_id,adapter,
+            description_id=args.description_id,
+            transcript_segment_id=args.transcript_segment_id,
+        )
+        print(json.dumps({"verification_id":record_id,"review_state":"NEEDS_REVIEW"},indent=2))
     elif args.command == "detect-scenes":
         from .video_intelligence import detect_scene_changes
 
