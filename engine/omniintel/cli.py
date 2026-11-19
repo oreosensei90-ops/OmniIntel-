@@ -118,7 +118,7 @@ def main() -> None:
     ocr_video.add_argument("--timeout", type=int, default=30)
     review_visual_record_cmd = sub.add_parser("review-visual-record", help="Review a scene, OCR, description, semantic or verification record")
     review_visual_record_cmd.add_argument("database", type=Path)
-    review_visual_record_cmd.add_argument("table", choices=["visual_scene_candidates","visual_ocr_results","visual_descriptions","visual_semantic_alignments","visual_claim_verifications"])
+    review_visual_record_cmd.add_argument("table", choices=["visual_transcript_alignments","visual_scene_candidates","visual_ocr_results","visual_descriptions","visual_semantic_alignments","visual_claim_verifications"])
     review_visual_record_cmd.add_argument("record_id")
     review_visual_record_cmd.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
     build_visual_timeline = sub.add_parser("build-visual-timeline", help="Create reviewable visual-frame and transcript alignment candidates")
