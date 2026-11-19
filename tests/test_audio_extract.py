@@ -100,14 +100,14 @@ def _setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, ffmpeg_kwargs: di
     imported = import_local_file(database, assets, video)
     probe = _ffprobe(tmp_path / "ffprobe")
     encoder = _ffmpeg(tmp_path / "ffmpeg", **(ffmpeg_kwargs or {}))
-    monkeypatch.setattr(
-        "omniintel.media_probe.shutil.which",
-        lambda name: str(probe) if name == "ffprobe" else None,
-    )
-    monkeypatch.setattr(
-        "omniintel.audio_extract.shutil.which",
-        lambda name: str(encoder) if name == "ffmpeg" else None,
-    )
+    def which(name: str) -> str | None:
+        if name == "ffprobe":
+            return str(probe)
+        if name == "ffmpeg":
+            return str(encoder)
+        return None
+
+    monkeypatch.setattr("shutil.which",which)
     return database, assets, imported, probe, encoder
 
 
@@ -151,8 +151,8 @@ def test_extract_audio_rejects_missing_audio_and_non_audio_stream(
     database, assets, imported, _, _ = _setup(tmp_path, monkeypatch)
     no_audio_probe = _ffprobe(tmp_path / "ffprobe-no-audio", audio=False)
     monkeypatch.setattr(
-        "omniintel.media_probe.shutil.which",
-        lambda _: str(no_audio_probe),
+        "shutil.which",
+        lambda name: str(no_audio_probe) if name == "ffprobe" else None,
     )
     with pytest.raises(ValueError, match="no audio stream"):
         extract_audio(database, assets, imported.asset.id)
@@ -162,8 +162,10 @@ def test_extract_audio_rejects_missing_audio_and_non_audio_stream(
     imported2 = import_local_file(database2, assets2, _video(tmp_path / "other.mp4"))
     probe2 = _ffprobe(tmp_path / "ffprobe-other")
     encoder = _ffmpeg(tmp_path / "ffmpeg-other")
-    monkeypatch.setattr("omniintel.media_probe.shutil.which", lambda _: str(probe2))
-    monkeypatch.setattr("omniintel.audio_extract.shutil.which", lambda _: str(encoder))
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: str(probe2) if name == "ffprobe" else str(encoder) if name == "ffmpeg" else None,
+    )
     with pytest.raises(ValueError, match="not an audio stream"):
         extract_audio(database2, assets2, imported2.asset.id, stream_index=0)
 
@@ -193,7 +195,10 @@ def test_extract_audio_enforces_timeout_and_negative_stream_offset(
         )
 
     negative_probe = _ffprobe(tmp_path / "ffprobe-negative", start_time="-0.250", version="7.2")
-    monkeypatch.setattr("omniintel.media_probe.shutil.which", lambda _: str(negative_probe))
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: str(negative_probe) if name == "ffprobe" else str(encoder) if name == "ffmpeg" else None,
+    )
     with pytest.raises(ValueError, match="Negative audio stream start"):
         extract_audio(database, assets, imported.asset.id, max_output_bytes=1_000_000)
 
