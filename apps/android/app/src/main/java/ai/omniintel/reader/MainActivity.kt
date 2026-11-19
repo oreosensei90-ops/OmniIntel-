@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -166,6 +169,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var book by remember { mutableStateOf<Book?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
@@ -246,6 +250,17 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 mediaStatus = "The selected audio file could not be opened."
             }
         }
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                audioPlayer?.let { player -> runCatching { if (player.isPlaying) player.pause() } }
+                audioPlaying = false
+                videoView?.let { view -> runCatching { if (view.isPlaying) view.pause() } }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     DisposableEffect(Unit) {
         onDispose {
