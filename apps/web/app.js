@@ -29,7 +29,7 @@ function renderEvidence(items) {
       seek.disabled = !state.mediaSourceId || state.mediaSourceId !== item.source_id;
       seek.title = seek.disabled ? "Attach this exact course source to enable seeking" : "Seek in attached local source";
       seek.addEventListener("click", () => {
-        const media = $("#local-media");
+        const media = $("#local-audio").hidden ? $("#local-media") : $("#local-audio");
         if (!media.src || state.mediaSourceId !== item.source_id) return;
         media.currentTime = Number(item.local_start_ms) / 1000;
         media.play().catch(() => {});
@@ -254,11 +254,14 @@ function configureMediaSources() {
   $("#media-status").textContent = select.disabled ? "This reader export has no course sources." : "Choose a course source, then attach its matching local media file.";
 }
 function resetLocalMedia() {
-  const media = $("#local-media");
-  media.pause();
-  media.removeAttribute("src");
-  media.load();
-  media.hidden = true;
+  const video = $("#local-media");
+  const audio = $("#local-audio");
+  for (const media of [video, audio]) {
+    media.pause();
+    media.removeAttribute("src");
+    media.load();
+    media.hidden = true;
+  }
   if (state.mediaUrl) URL.revokeObjectURL(state.mediaUrl);
   state.mediaUrl = null;
   $("#media-status").textContent = "No media attached.";
@@ -313,6 +316,7 @@ $("#media-source").addEventListener("change", (event) => {
   resetLocalMedia();
   state.mediaSourceId = event.target.value || null;
   $("#media-status").textContent = "Selected source changed. Attach the matching media file.";
+  renderChapter();
 });
 $("#media-file").addEventListener("change", (event) => {
   const file = event.target.files?.[0];
@@ -324,12 +328,13 @@ $("#media-file").addEventListener("change", (event) => {
   }
   resetLocalMedia();
   state.mediaUrl = URL.createObjectURL(file);
-  const media = $("#local-media");
+  const media = file.type.startsWith("audio/") ? $("#local-audio") : $("#local-media");
   media.src = state.mediaUrl;
   media.hidden = false;
   media.load();
   $("#media-status").textContent = "Attached locally: " + file.name + ". Timestamps are source-local; no cross-source offset is applied.";
   event.target.value = "";
+  renderChapter();
 });
 $("#search").addEventListener("input", (event) => {
   state.query = event.target.value.trim();
