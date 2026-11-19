@@ -17,7 +17,7 @@ reference candidates. Each knowledge unit stores its source element ID and a rev
 relationship to the exact page citation and element.
 
 All created units remain \`NEEDS_REVIEW\`. Native source elements use DERIVED provenance for the
-knowledge-unit representation; OCR-derived elements retain UNCERTAIN provenance. Their evidence
+knowledge-unit representation; OCR-derived elements begin with UNCERTAIN provenance and can be explicitly promoted to DERIVED only after visual review. Their evidence
 links begin PENDING. Re-running the import is idempotent per source element.
 
 A later knowledge agent can use these source-linked units to propose definitions, concepts,
