@@ -59,6 +59,13 @@ def main() -> None:
     extract_pdf_cmd.add_argument("--max-pages", type=int, default=500)
     extract_pdf_cmd.add_argument("--max-chars-per-page", type=int, default=100_000)
     extract_pdf_cmd.add_argument("--max-total-chars", type=int, default=5_000_000)
+    search_evidence = sub.add_parser("search-evidence", help="Search unified transcript and document-page evidence")
+    search_evidence.add_argument("database", type=Path)
+    search_evidence.add_argument("query")
+    search_evidence.add_argument("--limit", type=int, default=50)
+    resolve_evidence = sub.add_parser("resolve-evidence", help="Resolve a unified evidence citation ID")
+    resolve_evidence.add_argument("database", type=Path)
+    resolve_evidence.add_argument("reference_id")
     search_pages = sub.add_parser("search-pages", help="Search extracted local PDF page text")
     search_pages.add_argument("database", type=Path)
     search_pages.add_argument("query")
@@ -94,6 +101,7 @@ def main() -> None:
             "source_id": result.source_id,
             "segments": len(result.segment_ids),
             "evidence_items": len(result.evidence_ids),
+            "evidence_references": len(result.evidence_ref_ids),
             "duration_ms": transcript.duration_ms,
             "caption_format": transcript.metadata["caption_format"],
         }, ensure_ascii=False, indent=2))
@@ -128,6 +136,7 @@ def main() -> None:
             "page_count": result.page_count,
             "extracted_pages": result.extracted_pages,
             "empty_pages": result.empty_pages,
+            "evidence_references": list(result.evidence_ref_ids),
             "pages": [
                 {"page_id": page.id, "page_number": page.page_number,
                  "char_count": page.char_count, "sha256": page.content_sha256,
@@ -135,6 +144,18 @@ def main() -> None:
                 for page in result.pages
             ],
         }, ensure_ascii=False, indent=2))
+    elif args.command == "search-evidence":
+        from .evidence_refs import search_evidence_references
+
+        results = search_evidence_references(args.database, args.query, limit=args.limit)
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+    elif args.command == "resolve-evidence":
+        from .evidence_refs import get_evidence_reference
+
+        result = get_evidence_reference(args.database, args.reference_id)
+        if result is None:
+            raise SystemExit("Evidence reference not found")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
     elif args.command == "search-pages":
         from .document_pdf import search_document_pages
 
