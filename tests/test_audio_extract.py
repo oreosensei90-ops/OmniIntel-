@@ -12,7 +12,7 @@ from omniintel.audio_extract import extract_audio
 from omniintel.cli import main
 from omniintel.local_files import import_local_file
 from omniintel.models import TranscriptSegmentInput
-from omniintel.transcription import ChunkTranscription, run_wav_transcription
+from omniintel.transcription import ChunkTranscription, TranscriptionRunResult, run_wav_transcription
 
 
 def _video(path: Path) -> Path:
@@ -257,4 +257,35 @@ def test_extracted_audio_flows_into_source_aligned_resumable_transcription(
     segments = OmniIntelStore(database).get_transcript(imported.source_id)
     assert segments[0]["start_ms"] == 350
     assert segments[0]["end_ms"] == 1050
+
+def test_transcribe_wav_cli_passes_stream_offset_and_explicit_vad(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    captured: dict = {}
+
+    class Adapter:
+        def __init__(self, **kwargs):
+            captured["adapter"] = kwargs
+
+    def fake_run(database, assets, source_id, asset_id, adapter, **kwargs):
+        captured["run"] = kwargs
+        return TranscriptionRunResult(
+            "run-id",source_id,1000,(),(),(),0,0,kwargs["time_offset_ms"],
+        )
+
+    monkeypatch.setattr("omniintel.transcription.FasterWhisperAdapter",Adapter)
+    monkeypatch.setattr("omniintel.transcription.run_wav_transcription",fake_run)
+    database = tmp_path / "cli.db"
+    assets = tmp_path / "assets"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["omniintel","transcribe-wav",str(database),str(assets),"source-id","audio-id",
+         "--model","/local/model","--time-offset-ms","375","--vad","--beam-size","3"],
+    )
+    main()
+    output = json.loads(capsys.readouterr().out)
+    assert captured["adapter"]["vad_filter"] is True
+    assert captured["adapter"]["beam_size"] == 3
+    assert captured["run"]["time_offset_ms"] == 375
+    assert output["time_offset_ms"] == 375
 
