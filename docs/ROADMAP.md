@@ -65,7 +65,12 @@ This roadmap is a plan, not a claim that every item exists.
 
 ## Applications
 - [x] First dependency-free offline Web Reader prototype: local reader JSON import, cross-chapter evidence-aware search, source-specific local audio/video attachment and seeking, PDF page structure review, local IndexedDB notes/bookmarks, local progress and cached static shell (full Web platform and large-library indexing pending).
-- [x] Initial native Kotlin + Jetpack Compose Android reader with Storage Access Framework import, bounded strict JSON parsing, source/evidence referential integrity, cross-chapter search with chapter navigation, evidence rendering, local audio/video playback with source-scoped timestamp jumps, and version-scoped chapter progress plus per-block private notes and bookmarks in Preferences DataStore (Room-backed library, paragraph-level resume, annotation migration/export, background playback and full native study features pending).
+- [x] Native Kotlin + Jetpack Compose Android reader with Storage Access Framework import, bounded strict JSON parsing, source/evidence referential integrity, evidence rendering, local source-scoped audio/video playback and timestamp jumps.
+- [x] Room v3 offline Android library with normalized textbook sources, chapters, blocks and evidence; transactional re-import and cascading content cleanup.
+- [x] One-time, transactional migration of existing DataStore notes, bookmarks and chapter positions into Room; all subsequent annotation writes use Room.
+- [x] Per-textbook paragraph-level resume using the last visible block, with automatic position restoration.
+- [x] Library-wide on-device search across book/chapter titles, block text, evidence excerpts and private notes, opening the matching chapter and paragraph.
+- [ ] Annotation export/backup, background media controls, full-text indexed search at large-library scale and full native study features.
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
 - [x] First interactive Web and Android reader UIs with chapter navigation and search; Web also has local source playback, notes and bookmarks, while Android supports source-specific local media playback and evidence jumps.

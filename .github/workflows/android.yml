@@ -52,6 +52,7 @@ jobs:
       - name: Create APK checksum
         run: sha256sum apps/android/app/build/outputs/apk/debug/app-debug.apk > apps/android/app/build/outputs/apk/debug/app-debug.apk.sha256
       - name: Upload verified debug APK
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: OmniIntel-Android-debug-${{ github.sha }}
