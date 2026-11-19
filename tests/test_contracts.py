@@ -193,3 +193,53 @@ def test_document_topic_contracts_do_not_require_video_timestamps():
     }
     assert validator_for("document-topic-evidence-reference.schema.json").is_valid(link)
 
+def test_document_element_and_ocr_contracts_preserve_native_provenance():
+    common = {
+        "id": "0190f2a1-1234-7123-8123-123456789abc",
+        "page_id": "0190f2a1-1234-7123-8123-123456789abd",
+        "evidence_ref_id": "0190f2a1-1234-7123-8123-123456789abe",
+        "element_type": "EQUATION",
+        "ordinal": 0,
+        "text_content": "p_initial = p_final",
+        "content": {"text": "p_initial = p_final"},
+        "bbox": {"x0": 0.1, "y0": 0.2, "x1": 0.8, "y1": 0.3},
+        "asset_id": None,
+        "confidence": 0.9,
+        "provenance": "SOURCE",
+        "review_state": "NEEDS_REVIEW",
+        "created_at": "2026-11-19T08:00:00Z",
+    }
+    assert validator_for("document-element.schema.json").is_valid(common)
+
+    ocr = {
+        "page_id": common["page_id"],
+        "rendered_asset_id": "0190f2a1-1234-7123-8123-123456789abf",
+        "engine_name": "test-ocr",
+        "engine_version": "1",
+        "text_content": "Recognized text",
+        "words": [{
+            "text": "Recognized",
+            "x0": 0.1, "y0": 0.2, "x1": 0.4, "y1": 0.25,
+            "confidence": 96.0,
+        }],
+        "mean_confidence": 96.0,
+        "status": "NEEDS_REVIEW",
+        "created_at": "2026-11-19T08:00:00Z",
+    }
+    assert validator_for("document-ocr-page.schema.json").is_valid(ocr)
+
+
+def test_knowledge_unit_evidence_reference_contract_supports_element_lineage():
+    link = {
+        "id": "0190f2a1-1234-7123-8123-123456789abc",
+        "knowledge_unit_id": "0190f2a1-1234-7123-8123-123456789abd",
+        "evidence_ref_id": "0190f2a1-1234-7123-8123-123456789abe",
+        "element_id": "0190f2a1-1234-7123-8123-123456789abf",
+        "relation": "SOURCE_EXCERPT",
+        "review_state": "PENDING",
+        "rationale": None,
+        "created_at": "2026-11-19T08:00:00Z",
+        "reviewed_at": None,
+    }
+    assert validator_for("knowledge-unit-evidence-reference.schema.json").is_valid(link)
+
