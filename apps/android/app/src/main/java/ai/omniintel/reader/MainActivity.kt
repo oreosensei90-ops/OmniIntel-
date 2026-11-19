@@ -15,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,10 +29,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.withTransaction
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -51,6 +52,55 @@ private val Gold = Color(0xFFE2BD71)
 private val Muted = Color(0xFF9BA3B2)
 private const val MAX_IMPORT_BYTES = 50L * 1024L * 1024L
 private val Context.readerProgressStore by preferencesDataStore(name = "omniintel_reader_progress")
+
+
+private suspend fun migrateLegacyReaderPreferences(context: Context, database: ReaderDatabase) {
+    val migrationKey = "legacy_preferences_to_room_v1"
+    if (database.migrations().find(migrationKey) != null) return
+    val old = context.readerProgressStore.data.first()
+    val annotations = linkedMapOf<Pair<String, String>, ReaderAnnotationEntity>()
+    val progress = mutableListOf<ReaderProgressEntity>()
+    val now = System.currentTimeMillis()
+    for ((key, value) in old.asMap()) {
+        val name = key.name
+        when {
+            name.startsWith("note:") -> {
+                val split = name.indexOf(':', 5)
+                if (split > 5 && split < name.lastIndex) {
+                    val versionId = name.substring(5, split); val blockId = name.substring(split + 1)
+                    if (value is String) {
+                        val pair = versionId to blockId
+                        val previous = annotations[pair] ?: ReaderAnnotationEntity(versionId, blockId, null, false, now)
+                        annotations[pair] = previous.copy(note = value, updatedAtEpochMs = now)
+                    }
+                }
+            }
+            name.startsWith("bookmark:") -> {
+                val split = name.indexOf(':', 9)
+                if (split > 9 && split < name.lastIndex) {
+                    val versionId = name.substring(9, split); val blockId = name.substring(split + 1)
+                    if (value is Boolean) {
+                        val pair = versionId to blockId
+                        val previous = annotations[pair] ?: ReaderAnnotationEntity(versionId, blockId, null, false, now)
+                        annotations[pair] = previous.copy(bookmarked = value, updatedAtEpochMs = now)
+                    }
+                }
+            }
+            name.startsWith("chapter:") -> {
+                val versionId = name.removePrefix("chapter:")
+                if (versionId.isNotBlank() && value is Int) progress += ReaderProgressEntity(versionId, value.coerceAtLeast(0), null, now)
+            }
+        }
+    }
+    database.withTransaction {
+        database.annotations().upsertAll(annotations.values.toList())
+        progress.forEach { database.progress().upsert(it) }
+        database.migrations().insert(ReaderMigrationEntity(migrationKey, now))
+    }
+    context.readerProgressStore.edit { it.clear() }
+}
+
+
 
 data class ReaderSource(val id: String, val title: String)
 data class Evidence(val sourceId: String, val source: String, val locator: String, val startMs: Long?, val excerpt: String)
@@ -194,6 +244,10 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var book by remember { mutableStateOf<Book?>(null) }
     val libraryDatabase = remember { ReaderDatabase.get(context) }
     var libraryBooks by remember { mutableStateOf<List<LibraryBookEntity>>(emptyList()) }
+    var librarySearchQuery by remember { mutableStateOf("") }
+    var librarySearchResults by remember { mutableStateOf<List<LibrarySearchResult>>(emptyList()) }
+    var resumeBlockId by remember { mutableStateOf<String?>(null) }
+    val readerListState = rememberLazyListState()
     var videoImports by remember { mutableStateOf<List<VideoImportEntity>>(emptyList()) }
     var videoUrlDraft by remember { mutableStateOf("") }
     var videoImportMessage by remember { mutableStateOf<String?>(null) }
@@ -217,11 +271,20 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var audioPlaying by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         libraryBooks = runCatching {
-            withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().getAll() }
+            withContext(Dispatchers.IO) {
+                migrateLegacyReaderPreferences(context, libraryDatabase)
+                libraryDatabase.libraryBooks().getAll()
+            }
         }.getOrElse {
-            error = "The on-device library could not be loaded."
+            error = "The on-device library could not be loaded or legacy reader data could not be migrated safely."
             emptyList()
         }
+    }
+    LaunchedEffect(librarySearchQuery) {
+        val term = librarySearchQuery.trim()
+        librarySearchResults = if (term.isBlank()) emptyList() else runCatching {
+            withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().searchLibrary(term) }
+        }.getOrDefault(emptyList())
     }
     LaunchedEffect(Unit) {
         videoImports = runCatching {
@@ -234,61 +297,95 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
             videoImportMessage = "YouTube link received. Review it and add it to your queue."
         }
     }
+
+    fun displayLoadedBook(loadedBook: Book, savedProgress: ReaderProgressEntity?, savedAnnotations: List<ReaderAnnotationEntity>, warning: String? = null, targetBlockId: String? = null) {
+        notesByBlock = savedAnnotations.mapNotNull { row -> row.note?.takeIf { it.isNotBlank() }?.let { row.blockId to it } }.toMap()
+        bookmarkedBlocks = savedAnnotations.filter { it.bookmarked }.map { it.blockId }.toSet()
+        editingBlockId = null; noteDraft = ""; book = loadedBook
+        chapterIndex = (savedProgress?.chapterIndex ?: 0).coerceIn(0, loadedBook.chapters.lastIndex)
+        resumeBlockId = targetBlockId ?: savedProgress?.lastBlockId
+        query = ""; showBookmarksOnly = false; error = warning
+        selectedSourceId = null; mediaUri = null; mediaMime = null
+        audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
+        videoView?.stopPlayback(); videoView = null
+        mediaStatus = "Select the exact course source, then attach only the matching local media file."
+    }
+
     fun loadBook(uri: Uri) {
         open(uri) { result ->
             result.onSuccess { loadedBook ->
                 scope.launch {
-                    var libraryWarning: String? = null
-                    val hasGrant = context.contentResolver.persistedUriPermissions.any {
-                        it.uri == uri && it.isReadPermission
-                    } || runCatching {
-                        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }.isSuccess
-                    if (hasGrant) {
-                        runCatching {
-                            val now = System.currentTimeMillis()
-                            withContext(Dispatchers.IO) {
-                                val dao = libraryDatabase.libraryBooks()
-                                val previous = dao.find(loadedBook.versionId)
-                                dao.upsert(
-                                    LibraryBookEntity(
-                                        versionId = loadedBook.versionId,
-                                        title = loadedBook.title,
-                                        documentUri = uri.toString(),
-                                        sourceCount = loadedBook.sources.size,
-                                        chapterCount = loadedBook.chapters.size,
-                                        importedAtEpochMs = previous?.importedAtEpochMs ?: now,
-                                        lastOpenedAtEpochMs = now
-                                    )
+                    runCatching {
+                        val hasGrant = context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission } ||
+                            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }.isSuccess
+                        val now = System.currentTimeMillis()
+                        val saved = withContext(Dispatchers.IO) {
+                            libraryDatabase.withTransaction {
+                                val previous = libraryDatabase.libraryBooks().find(loadedBook.versionId)
+                                libraryDatabase.libraryBooks().upsert(
+                                    LibraryBookEntity(loadedBook.versionId, loadedBook.title, uri.toString(),
+                                        loadedBook.sources.size, loadedBook.chapters.size,
+                                        previous?.importedAtEpochMs ?: now, now)
                                 )
-                                dao.getAll()
+                                val dao = libraryDatabase.readerContent()
+                                dao.deleteChapters(loadedBook.versionId); dao.deleteSources(loadedBook.versionId)
+                                dao.insertSources(loadedBook.sources.map { TextbookSourceEntity(loadedBook.versionId, it.id, it.title) })
+                                dao.insertChapters(loadedBook.chapters.mapIndexed { index, ch -> TextbookChapterEntity(loadedBook.versionId, index, ch.title) })
+                                dao.insertBlocks(loadedBook.chapters.flatMapIndexed { ci, ch ->
+                                    ch.blocks.mapIndexed { bi, block ->
+                                        TextbookBlockEntity(loadedBook.versionId, block.id, ci, bi, block.type, block.text, block.provenance)
+                                    }
+                                })
+                                dao.insertEvidence(loadedBook.chapters.flatMap { ch ->
+                                    ch.blocks.flatMap { block ->
+                                        block.evidence.mapIndexed { ei, ev ->
+                                            TextbookEvidenceEntity(loadedBook.versionId, block.id, ei, ev.sourceId, ev.source, ev.locator, ev.startMs, ev.excerpt)
+                                        }
+                                    }
+                                })
                             }
-                        }.onSuccess { libraryBooks = it }
-                            .onFailure { libraryWarning = "Textbook opened, but the local library index could not be updated." }
-                    } else {
-                        libraryWarning = "Textbook opened for this session only; its document provider did not allow persistent access."
-                    }
-                    val progressKey = intPreferencesKey("chapter:${loadedBook.versionId}")
-                    val savedChapter = runCatching {
-                        context.readerProgressStore.data.first()[progressKey]
-                    }.getOrNull() ?: 0
-                    notesByBlock = emptyMap()
-                    bookmarkedBlocks = emptySet()
-                    editingBlockId = null
-                    noteDraft = ""
-                    book = loadedBook
-                    chapterIndex = savedChapter.coerceIn(0, loadedBook.chapters.lastIndex)
-                    query = ""
-                    showBookmarksOnly = false
-                    error = libraryWarning
-                    selectedSourceId = null; mediaUri = null; mediaMime = null
-                    audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
-                    videoView?.stopPlayback(); videoView = null
-                    mediaStatus = "Select the exact course source, then attach only the matching local media file."
+                            Triple(libraryDatabase.progress().find(loadedBook.versionId),
+                                libraryDatabase.annotations().forVersion(loadedBook.versionId),
+                                libraryDatabase.libraryBooks().getAll())
+                        }
+                        libraryBooks = saved.third
+                        displayLoadedBook(loadedBook, saved.first, saved.second,
+                            if (hasGrant) null else "Imported into the on-device library. The original file permission is temporary, but the stored textbook remains available offline.")
+                    }.onFailure { error = "Could not save the textbook safely to the on-device library: " + (it.message ?: "storage error") }
                 }
             }.onFailure { error = it.message ?: "Could not open reader export." }
         }
     }
+
+    fun openStoredBook(versionId: String, targetBlockId: String? = null) {
+        scope.launch {
+            runCatching {
+                val stored = withContext(Dispatchers.IO) {
+                    val metadata = requireNotNull(libraryDatabase.libraryBooks().find(versionId))
+                    val dao = libraryDatabase.readerContent()
+                    val sources = dao.sources(versionId); val chapters = dao.chapters(versionId)
+                    val blocks = dao.blocks(versionId); val evidence = dao.evidence(versionId).groupBy { it.blockId }
+                    require(chapters.isNotEmpty() && blocks.isNotEmpty()) { "Stored textbook content is unavailable." }
+                    val loaded = Book(metadata.title, versionId, sources.map { ReaderSource(it.sourceId, it.title) },
+                        chapters.map { chapter ->
+                            ReaderChapter(chapter.title, blocks.filter { it.chapterIndex == chapter.chapterIndex }.map { block ->
+                                Block(block.blockId, block.blockType, block.text, block.provenance,
+                                    evidence[block.blockId].orEmpty().map { ev -> Evidence(ev.sourceId, ev.sourceTitle, ev.locator, ev.startMs, ev.excerpt) })
+                            })
+                        })
+                    Triple(loaded, libraryDatabase.progress().find(versionId), libraryDatabase.annotations().forVersion(versionId))
+                }
+                displayLoadedBook(stored.first, stored.second, stored.third, targetBlockId = targetBlockId)
+                libraryBooks = withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().getAll() }
+                librarySearchQuery = ""
+            }.onFailure {
+                val metadata = withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().find(versionId) }
+                if (metadata != null) loadBook(Uri.parse(metadata.documentUri))
+                else error = "Could not reopen the saved textbook: " + (it.message ?: "content unavailable")
+            }
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadBook(uri)
     }
@@ -351,26 +448,10 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     LaunchedEffect(book?.versionId) {
         val currentBook = book ?: return@LaunchedEffect
         runCatching {
-            val preferences = context.readerProgressStore.data.first()
-            val prefix = "${currentBook.versionId}:"
-            notesByBlock = preferences.asMap().mapNotNull { (key, value) ->
-                val name = key.name
-                if (name.startsWith("note:$prefix") && value is String) name.removePrefix("note:$prefix") to value else null
-            }.toMap()
-            bookmarkedBlocks = preferences.asMap().mapNotNull { (key, value) ->
-                val name = key.name
-                if (name.startsWith("bookmark:$prefix") && value == true) name.removePrefix("bookmark:$prefix") else null
-            }.toSet()
-        }.onFailure { error = "Could not restore local notes and bookmarks." }
-    }
-    LaunchedEffect(book?.versionId, chapterIndex) {
-        val currentBook = book ?: return@LaunchedEffect
-        val progressKey = intPreferencesKey("chapter:${currentBook.versionId}")
-        runCatching {
-            context.readerProgressStore.edit { preferences ->
-                preferences[progressKey] = chapterIndex
-            }
-        }
+            val rows = withContext(Dispatchers.IO) { libraryDatabase.annotations().forVersion(currentBook.versionId) }
+            notesByBlock = rows.mapNotNull { row -> row.note?.takeIf { it.isNotBlank() }?.let { row.blockId to it } }.toMap()
+            bookmarkedBlocks = rows.filter { it.bookmarked }.map { it.blockId }.toSet()
+        }.onFailure { error = "Could not restore local notes and bookmarks from the on-device library." }
     }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -489,6 +570,25 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     }
                 }
                 error?.let { Text(it, color = Color(0xFFFF8C82), modifier = Modifier.padding(top = 12.dp)) }
+                OutlinedTextField(
+                    value = librarySearchQuery, onValueChange = { librarySearchQuery = it },
+                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp), singleLine = true,
+                    label = { Text("Search your entire library") },
+                    placeholder = { Text("Books, chapters, paragraphs, evidence and notes") }
+                )
+                if (librarySearchQuery.isNotBlank()) {
+                    Text("LIBRARY RESULTS · " + librarySearchResults.size, color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+                    librarySearchResults.take(12).forEach { hit ->
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), colors = CardDefaults.cardColors(containerColor = Panel)) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                                Text(hit.bookTitle + " · " + hit.chapterTitle, color = Gold, fontSize = 10.sp)
+                                Text(hit.blockText.ifBlank { hit.note.orEmpty() }.take(180), color = Color.White, fontSize = 12.sp)
+                                TextButton(onClick = { openStoredBook(hit.versionId, hit.blockId) }) { Text("Open matching paragraph", color = Gold) }
+                            }
+                        }
+                    }
+                    if (librarySearchResults.isEmpty()) Text("No matching material in your saved library.", color = Muted, fontSize = 11.sp)
+                }
                 if (libraryBooks.isNotEmpty()) {
                     Text("ON THIS DEVICE", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
                     LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -499,11 +599,19 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                         Text(entry.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                                         Text("${entry.chapterCount} chapters · ${entry.sourceCount} sources", color = Muted, fontSize = 10.sp)
                                     }
-                                    TextButton(onClick = { loadBook(Uri.parse(entry.documentUri)) }) { Text("Open", color = Gold) }
+                                    TextButton(onClick = { openStoredBook(entry.versionId) }) { Text("Open", color = Gold) }
                                     TextButton(onClick = {
                                         scope.launch {
                                             runCatching {
-                                                withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().delete(entry.versionId) }
+                                                withContext(Dispatchers.IO) {
+                                                    libraryDatabase.withTransaction {
+                                                        libraryDatabase.readerContent().deleteChapters(entry.versionId)
+                                                        libraryDatabase.readerContent().deleteSources(entry.versionId)
+                                                        libraryDatabase.annotations().deleteForVersion(entry.versionId)
+                                                        libraryDatabase.progress().delete(entry.versionId)
+                                                        libraryDatabase.libraryBooks().delete(entry.versionId)
+                                                    }
+                                                }
                                                 runCatching {
                                                     context.contentResolver.releasePersistableUriPermission(
                                                         Uri.parse(entry.documentUri), Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -631,8 +739,31 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     }.map { Triple(index, chapter.title, it) }
                 }
             }
+            LaunchedEffect(current.versionId, chapterIndex, query, showBookmarksOnly) {
+                if (query.isBlank() && !showBookmarksOnly) {
+                    val target = resumeBlockId?.let { id -> blocks.indexOfFirst { it.third.id == id } } ?: 0
+                    readerListState.scrollToItem(target.coerceIn(0, (blocks.size - 1).coerceAtLeast(0)))
+                    resumeBlockId = null
+                }
+            }
+            LaunchedEffect(current.versionId, chapterIndex, query, showBookmarksOnly) {
+                if (query.isBlank() && !showBookmarksOnly) {
+                    snapshotFlow { readerListState.firstVisibleItemIndex }.distinctUntilChanged().collect { visibleIndex ->
+                        blocks.getOrNull(visibleIndex)?.third?.let { visibleBlock ->
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    libraryDatabase.progress().upsert(
+                                        ReaderProgressEntity(current.versionId, chapterIndex, visibleBlock.id, System.currentTimeMillis())
+                                    )
+                                }
+                            }.onFailure { error = "Could not save paragraph-level reading progress." }
+                        }
+                    }
+                }
+            }
             LazyColumn(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                state = readerListState,
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(blocks, key = { it.third.id }) { (resultChapterIndex, chapterTitle, block) ->
@@ -648,13 +779,17 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
                                 TextButton(onClick = {
-                                    val key = booleanPreferencesKey("bookmark:${current.versionId}:${block.id}")
                                     val next = block.id !in bookmarkedBlocks
                                     scope.launch {
                                         runCatching {
-                                            context.readerProgressStore.edit { prefs -> prefs[key] = next }
+                                            withContext(Dispatchers.IO) {
+                                                val previous = libraryDatabase.annotations().find(current.versionId, block.id)
+                                                libraryDatabase.annotations().upsert(
+                                                    ReaderAnnotationEntity(current.versionId, block.id, previous?.note, next, System.currentTimeMillis())
+                                                )
+                                            }
                                             bookmarkedBlocks = if (next) bookmarkedBlocks + block.id else bookmarkedBlocks - block.id
-                                        }.onFailure { error = "Could not save bookmark." }
+                                        }.onFailure { error = "Could not save bookmark to the on-device library." }
                                     }
                                 }) { Text(if (block.id in bookmarkedBlocks) "★ Saved" else "☆ Bookmark", color = Gold) }
                             }
@@ -722,15 +857,20 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     TextButton(onClick = {
                         val currentBook = book
                         if (currentBook != null) {
-                            val key = stringPreferencesKey("note:${currentBook.versionId}:$blockId")
                             val saved = noteDraft.trim()
                             scope.launch {
                                 runCatching {
-                                    context.readerProgressStore.edit { prefs ->
-                                        if (saved.isBlank()) prefs.remove(key) else prefs[key] = saved
+                                    withContext(Dispatchers.IO) {
+                                        val previous = libraryDatabase.annotations().find(currentBook.versionId, blockId)
+                                        libraryDatabase.annotations().upsert(
+                                            ReaderAnnotationEntity(currentBook.versionId, blockId,
+                                                saved.takeIf { it.isNotBlank() },
+                                                previous?.bookmarked ?: (blockId in bookmarkedBlocks),
+                                                System.currentTimeMillis())
+                                        )
                                     }
                                     notesByBlock = if (saved.isBlank()) notesByBlock - blockId else notesByBlock + (blockId to saved)
-                                    editingBlockId = null
+                            editingBlockId = null
                                 }.onFailure { error = "Could not save local note." }
                             }
                         }
