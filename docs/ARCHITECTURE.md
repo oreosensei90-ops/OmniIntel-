@@ -26,7 +26,7 @@ Do not collapse these layers into one summary field.
 
 ## Initial Python slice
 
-The first implementation slice establishes stable identifiers, typed transcript inputs, SQLite persistence, immutable migration checksums and deterministic transcript import. It deliberately does not claim to perform speech recognition, visual understanding or AI reasoning.
+The foundation now includes stable identifiers, typed transcript inputs, SQLite persistence, immutable migration checksums, transcript and PDF-page evidence, local OCR, deterministic PDF layout extraction, source-linked knowledge candidates and evidence-gated textbook composition. It still does not claim to perform speech recognition, semantic claim extraction, visual understanding or AI reasoning.
 
 ## Planned processing flow
 
@@ -52,3 +52,20 @@ The first implementation slice establishes stable identifiers, typed transcript 
 ## AI boundary
 
 AI providers are optional adapters. Deterministic core operations must remain available without a model. External processing is disabled unless the user explicitly authorizes it.
+
+
+## Current local PDF processing slice
+
+The implemented document path is deliberately staged:
+
+1. A user-selected PDF is registered as an immutable, content-addressed source asset.
+2. pypdf extracts page-numbered native text with per-page hashes and bounded limits.
+3. An optional local OCR adapter renders image-only pages, stores word boxes/confidence and requires explicit page review. Tesseract is the initial adapter; it is not bundled and no remote OCR fallback exists.
+4. pdfplumber extracts positioned headings/paragraphs, equation candidates, table candidates and embedded/vector figure regions. Every element retains a page citation, normalized bounds, provenance and review state.
+5. Accepted elements can create idempotent draft knowledge units with exact source-element lineage. This does not automatically create or validate claims.
+6. Reviewed document topics can map multiple elements on one page. Deterministic textbook composition carries reviewed source blocks and accepted claims into chapters only when their exact page/element citations align.
+7. The publication auditor blocks uncertain provenance, unreviewed evidence, unsupported claims and unaccepted OCR/element references.
+
+Page numbers remain page numbers; they are never encoded as fake media timestamps. OCR and layout extraction are heuristic and bounded, not a hostile-file sandbox. See DOCUMENT_PIPELINE.md for the current CLI sequence and limitations.
+
+The current document composer preserves source paragraphs, equations, tables and figure assets as structured blocks. Actual image embedding across PDF/DOCX/HTML/Markdown, native math rendering, semantic concept/claim discovery, formula verification and generated pedagogical explanations remain future work.
