@@ -170,3 +170,26 @@ Disposition: high-priority architecture reference for claim verification, consen
 
 These appeared relevant in the supplied GitHub topic scans. They are leads only until source, license, platform support, maintenance and security are separately verified.
 
+
+
+### Additional direct-source findings from the same batch
+
+- **Vibe transcript model:** segment and optional word-level timestamps are stored in centiseconds, with optional speaker IDs. This is a useful precision/diarization contract reference; OmniIntel's canonical time unit remains integer milliseconds, so adapters must convert explicitly and test rounding.
+- **Vibe media staging:** its FFmpeg helper uses a private app-cache staging directory, verifies directory permissions/ownership and falls back to a per-process emergency directory. This is a valuable native-app security pattern for future Android/Web temporary media handling.
+- **take-notes genre router:** source type drives a closed, inspectable genre selection order; user-defined genres precede bundled genres and the catch-all is last. Genre-specific contracts specify mandatory fields and explicitly prohibit filling missing source facts with guesses. Adopt the principle of source-shaped document composition, but keep OmniIntel's canonical block schema and validation rather than storing arbitrary HTML as the source of truth.
+- **take-notes renderer:** uses separate templates by genre and a small shared shell. Its HTML output is convenient and durable, but generated page state is not a replacement for canonical study records.
+- **interactive-deep-notes page shell:** persistence, export, keyboard access and reduced-motion behavior are explicit. Adopt accessibility and durable-answer export requirements; store learner answers in the canonical study database rather than page-local storage.
+- **lecture-to-notes slide extraction:** interval sampling plus perceptual hash is used because scene detection alone misses smooth transitions and progressive reveals. Its code preserves foreign files in output directories rather than deleting them during reruns. OmniIntel should keep source frames immutable and create separate derived candidate sets.
+- **lecture-to-notes OCR triage:** records OCR validity, confidence, text density, image size and Laplacian variance for every frame, including skipped frames. Missing OCR engine is a hard failure rather than a confident empty result. Adopt explicit distinction between no text and OCR failure.
+- **lecture-to-notes semantic dedup:** combines text-subset similarity and layout similarity, disables layout merging when its SSIM dependency is absent rather than silently substituting a weaker metric, and filters conferencing UI chrome before ranking slide content.
+- **lecture-to-notes temporal re-anchoring:** aligns an LLM transcript's words against a local ASR clock and reports the anchor coverage. This is an advanced recovery technique, not a default timestamp source; OmniIntel must preserve original transcript text and label re-anchored timing as DERIVED with error estimates.
+- **amroeser/lecture-notes-app:** series assembly uses explicit chapter markers, checks chapter permutations, chunks series compilation and hashes cache inputs. Its markers prove structural presence/order only, not semantic completeness; OmniIntel's own publication audit must retain evidence coverage and claim-level checks.
+- **Pranav322/youtube-notes:** map/reduce preserves technical code/formula blocks and exports Markdown/PDF, but concurrent chunk fan-out is not a mobile-safe default. OmniIntel uses bounded workers and persistent checkpoints.
+- **Allen0497/video-to-notes:** captions-first ingestion, then local ASR fallback, and PSNR dedup are useful efficiency ideas. Its sample script uses platform URL downloading and external API options; OmniIntel adapters must remain authorization/terms-aware and must never silently send audio externally.
+- **xKarinSan/video-notes:** timestamp-linked note replay and multiple note views are useful reader ideas; its prompt templates remain generic and cannot replace evidence-gated structured knowledge.
+
+### Current research-derived implementation progress
+
+- Implemented a read-only plan-first local input planner. It classifies selected local files, emits modality/action/resource/network metadata, and blocks readiness until speech language and caption-to-media association are confirmed where applicable. It does not perform ingestion or processing.
+- Implemented ordered source collections/courses with typed membership roles. Sources remain independent and can belong to multiple collections; membership does not imply shared clocks or semantic relationships.
+- These foundations are exposed through CLI commands and documented in INPUT_PLANNING.md and COLLECTIONS.md. Approved plan execution, multi-source textbook composition and cross-source alignment remain pending.
