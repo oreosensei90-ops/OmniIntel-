@@ -299,6 +299,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Text(current.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Text("${current.chapters.size} chapters · ${current.sources.size} sources", color = Muted, fontSize = 11.sp)
+                error?.let { Text(it, color = Color(0xFFFF8C82), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp)) }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box {
