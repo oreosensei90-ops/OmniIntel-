@@ -216,6 +216,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
         open(uri) { result ->
             result.onSuccess { loadedBook ->
                 scope.launch {
+                    var libraryWarning: String? = null
                     val hasGrant = context.contentResolver.persistedUriPermissions.any {
                         it.uri == uri && it.isReadPermission
                     } || runCatching {
@@ -241,9 +242,9 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                                 dao.getAll()
                             }
                         }.onSuccess { libraryBooks = it }
-                            .onFailure { error = "Textbook opened, but the local library index could not be updated." }
+                            .onFailure { libraryWarning = "Textbook opened, but the local library index could not be updated." }
                     } else {
-                        error = "Textbook opened for this session only; its document provider did not allow persistent access."
+                        libraryWarning = "Textbook opened for this session only; its document provider did not allow persistent access."
                     }
                     val progressKey = intPreferencesKey("chapter:${loadedBook.versionId}")
                     val savedChapter = runCatching {
@@ -257,7 +258,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                     chapterIndex = savedChapter.coerceIn(0, loadedBook.chapters.lastIndex)
                     query = ""
                     showBookmarksOnly = false
-                    error = error?.takeIf { it.startsWith("Textbook opened") || it.startsWith("The on-device") }
+                    error = libraryWarning
                     selectedSourceId = null; mediaUri = null; mediaMime = null
                     audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
                     videoView?.stopPlayback(); videoView = null
