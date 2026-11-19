@@ -117,7 +117,7 @@ def _tool_version(executable: str, timeout_seconds: float) -> str:
 
 
 def _duration_ms(value: Any) -> int | None:
-    if value is None or value in {"", "N/A"}:
+    if value is None or (isinstance(value, str) and value in {"", "N/A"}):
         return None
     try:
         seconds = Decimal(str(value))
@@ -143,6 +143,21 @@ def _optional_int(value: Any, *, maximum: int) -> int | None:
     if number <= 0 or number > maximum:
         raise ValueError("ffprobe integer field is outside the supported range")
     return number
+
+
+
+def _optional_nonnegative_int(value: Any, *, maximum: int) -> int | None:
+    if value is None or (isinstance(value, str) and value in {"", "N/A"}):
+        return None
+    if isinstance(value, bool):
+        raise ValueError("ffprobe returned a boolean where an integer was expected")
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError("ffprobe returned an invalid integer field") from error
+    if number < 0 or number > maximum:
+        raise ValueError("ffprobe integer field is outside the supported range")
+    return number or None
 
 
 def _bounded_text(value: Any, *, maximum: int = 128) -> str | None:
@@ -215,14 +230,14 @@ def _parse_probe(
         durations = [stream.duration_ms for stream in streams if stream.duration_ms]
         duration_ms = max(durations) if durations else None
     metadata = {
-        "container_bit_rate": _optional_int(format_info.get("bit_rate"), maximum=2**63 - 1),
-        "container_reported_size": _optional_int(format_info.get("size"), maximum=2**63 - 1),
+        "container_bit_rate": _optional_nonnegative_int(format_info.get("bit_rate"), maximum=2**63 - 1),
+        "container_reported_size": _optional_nonnegative_int(format_info.get("size"), maximum=2**63 - 1),
         "probe_schema": _PROBE_SCHEMA,
     }
     return format_name, duration_ms, metadata, tuple(sorted(streams, key=lambda item: item.stream_index))
 
 
-def _fingerprint(asset_sha256: str, tool_version: str) -> str:
+def _fingerprint(asset_sha256: str, tool_version: str, max_streams: int, max_output_bytes: int) -> str:
     payload = json.dumps(
         {
             "asset_sha256": asset_sha256,
@@ -230,6 +245,8 @@ def _fingerprint(asset_sha256: str, tool_version: str) -> str:
             "tool_version": tool_version,
             "probe_schema": _PROBE_SCHEMA,
             "show_entries": _SHOW_ENTRIES,
+            "max_streams": max_streams,
+            "max_output_bytes": max_output_bytes,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -304,7 +321,7 @@ def probe_local_media(
     if not executable:
         raise RuntimeError("ffprobe was not found; install FFmpeg tools to inspect local media")
     version = _tool_version(executable, timeout_seconds)
-    fingerprint = _fingerprint(asset.sha256, version)
+    fingerprint = _fingerprint(asset.sha256, version, max_streams, max_output_bytes)
     with connect(database_path) as conn:
         existing = conn.execute(
             "SELECT id FROM media_probes WHERE source_asset_id=? AND probe_fingerprint=?",
@@ -336,6 +353,7 @@ def probe_local_media(
     )
     probe_id = uuid7()
     created_at = utc_now()
+    reused = False
     with connect(database_path) as conn:
         conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute(
@@ -344,6 +362,7 @@ def probe_local_media(
         ).fetchone()
         if existing is not None:
             probe_id = existing["id"]
+            reused = True
         else:
             conn.execute(
                 """INSERT INTO media_probes
@@ -377,7 +396,7 @@ def probe_local_media(
                          AND duration_ms IS NULL""",
                     (duration_ms, asset_id),
                 )
-    return _load_result(database_path, probe_id, reused=False)
+    return _load_result(database_path, probe_id, reused=reused)
 
 
 def media_probe_dict(result: MediaProbeResult) -> dict[str, Any]:
