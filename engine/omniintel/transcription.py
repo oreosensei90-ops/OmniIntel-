@@ -140,6 +140,35 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+
+def _resolve_time_offset(
+    database_path: str | Path,
+    source_id: str,
+    asset_id: str,
+    requested_offset_ms: int | None,
+) -> int:
+    if requested_offset_ms is not None:
+        if type(requested_offset_ms) is not int or requested_offset_ms < 0:
+            raise ValueError("time_offset_ms must be a non-negative integer")
+        return requested_offset_ms
+    with connect(database_path) as conn:
+        rows = conn.execute(
+            """SELECT DISTINCT time_offset_ms FROM media_derivatives
+               WHERE output_asset_id=? AND operation='AUDIO_PCM_WAV'
+                 AND source_asset_id IN (
+                     SELECT id FROM source_assets WHERE source_id=?
+                 )
+               ORDER BY time_offset_ms""",
+            (asset_id,source_id),
+        ).fetchall()
+    offsets = {row["time_offset_ms"] for row in rows}
+    if len(offsets) > 1:
+        raise ValueError(
+            "Audio asset has multiple source timeline offsets; pass --time-offset-ms explicitly"
+        )
+    return next(iter(offsets)) if offsets else 0
+
+
 def _config_hash(
     adapter: TranscriptionAdapter,
     *,
