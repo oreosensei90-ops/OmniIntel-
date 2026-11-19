@@ -84,7 +84,7 @@ def _ffmpeg(
         " else:\n"
         "  with wave.open(str(output),'wb') as wav:\n"
         "   wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(16000)\n"
-        "   wav.writeframes(b'\x00\x00' * 16000 * seconds)\n"
+        "   wav.writeframes(bytes(2) * 16000 * seconds)\n"
     )
     path.write_text(script, encoding="utf-8")
     path.chmod(0o755)
