@@ -10,7 +10,7 @@
       "type": "object",
       "required": ["id", "textbook_title"],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "minLength": 1, "maxLength": 128},
         "textbook_title": {"type": "string"},
         "version_label": {"type": ["string", "null"]},
         "collection_id": {"type": "string"}
