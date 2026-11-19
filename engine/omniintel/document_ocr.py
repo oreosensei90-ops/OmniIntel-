@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import json
 import shutil
 import subprocess
@@ -149,6 +150,29 @@ class TesseractOCR:
         return OCRResult(text, tuple(words), confidence)
 
 
+def _validate_ocr_result(result: OCRResult) -> None:
+    if not isinstance(result.text,str):
+        raise ValueError("OCR adapter text output must be a string")
+    if result.mean_confidence is not None and (
+        not math.isfinite(result.mean_confidence)
+        or not 0 <= result.mean_confidence <= 100
+    ):
+        raise ValueError("OCR adapter mean confidence must be between zero and 100")
+    for word in result.words:
+        if not word.text.strip():
+            raise ValueError("OCR adapter returned an empty word")
+        coordinates = (word.x0,word.y0,word.x1,word.y1)
+        if not all(math.isfinite(value) for value in coordinates):
+            raise ValueError("OCR adapter returned non-finite word coordinates")
+        if not (
+            0 <= word.x0 <= word.x1 <= 1
+            and 0 <= word.y0 <= word.y1 <= 1
+        ):
+            raise ValueError("OCR word boxes must be normalized to the rendered page")
+        if not math.isfinite(word.confidence) or not 0 <= word.confidence <= 100:
+            raise ValueError("OCR word confidence must be between zero and 100")
+
+
 def _render_png(page: pdfplumber.page.Page, dpi: int, max_pixels: int) -> bytes:
     width = max(1, int(page.width * dpi / 72))
     height = max(1, int(page.height * dpi / 72))
@@ -240,6 +264,7 @@ def ocr_pdf(
                     raise ValueError("PDF OCR render exceeds the configured total pixel limit")
                 png = _render_png(page, dpi, max_pixels_per_page)
                 ocr = adapter.recognize_png(png, timeout_seconds=timeout_seconds_per_page)
+                _validate_ocr_result(ocr)
                 if len(ocr.text) > max_chars_per_page:
                     raise ValueError("OCR page text exceeds the configured character limit")
                 total_chars += len(ocr.text)
