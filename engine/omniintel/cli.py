@@ -66,7 +66,7 @@ def main() -> None:
     transcribe_wav.add_argument("--vad", action="store_true", help="Enable VAD filtering; may omit quiet lecture speech")
     transcribe_wav.add_argument("--language", default=None)
     transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
-    transcribe_wav.add_argument("--time-offset-ms", type=int, default=0)
+    transcribe_wav.add_argument("--time-offset-ms", type=int, default=None)
     extract_audio = sub.add_parser("extract-audio", help="Extract a selected local audio stream to resumable-transcription WAV")
     extract_audio.add_argument("database", type=Path)
     extract_audio.add_argument("asset_dir", type=Path)
