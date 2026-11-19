@@ -429,7 +429,56 @@ def review_visual_record(
     if state not in {"ACCEPTED","REJECTED","NEEDS_REVIEW"}:
         raise ValueError("Invalid review state")
     with connect(database_path) as conn:
-        cursor=conn.execute(f"UPDATE {table} SET review_state=? WHERE id=?",(state,record_id))
-        if cursor.rowcount!=1:
+        conn.execute("BEGIN IMMEDIATE")
+        row=conn.execute(f"SELECT * FROM {table} WHERE id=?",(record_id,)).fetchone()
+        if row is None:
             raise ValueError("Visual record does not exist")
+        if state == "ACCEPTED":
+            if table == "visual_scene_candidates":
+                accepted=conn.execute(
+                    """SELECT count(*) FROM visual_events
+                       WHERE id IN (?,?) AND review_state='ACCEPTED'""",
+                    (row["previous_event_id"],row["current_event_id"]),
+                ).fetchone()[0]
+                if accepted != 2:
+                    raise ValueError("Both frame events must be accepted before accepting a scene cut")
+            elif table in {"visual_ocr_results","visual_descriptions"}:
+                event=conn.execute(
+                    "SELECT review_state FROM visual_events WHERE id=?",
+                    (row["visual_event_id"],),
+                ).fetchone()
+                if event is None or event["review_state"] != "ACCEPTED":
+                    raise ValueError("The visual event must be accepted before accepting its interpretation")
+            elif table == "visual_semantic_alignments":
+                event=conn.execute(
+                    "SELECT review_state FROM visual_events WHERE id=?",
+                    (row["visual_event_id"],),
+                ).fetchone()
+                temporal=conn.execute(
+                    """SELECT review_state FROM visual_transcript_alignments
+                       WHERE visual_event_id=? AND transcript_segment_id=?""",
+                    (row["visual_event_id"],row["transcript_segment_id"]),
+                ).fetchone()
+                if event is None or event["review_state"] != "ACCEPTED" or temporal is None or temporal["review_state"] != "ACCEPTED":
+                    raise ValueError("Accept the frame and temporal alignment before semantic alignment")
+            elif table == "visual_claim_verifications":
+                event=conn.execute(
+                    "SELECT review_state FROM visual_events WHERE id=?",
+                    (row["visual_event_id"],),
+                ).fetchone()
+                description=conn.execute(
+                    "SELECT review_state FROM visual_descriptions WHERE id=?",
+                    (row["description_id"],),
+                ).fetchone() if row["description_id"] else None
+                if event is None or event["review_state"] != "ACCEPTED" or description is None or description["review_state"] != "ACCEPTED":
+                    raise ValueError("Accept the visual event and description before accepting claim verification")
+                if row["transcript_segment_id"]:
+                    temporal=conn.execute(
+                        """SELECT review_state FROM visual_transcript_alignments
+                           WHERE visual_event_id=? AND transcript_segment_id=?""",
+                        (row["visual_event_id"],row["transcript_segment_id"]),
+                    ).fetchone()
+                    if temporal is None or temporal["review_state"] != "ACCEPTED":
+                        raise ValueError("Accept the temporal transcript alignment before cross-modal verification")
+        conn.execute(f"UPDATE {table} SET review_state=? WHERE id=?",(state,record_id))
     return state
