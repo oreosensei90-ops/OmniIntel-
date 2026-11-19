@@ -18,6 +18,7 @@ from .database import connect
 from .models import TranscriptImport, TranscriptSegmentInput
 from .store import OmniIntelStore
 from .textbook import BlockInput, TextbookStore
+from .reader_export import to_reader_export
 
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 _ALLOWED_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"}
@@ -215,7 +216,7 @@ def compose_transcript_textbook(
         "ai_generated_explanations": False,
         "review_required": True,
     }
-    return tree
+    return to_reader_export(database_path, tree, imported.source_id)
 
 
 def process_youtube_video(
@@ -354,7 +355,7 @@ def compose_registered_source(
         "composition": "EXTRACTIVE_SOURCE_GROUNDED", "ai_generated_explanations": False,
         "review_required": True,
     }
-    return tree
+    return to_reader_export(database_path, tree, source_id)
 
 
 def compose_source_main() -> None:

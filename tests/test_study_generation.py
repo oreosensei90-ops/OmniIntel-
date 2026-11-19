@@ -69,6 +69,9 @@ def test_generates_review_gated_textbook_and_reader_tree(tmp_path):
     assert result["pipeline"]["all_evidence_links"] == "PENDING"
     assert result["pipeline"]["human_review_required"] is True
     assert result["source"]["id"] == imported.source_id
+    assert result["sources"][0]["source_id"] == imported.source_id
+    assert result["anchor_source_id"] == imported.source_id
+    assert result["alignment_policy"].startswith("Single-source reader")
     blocks = result["chapters"][0]["blocks"]
     assert {block["block_type"] for block in blocks} >= {
         "SUMMARY", "PARAGRAPH", "DEFINITION", "WORKED_SOLUTION", "EXERCISE"
@@ -79,6 +82,10 @@ def test_generates_review_gated_textbook_and_reader_tree(tmp_path):
         for block in blocks for link in block["evidence_references"]
     )
     assert all(block["provenance"] != "SOURCE" for block in blocks)
+    assert all(
+        item["seek_available"] and item["transcript_excerpt"]
+        for block in blocks for item in block["evidence"]
+    )
 
 
 def test_rejects_model_citations_not_in_supplied_source(tmp_path):

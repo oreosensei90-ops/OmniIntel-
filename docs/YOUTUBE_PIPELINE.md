@@ -62,3 +62,7 @@ summaries, worked solutions or definitions. The generated paragraphs reproduce s
 captions, and all glossary candidates remain marked `UNCERTAIN / NEEDS_REVIEW`.
 A separately configured and consented knowledge-generation provider is still required
 for original explanatory prose, semantic concept extraction and generated study answers.
+
+The CLI output is normalized to the portable Android/Web reader export contract, including
+the required source catalog and reader-safe timestamp/page evidence objects. Import it
+with **Import reader JSON** in the native app.

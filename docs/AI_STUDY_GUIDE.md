@@ -56,3 +56,9 @@ It does not yet perform semantic entailment verification, contradiction-scope re
 expert quality scoring, source coverage measurement, concept graph clustering, or a
 multi-provider routing policy. The generated content must be reviewed before publication
 or study reliance.
+
+## Reader export compatibility
+
+The output is normalized to the portable reader contract: it includes a source catalog,
+anchor source and alignment policy, plus Android/Web-safe transcript excerpts and
+page/element locators. Source timestamps remain local; no course clock is invented.

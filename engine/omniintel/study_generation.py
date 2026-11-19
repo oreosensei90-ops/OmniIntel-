@@ -20,6 +20,7 @@ from .database import connect, migrate
 from .knowledge import ClaimEvidenceReferenceInput, ClaimInput, KnowledgeUnitInput
 from .knowledge_store import KnowledgeStore
 from .textbook import BlockInput, TextbookStore
+from .reader_export import to_reader_export
 
 MAX_EVIDENCE_ITEMS = 40
 MAX_EVIDENCE_CHARS = 30_000
@@ -339,7 +340,7 @@ def generate_study_guide(
         "generated_blocks": created,
         "no_auto_publication": True,
     }
-    return tree
+    return to_reader_export(database_path, tree, source_id)
 
 
 def main() -> None:

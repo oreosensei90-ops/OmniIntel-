@@ -56,6 +56,8 @@ A Neural Network can learn complex representations.
     )
 
     assert result["pipeline"]["status"] == "TRANSCRIPT_DRAFT_READY"
+    assert result["sources"][0]["source_id"] == result["source"]["id"]
+    assert result["anchor_source_id"] == result["source"]["id"]
     assert result["pipeline"]["ai_generated_explanations"] is False
     assert result["version"]["title"] == "Transcript reader draft"
     content_chapters = [item for item in result["chapters"] if item["blocks"]]
