@@ -128,8 +128,8 @@ class TextbookMarkdownExporter:
             "",
             f"*{edition}*",
             "",
-            f"Edition {version['version_number']} · {len(chapters)} chapters · "
-            f"{report.total_blocks} content blocks",
+            (f"Edition {version['version_number']} · {len(chapters)} chapters · "
+            f"{report.total_blocks} content blocks"),
             "",
             "## Contents",
             "",
@@ -170,8 +170,8 @@ class TextbookMarkdownExporter:
             "",
             "*OmniIntel · Evidence-grounded learning.*",
             "",
-            "> This edition passed structural publication checks. Those checks do not establish "
-            "factual truth, semantic correctness, mathematical correctness or completeness.",
+            ("> This edition passed structural publication checks. Those checks do not establish "
+            "factual truth, semantic correctness, mathematical correctness or completeness."),
             "",
         ])
         output = Path(output_path)
