@@ -83,6 +83,7 @@ class DocumentTopicEvidenceInput:
     relation: TopicRelation
     relevance_score: float | None = None
     rationale: str | None = None
+    element_id: str | None = None
 
     def validate(self) -> None:
         if not self.topic_id or not self.evidence_ref_id:
@@ -186,10 +187,10 @@ class TopicStore:
             conn.execute(
                 """INSERT INTO document_topic_evidence_refs
                    (id,topic_id,evidence_ref_id,relation,review_state,
-                    relevance_score,rationale,created_at)
-                   VALUES(?,?,?,?,'PENDING',?,?,?)""",
+                    relevance_score,rationale,created_at,element_id)
+                   VALUES(?,?,?,?,'PENDING',?,?,?,?)""",
                 (link_id,data.topic_id,data.evidence_ref_id,data.relation,
-                 data.relevance_score,data.rationale,utc_now()),
+                 data.relevance_score,data.rationale,utc_now(),data.element_id),
             )
         return link_id
 
@@ -248,10 +249,13 @@ class TopicStore:
             refs = conn.execute(
                 """SELECT t.id AS topic_id,er.id AS evidence_ref_id,
                           er.locator_kind,er.page_number,er.source_asset_id,
-                          er.start_ms,er.end_ms,te.relation,te.review_state
+                          er.start_ms,er.end_ms,te.relation,te.review_state,
+                          te.element_id,de.element_type,de.text_content AS element_text,
+                          de.review_state AS element_review_state
                    FROM document_topics t
                    JOIN document_topic_evidence_refs te ON te.topic_id=t.id
                    JOIN evidence_refs er ON er.id=te.evidence_ref_id
+                   LEFT JOIN document_elements de ON de.id=te.element_id
                    WHERE t.source_id=?
                    ORDER BY t.ordinal,er.page_number,er.start_ms""",
                 (source_id,),
