@@ -615,6 +615,72 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0014_claim_and_block_evidence_references",
+        """
+        CREATE TABLE claim_evidence_refs (
+            id TEXT PRIMARY KEY,
+            claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN (
+                'SUPPORTS','CONTRADICTS','QUALIFIES','CONTEXTUALIZES','ILLUSTRATES'
+            )),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            relevance_score REAL CHECK(relevance_score IS NULL OR
+                (relevance_score >= 0 AND relevance_score <= 1)),
+            rationale TEXT,
+            reviewed_at TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(claim_id,evidence_ref_id,relation)
+        );
+        CREATE INDEX idx_claim_evidence_refs_claim
+            ON claim_evidence_refs(claim_id,review_state);
+        CREATE INDEX idx_claim_evidence_refs_ref
+            ON claim_evidence_refs(evidence_ref_id);
+        CREATE TABLE block_evidence_refs (
+            id TEXT PRIMARY KEY,
+            block_id TEXT NOT NULL REFERENCES chapter_blocks(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN (
+                'SUPPORTS','ILLUSTRATES','CONTEXTUALIZES','CONTRADICTS'
+            )),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(block_id,evidence_ref_id,relation)
+        );
+        CREATE INDEX idx_block_evidence_refs_block
+            ON block_evidence_refs(block_id,review_state);
+        CREATE TRIGGER block_evidence_refs_validate_insert
+        BEFORE INSERT ON block_evidence_refs
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks b
+                JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                JOIN textbook_versions v ON v.id=ch.version_id
+                JOIN textbooks t ON t.id=v.textbook_id
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE b.id=NEW.block_id AND t.source_id=er.source_id
+            ) THEN RAISE(ABORT,'block evidence reference must belong to the textbook source') END;
+        END;
+        CREATE TRIGGER block_evidence_refs_validate_update
+        BEFORE UPDATE OF block_id,evidence_ref_id ON block_evidence_refs
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks b
+                JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                JOIN textbook_versions v ON v.id=ch.version_id
+                JOIN textbooks t ON t.id=v.textbook_id
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE b.id=NEW.block_id AND t.source_id=er.source_id
+            ) THEN RAISE(ABORT,'block evidence reference must belong to the textbook source') END;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
