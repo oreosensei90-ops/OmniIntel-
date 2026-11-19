@@ -10,6 +10,8 @@ from omniintel.document_structure import (
     review_document_element,
     search_document_elements,
 )
+from omniintel.document_knowledge import create_knowledge_candidates_from_document_elements
+
 from omniintel.evidence_refs import search_evidence_references
 from omniintel.knowledge import ClaimEvidenceReferenceInput, ClaimInput
 from omniintel.knowledge_store import KnowledgeStore
@@ -79,9 +81,21 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     )
     assert review_document_element(database,paragraph.id,"ACCEPTED") == "ACCEPTED"
 
+    candidates = create_knowledge_candidates_from_document_elements(database,imported.source_id)
+    assert len(candidates.candidate_unit_ids) == 1
+    candidate_id = candidates.candidate_unit_ids[0]
+    candidate_bundle = KnowledgeStore(database).get_unit_bundle(candidate_id)
+    assert candidate_bundle["unit"]["status"] == "NEEDS_REVIEW"
+    assert candidate_bundle["unit"]["source_element_id"] == paragraph.id
+    assert candidate_bundle["evidence_references"][0]["element_id"] == paragraph.id
+    KnowledgeStore(database).review_unit_evidence_reference(
+        candidate_bundle["evidence_references"][0]["link_id"],"ACCEPTED"
+    )
+
     knowledge = KnowledgeStore(database)
     claim = knowledge.create_claim(ClaimInput(
-        "An isolated system conserves its total momentum."
+        "An isolated system conserves its total momentum.",
+        knowledge_unit_id=candidate_id,
     ))
     claim_link = knowledge.link_evidence_reference(ClaimEvidenceReferenceInput(
         claim,paragraph.evidence_ref_id,"SUPPORTS",0.99,
@@ -93,11 +107,18 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     topic = topics.create_document_topic(
         DocumentTopicInput(imported.source_id,"Conservation of momentum",0)
     )
-    topic_link = topics.link_document_evidence(DocumentTopicEvidenceInput(
-        topic,paragraph.evidence_ref_id,"INTRODUCES",0.99,
-        element_id=paragraph.id,
-    ))
-    assert topics.review_document_evidence_link(topic_link,"ACCEPTED") == "ACCEPTED"
+    topic_links = []
+    for element in result.elements:
+        if element.element_type == "HEADING":
+            continue
+        review_document_element(database,element.id,"ACCEPTED")
+        topic_link = topics.link_document_evidence(DocumentTopicEvidenceInput(
+            topic,element.evidence_ref_id,"INTRODUCES",0.99,
+            element_id=element.id,
+        ))
+        assert topics.review_document_evidence_link(topic_link,"ACCEPTED") == "ACCEPTED"
+        topic_links.append(topic_link)
+    assert topic_links
 
     textbooks = TextbookStore(database)
     version = textbooks.compose_from_accepted_document_topics(
@@ -105,9 +126,12 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     )
     report = TextbookPublicationAuditor(database).audit(version)
     assert report.ready
-    block = textbooks.get_version_tree(version)["chapters"][0]["blocks"][0]
-    assert block["evidence_references"][0]["element_id"] == paragraph.id
-    assert block["evidence_references"][0]["element_type"] == "PARAGRAPH"
+    blocks = textbooks.get_version_tree(version)["chapters"][0]["blocks"]
+    claim_block = next(block for block in blocks if block["claim_id"] == claim)
+    assert claim_block["evidence_references"][0]["element_id"] == paragraph.id
+    assert claim_block["evidence_references"][0]["element_type"] == "PARAGRAPH"
+    block_types = {block["block_type"] for block in blocks}
+    assert {"PARAGRAPH","EQUATION","TABLE","DIAGRAM"} <= block_types
 
     review_document_element(database,paragraph.id,"NEEDS_REVIEW")
     blocked = TextbookPublicationAuditor(database).audit(version)
