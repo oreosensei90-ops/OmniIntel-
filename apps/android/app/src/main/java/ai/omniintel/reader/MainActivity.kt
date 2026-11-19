@@ -115,15 +115,21 @@ class MainActivity : ComponentActivity() {
                 }
                 val text = listOf("text", "body", "definition", "description", "code", "latex", "expression", "term")
                     .firstNotNullOfOrNull { key -> content.optString(key).takeIf { it.isNotBlank() } }.orEmpty()
+                val requestedId = block.optString("id").takeIf { it.isNotBlank() } ?: "${i}-${j}"
+                var stableId = requestedId
+                var suffix = 1
+                while (!seenBlockIds.add(stableId)) {
+                    stableId = "${requestedId}@${i}-${j}-${suffix++}"
+                }
                 Block(
-                    block.optString("id", "\${i}-\${j}"),
+                    stableId,
                     block.optString("block_type", "PARAGRAPH"),
                     text,
                     block.optString("provenance", "UNSPECIFIED"),
                     evidence
                 )
             }
-            Chapter(chapter.optString("title", "Chapter \${i + 1}"), blocks)
+            Chapter(chapter.optString("title", "Chapter ${i + 1}"), blocks)
         }
         require(chapters.isNotEmpty()) { "This textbook has no readable chapters." }
         return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), chapters)
@@ -172,7 +178,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
         } else {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Text(current.title, color = Gold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("\${current.chapters.size} chapters", color = Muted, fontSize = 11.sp)
+                Text("${current.chapters.size} chapters", color = Muted, fontSize = 11.sp)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
@@ -182,7 +188,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                     OutlinedButton(onClick = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }, enabled = chapterIndex > 0) { Text("Previous") }
                     OutlinedButton(onClick = { chapterIndex = (chapterIndex + 1).coerceAtMost(current.chapters.lastIndex) }, enabled = chapterIndex < current.chapters.lastIndex) { Text("Next") }
                 }
-                Text("CHAPTER \${chapterIndex + 1} / \${current.chapters.size}", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
+                Text("CHAPTER ${chapterIndex + 1} / ${current.chapters.size}", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
                 Text(current.chapters[chapterIndex].title, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
             }
             val blocks = current.chapters[chapterIndex].blocks.filter { block ->
@@ -198,10 +204,10 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
                             Text(block.text, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 7.dp))
-                            Text("PROVENANCE · \${block.provenance}", color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 8.dp))
+                            Text("PROVENANCE · ${block.provenance}", color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 8.dp))
                             block.evidence.forEach { evidence ->
                                 HorizontalDivider(color = Color(0xFF343945), modifier = Modifier.padding(vertical = 8.dp))
-                                Text("\${evidence.source} · \${evidence.locator}", color = Gold, fontSize = 11.sp)
+                                Text("${evidence.source} · ${evidence.locator}", color = Gold, fontSize = 11.sp)
                                 if (evidence.excerpt.isNotBlank()) Text(evidence.excerpt, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
                             }
                         }
