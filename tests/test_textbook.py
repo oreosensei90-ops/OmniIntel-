@@ -97,9 +97,8 @@ def test_textbook_block_hierarchy_rejects_cycles(tmp_path: Path) -> None:
     child = store.add_block(
         chapter, BlockInput("PARAGRAPH", {"text": "Child"}, "EXPLANATION", parent_block_id=parent)
     )
-    with connect(path) as conn:
-        with pytest.raises(sqlite3.IntegrityError, match="cannot contain a cycle"):
-            conn.execute("UPDATE chapter_blocks SET parent_block_id=? WHERE id=?", (child, parent))
+    with connect(path) as conn, pytest.raises(sqlite3.IntegrityError, match="cannot contain a cycle"):
+        conn.execute("UPDATE chapter_blocks SET parent_block_id=? WHERE id=?", (child, parent))
 
 
 
