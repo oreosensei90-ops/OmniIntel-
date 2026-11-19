@@ -3,8 +3,6 @@ from pathlib import Path
 import pytest
 
 from omniintel.local_files import import_local_file
-from omniintel.store import OmniIntelStore
-
 
 PDF = b"%PDF-1.7\n% minimal test fixture\n"
 PNG = b"\x89PNG\r\n\x1a\nfixture"
