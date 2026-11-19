@@ -356,3 +356,32 @@ prompts and clearly marked glossary candidates. It does not download video/audio
 does not fabricate AI explanations. For a locally imported and transcribed WAV source,
 use `omniintel-compose-source DATABASE SOURCE_ID --output ./exports/local-reader.json`
 to create the same reader JSON without duplicating its source. See [the full pipeline guide](docs/YOUTUBE_PIPELINE.md).
+
+
+## Online video → AI study notes (hosted service)
+
+The Web app now includes an online YouTube-to-notes client. It submits a consented job to the OmniIntel API, polls the durable job queue, and opens the resulting reader export automatically. The hosted worker retrieves public metadata/captions, composes timestamped source evidence, and—only when the user separately approves AI processing—sends the transcript to the server-configured OpenAI model for a structured study-guide draft. Generated blocks and evidence links remain review-gated.
+
+Install and run the service on a trusted server:
+
+```bash
+python -m pip install -e '.[service,youtube]'
+export OMNIINTEL_DATABASE=/srv/omniintel/omniintel.db
+export OMNIINTEL_API_TOKEN='replace-with-a-long-random-secret'
+export OMNIINTEL_CORS_ORIGINS='https://your-web-app.example'
+export OMNIINTEL_OPENAI_API_KEY='server-side-key'
+export OMNIINTEL_OPENAI_MODEL='gpt-4.1-mini'
+omniintel-api
+```
+
+Run a separate worker against the same persistent database:
+
+```bash
+omniintel-worker --database /srv/omniintel/omniintel.db
+```
+
+Deploy the Web Reader from `apps/web/` over HTTPS. Enter the API origin and bearer token in the Video → Notes panel. Never put the OpenAI API key in the browser. The API token is held in session storage for the current browser tab; the API uses bearer authentication and can restrict CORS origins.
+
+Required server configuration: keep the database on persistent storage, use a strong unique API token, set exact Web origins in `OMNIINTEL_CORS_ORIGINS`, terminate TLS at a trusted reverse proxy, and restrict the API to trusted users. The API currently supports YouTube videos with retrievable public captions. If no supported public captions are available, the job fails with an explicit message; it does not silently download the video or bypass access controls. Authorized media upload and no-caption transcription are not yet wired into this hosted API. AI notes are drafts: evidence IDs are checked structurally, but semantic entailment and factual correctness still require human review.
+
+For a local smoke test, use `OMNIINTEL_API_TOKEN`, `OMNIINTEL_DATABASE`, run `omniintel-api` and `omniintel-worker` in separate terminals, and configure the Web app with `http://127.0.0.1:8000`.

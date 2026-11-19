@@ -41,6 +41,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -252,6 +254,13 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var videoImports by remember { mutableStateOf<List<VideoImportEntity>>(emptyList()) }
     var videoUrlDraft by remember { mutableStateOf("") }
     var videoImportMessage by remember { mutableStateOf<String?>(null) }
+    var apiBaseDraft by remember {
+        mutableStateOf(context.getSharedPreferences("omniintel_remote", Context.MODE_PRIVATE).getString("api_base", "").orEmpty())
+    }
+    var apiTokenDraft by remember { mutableStateOf("") }
+    var networkApproved by remember { mutableStateOf(false) }
+    var aiApproved by remember { mutableStateOf(false) }
+    var onlineBusy by remember { mutableStateOf(false) }
     var annotationBackupMessage by remember { mutableStateOf<String?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
@@ -560,7 +569,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
         ) {
             Column {
                 Text("OMNIINTEL", color = Color.White, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text("OFFLINE READER", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
+                Text("VIDEO → NOTES · READER", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (book != null) {
@@ -647,6 +656,90 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 videoImportMessage?.let {
                     Text(it, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
                 }
+                Spacer(Modifier.height(12.dp))
+                Text("ONLINE VIDEO PROCESSING", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
+                OutlinedTextField(
+                    value = apiBaseDraft,
+                    onValueChange = {
+                        apiBaseDraft = it
+                        context.getSharedPreferences("omniintel_remote", Context.MODE_PRIVATE)
+                            .edit().putString("api_base", it).apply()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("OmniIntel API HTTPS address") },
+                    placeholder = { Text("https://your-server.example") }
+                )
+                OutlinedTextField(
+                    value = apiTokenDraft,
+                    onValueChange = { apiTokenDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Server API token · this session only") },
+                    placeholder = { Text("Bearer token") }
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = networkApproved, onCheckedChange = { networkApproved = it })
+                    Text("I authorize public video metadata and caption retrieval.", color = Muted, fontSize = 11.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = aiApproved, onCheckedChange = { aiApproved = it })
+                    Text("I authorize sending the transcript to this server's configured AI provider.", color = Muted, fontSize = 11.sp)
+                }
+                Button(
+                    enabled = !onlineBusy && videoUrlDraft.isNotBlank() && apiBaseDraft.isNotBlank() &&
+                        apiTokenDraft.isNotBlank() && networkApproved && aiApproved,
+                    onClick = {
+                        val parsed = parseYouTubeUrl(videoUrlDraft)
+                        if (parsed == null) {
+                            videoImportMessage = "That link isn't a supported YouTube video URL."
+                        } else {
+                            onlineBusy = true
+                            videoImportMessage = "Submitting video to OmniIntel…"
+                            val apiBase = apiBaseDraft
+                            val apiToken = apiTokenDraft
+                            scope.launch {
+                                try {
+                                    val created = withContext(Dispatchers.IO) {
+                                        submitRemoteVideoJob(apiBase, apiToken, parsed.url)
+                                    }
+                                    val statusPath = created.getString("status_url")
+                                    val jobId = created.getString("job_id")
+                                    videoImportMessage = "Job $jobId queued · fetching captions and generating notes…"
+                                    var attempts = 0
+                                    var readerJson: String? = null
+                                    while (attempts < 1800 && readerJson == null) {
+                                        delay(2_000)
+                                        val status = withContext(Dispatchers.IO) {
+                                            getRemoteVideoJob(apiBase, apiToken, statusPath)
+                                        }
+                                        when (status.optString("status")) {
+                                            "COMPLETED" -> {
+                                                val result = status.optJSONObject("result")
+                                                    ?: error("The server returned no job result.")
+                                                val reader = result.optJSONObject("reader")
+                                                    ?: error("The server completed without a reader export.")
+                                                readerJson = reader.toString()
+                                            }
+                                            "FAILED" -> error(status.optString("error").ifBlank { "Video processing failed." })
+                                            else -> videoImportMessage = "Processing video · \${status.optString("status")} · job $jobId"
+                                        }
+                                        attempts++
+                                    }
+                                    val json = readerJson ?: error("The job is still processing. Check again later.")
+                                    val cached = File(context.cacheDir, "omniintel-$jobId.json")
+                                    withContext(Dispatchers.IO) { cached.writeText(json, Charsets.UTF_8) }
+                                    loadBook(Uri.fromFile(cached))
+                                    videoImportMessage = "Notes generated. Importing into your on-device library…"
+                                } catch (failure: Throwable) {
+                                    videoImportMessage = failure.message ?: "Online video processing failed."
+                                } finally {
+                                    onlineBusy = false
+                                }
+                            }
+                        }
+                    }
+                ) { Text(if (onlineBusy) "Processing…" else "Generate video notes online") }
                 if (videoImports.isNotEmpty()) {
                     Text(
                         "VIDEO QUEUE · ${videoImports.size}",

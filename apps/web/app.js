@@ -656,3 +656,84 @@ restoreFileInput.addEventListener("change", async () => {
     restoreFileInput.value = "";
   }
 });
+
+
+// Online video → notes client. The API token is held only for this browser tab.
+const onlineForm = $("#online-video-form");
+if (onlineForm) {
+  const onlineStatus = $("#online-status");
+  const onlineButton = $("#online-submit");
+  const apiInput = $("#api-base-url");
+  const savedApi = localStorage.getItem("omniintel-api-base-url");
+  if (savedApi) apiInput.value = savedApi;
+
+  function setOnlineStatus(message, isError = false) {
+    onlineStatus.textContent = message;
+    onlineStatus.classList.toggle("error", isError);
+  }
+  function apiBase() {
+    const parsed = new URL(apiInput.value.trim());
+    const local = ["localhost", "127.0.0.1"].includes(parsed.hostname);
+    if (parsed.protocol !== "https:" && !(local && parsed.protocol === "http:")) {
+      throw new Error("Use HTTPS for a remote API. HTTP is allowed only for localhost.");
+    }
+    return parsed.origin;
+  }
+  async function apiRequest(base, token, path, options = {}) {
+    const response = await fetch(base + path, {
+      ...options,
+      headers: {
+        "Authorization": "Bearer " + token,
+        ...(options.headers || {})
+      }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || ("API request failed: HTTP " + response.status));
+    return body;
+  }
+  onlineForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!onlineForm.reportValidity()) return;
+    onlineButton.disabled = true;
+    try {
+      const base = apiBase();
+      const token = $("#api-token").value.trim();
+      if (!token) throw new Error("Enter the API access token supplied by your OmniIntel server.");
+      if (!$("#approve-network").checked) throw new Error("Confirm permission to retrieve public video metadata and captions.");
+      if (!$("#approve-ai").checked) throw new Error("Confirm that the transcript may be sent to the configured AI provider to generate study notes.");
+      localStorage.setItem("omniintel-api-base-url", base);
+      sessionStorage.setItem("omniintel-api-token", token);
+      setOnlineStatus("Submitting video…");
+      const created = await apiRequest(base, token, "/v1/youtube/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: $("#video-url").value.trim(),
+          approve_network: true,
+          approve_ai: true,
+          language: $("#video-language").value.trim() || null,
+          chapter_minutes: 10
+        })
+      });
+      setOnlineStatus("Video accepted · job " + created.job_id + " · fetching metadata and captions…");
+      for (let attempt = 0; attempt < 1800; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const job = await apiRequest(base, token, created.status_url);
+        if (job.status === "COMPLETED") {
+          const reader = job.result?.reader;
+          if (!reader) throw new Error("Processing completed without a reader export.");
+          setOnlineStatus("Notes generated · opening " + (job.result.title || "your video") + "…");
+          renderBook(reader, (job.result.title || "OmniIntel video notes") + ".json");
+          return;
+        }
+        if (job.status === "FAILED") throw new Error(job.error || "Video processing failed.");
+        setOnlineStatus("Processing video · " + job.status.toLowerCase() + " · attempt " + job.attempt);
+      }
+      throw new Error("This job is still running. Reopen the app and check its job status with the server.");
+    } catch (error) {
+      setOnlineStatus(error.message || "Video processing failed.", true);
+    } finally {
+      onlineButton.disabled = false;
+    }
+  });
+}

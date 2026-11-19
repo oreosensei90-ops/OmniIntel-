@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111318">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="description" content="Private, offline course textbook reader for OmniIntel exports.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Turn supported online videos into timestamped, evidence-linked OmniIntel study notes.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
   <title>OmniIntel Reader</title>
@@ -26,9 +26,29 @@
     <section id="welcome" class="welcome">
       <p class="eyebrow">PRIVATE BY DEFAULT · WORKS OFFLINE</p>
       <h1>Your learning library,<br><span>on your device.</span></h1>
-      <p>Open a reader JSON file exported by OmniIntel. Your document stays in this browser session; reading position is saved locally on this device.</p>
+      <p>Turn a supported YouTube video into structured, timestamp-linked notes, then keep learning in your OmniIntel library.</p>
+      <form id="online-video-form" class="online-panel">
+        <p class="eyebrow">VIDEO → NOTES · ONLINE PROCESSING</p>
+        <label for="video-url">YouTube video URL</label>
+        <input id="video-url" type="url" placeholder="https://www.youtube.com/watch?v=…" required maxlength="2048">
+        <label for="api-base-url">OmniIntel API address</label>
+        <input id="api-base-url" type="url" placeholder="https://your-omniintel-api.example" required>
+        <label for="api-token">API access token</label>
+        <input id="api-token" type="password" autocomplete="off" placeholder="Server-issued bearer token" required>
+        <label for="video-language">Preferred caption language (optional)</label>
+        <input id="video-language" type="text" placeholder="en, hi, fr…" maxlength="16">
+        <label class="consent-line"><input id="approve-network" type="checkbox" required> I am authorized to process this video, and approve retrieving its public metadata and captions.</label>
+        <label class="consent-line"><input id="approve-ai" type="checkbox" required> I approve sending the retrieved transcript to the AI provider configured by this server to generate study notes.</label>
+        <button id="online-submit" class="primary-button" type="submit">Generate video notes</button>
+        <p id="online-status" class="hint" role="status" aria-live="polite">Requires a deployed OmniIntel API and configured AI provider. Your token is kept in this tab only.</p>
+      </form>
+      <details class="local-import">
+        <summary>Already have a reader export? Open it locally</summary>
+        <p>Your imported reader remains available without a network connection.</p>
+        <label class="primary-button" for="reader-file">Choose a reader export</label>
+      </details>
       <label class="primary-button" for="reader-file">Choose a reader export</label>
-      <p class="hint">Create one with <code>omniintel reader-open DATABASE VERSION_ID &gt; course-reader.json</code></p>
+      
     </section>
     <section id="reader" class="reader" hidden>
       <aside class="sidebar">

@@ -1,4 +1,4 @@
-# OmniIntel Android — offline reader
+# OmniIntel Android — video-to-notes and offline reader
 
 Native Kotlin + Jetpack Compose reader for local OmniIntel synchronized-reader JSON exports. It renders chapters, blocks, provenance, transcript excerpts and PDF page citations. Users can pair an exact course source with a local audio/video file and jump to source-local evidence timestamps; unreviewed cross-source offsets are never applied.
 
@@ -21,6 +21,12 @@ The app stores the imported reader content on-device in Room v3: sources, chapte
 - Library-wide search covers book and chapter titles, block text, evidence excerpts and private notes.
 - Existing DataStore notes, bookmarks and chapter positions are migrated transactionally on first startup. The legacy store is cleared only after the Room migration commits.
 - Re-import replaces normalized source content transactionally while preserving annotations and reading progress for matching block IDs.
+
+## Online video → notes
+
+On the library screen, paste a supported YouTube URL, enter the HTTPS OmniIntel API address and server-issued bearer token, and approve both public metadata/caption retrieval and external AI processing. The app submits a durable job, polls its status, downloads the generated reader JSON and imports it directly into Room. The API token remains in the current app session; only the API origin is saved locally. The server must be deployed and configured with its worker, YouTube adapter and AI provider. Videos without retrievable public captions currently fail with an explicit explanation; no DRM or access-control bypass is performed.
+
+Online processing requires Android INTERNET permission. Local reading, annotations, playback and backups continue to work offline.
 
 ## Android queue → local engine
 
@@ -47,7 +53,7 @@ cd apps/android
 
 ## Privacy and current boundaries
 
-- No INTERNET permission, account, analytics, provider key or remote endpoint.
+- The app uses the network only when the user explicitly submits a video to a configured OmniIntel API. No analytics or provider API key is embedded in the APK.
 - Reader import and library search are local-only.
 - Media files are explicitly selected by the user and attached to a chosen source; media bytes are not uploaded.
 - The YouTube intake queue exports a portable JSON handoff. On a computer with the local Python engine installed, run `omniintel-youtube-queue ./omniintel.db ./omniintel-video-queue.json --output-dir ./exports --approve-network`. This retrieves public metadata/captions only; it does not download media. Each completed video produces a reader JSON file, and failures are listed in `queue-results.json`.

@@ -10,3 +10,15 @@
 .document-structure{margin-top:9px;padding:8px;background:#14161c;border-radius:7px}.document-structure summary{font-size:10px;color:var(--gold2);cursor:pointer}.document-element{font-size:10px;line-height:1.5;color:var(--muted);margin:6px 0;overflow-wrap:anywhere}
 
 .reading-actions{display:flex;align-items:center;gap:12px}.study-panel{margin:0 0 28px;padding:20px;background:var(--panel);border:1px solid var(--line);border-radius:14px}.study-top{display:flex;justify-content:space-between;align-items:start;gap:16px}.study-top h2{margin:7px 0;font-size:24px}.study-card{margin:18px 0;padding:clamp(18px,4vw,34px);min-height:190px;border-radius:12px;background:#101217;border:1px solid var(--line);display:flex;flex-direction:column;justify-content:center}.study-card h3{font-size:clamp(20px,3vw,30px);line-height:1.4;margin:12px 0;color:var(--text);white-space:pre-wrap}.study-card #study-answer{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);color:var(--text);line-height:1.7;white-space:pre-wrap}.study-controls,.study-rating{display:flex;justify-content:center;gap:9px;flex-wrap:wrap;margin-top:12px}.study-panel>p{margin:16px 0 0}.study-panel button{min-height:38px}.study-rating{border-top:1px solid var(--line);padding-top:14px}.study-rating button:disabled{opacity:.45}@media(max-width:760px){.reading-actions{align-items:flex-end;flex-direction:column;gap:7px}.study-controls button{flex:1}.study-rating button{flex:1}}
+
+
+.online-panel{display:grid;gap:.7rem;margin:1.5rem 0;padding:1.1rem;border:1px solid var(--line);border-radius:1rem;background:var(--panel);max-width:42rem}
+.online-panel>label:not(.consent-line){font-size:.82rem;color:var(--muted);font-weight:650}
+.online-panel input:not([type=checkbox]){width:100%;min-width:0;padding:.8rem .9rem;border:1px solid var(--line);border-radius:.65rem;background:var(--surface);color:var(--text);font:inherit}
+.online-panel .consent-line{display:flex;gap:.65rem;align-items:flex-start;font-size:.84rem;line-height:1.45;color:var(--muted)}
+.online-panel .consent-line input{margin-top:.2rem;flex:0 0 auto}
+.online-panel button:disabled{opacity:.55;cursor:wait}
+#online-status{min-height:1.4em;overflow-wrap:anywhere}
+#online-status.error{color:var(--danger,#e56b6f)}
+.local-import{margin:1.25rem 0;color:var(--muted)}
+.local-import summary{cursor:pointer;font-weight:650}

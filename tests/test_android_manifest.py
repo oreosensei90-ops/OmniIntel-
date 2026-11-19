@@ -2,7 +2,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
-def test_android_reader_manifest_does_not_request_network_access() -> None:
+def test_android_reader_requests_network_only_for_consent_gated_online_video_processing() -> None:
     manifest = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
     root = ET.parse(manifest).getroot()
     android = "{http://schemas.android.com/apk/res/android}"
@@ -10,7 +10,7 @@ def test_android_reader_manifest_does_not_request_network_access() -> None:
         node.attrib.get(android + "name")
         for node in root.findall("uses-permission")
     }
-    assert "android.permission.INTERNET" not in permissions
+    assert "android.permission.INTERNET" in permissions
     assert "android.permission.ACCESS_NETWORK_STATE" not in permissions
     assert root.find("application") is not None
 
@@ -193,3 +193,19 @@ def test_android_library_uses_normalized_room_storage_and_persistable_document_a
     assert 'searchLibrary(term)' in activity
 
 
+
+
+def test_android_online_video_client_requires_https_and_explicit_consent_controls() -> None:
+    root = Path(__file__).parents[1]
+    manifest = ET.parse(root / "apps" / "android" / "app" / "src" / "main" / "AndroidManifest.xml").getroot()
+    android = "{http://schemas.android.com/apk/res/android}"
+    permissions = {node.attrib.get(android + "name") for node in manifest.findall("uses-permission")}
+    assert "android.permission.INTERNET" in permissions
+    remote = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "RemoteVideoApi.kt").read_text(encoding="utf-8")
+    activity = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt").read_text(encoding="utf-8")
+    assert 'url.protocol == "https"' in remote
+    assert 'connection.instanceFollowRedirects = false' in remote
+    assert 'approve_network' in remote and 'approve_ai' in remote
+    assert "networkApproved && aiApproved" in activity
+    assert "getRemoteVideoJob" in activity
+    assert "loadBook(Uri.fromFile(cached))" in activity
