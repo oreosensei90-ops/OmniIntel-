@@ -55,6 +55,27 @@ class PlanExecutor:
         with connect(self.database_path) as conn:
             migrate(conn)
 
+    def reserve_source_id(self, plan_id: str, stage_key: str, input_hash: str) -> str:
+        """Reserve a stable UUIDv7 source ID before performing an external file effect."""
+        if len(input_hash)!=64 or any(ch not in "0123456789abcdef" for ch in input_hash):
+            raise PlanExecutionError("Source effect input hash must be a lowercase SHA-256")
+        with connect(self.database_path) as conn:
+            row=conn.execute(
+                """SELECT source_id FROM execution_source_effects
+                   WHERE plan_id=? AND stage_key=? AND input_hash=?""",
+                (plan_id,stage_key,input_hash),
+            ).fetchone()
+            if row:
+                return row["source_id"]
+            source_id=uuid7()
+            conn.execute(
+                """INSERT INTO execution_source_effects
+                   (plan_id,stage_key,input_hash,source_id,created_at)
+                   VALUES(?,?,?,?,?)""",
+                (plan_id,stage_key,input_hash,source_id,utc_now()),
+            )
+            return source_id
+
     @staticmethod
     def _snapshot(plan: dict[str, Any]) -> dict[str, Any]:
         if plan.get("schema_version") != 1:
@@ -176,7 +197,7 @@ class PlanExecutor:
                     raise PlanExecutionError("Input changed during execution; refusing stale stage")
                 paths = [Path(item["path"]) for item in selected]
                 result = handlers[stage["stage"]](paths, {
-                    "plan_id": plan_id, "stage": stage["stage"],
+                    "plan_id": plan_id, "stage": stage["stage"], "stage_key": stage_key,
                     "expected_sha256": [item["sha256"] for item in selected],
                 })
                 if not isinstance(result, dict):
