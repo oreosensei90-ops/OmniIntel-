@@ -151,3 +151,25 @@ def test_android_reader_can_filter_and_search_saved_bookmarks_and_notes() -> Non
     assert 'matchesQuery && (!showBookmarksOnly || block.id in bookmarkedBlocks)' in code
     assert 'showBookmarksOnly = !showBookmarksOnly' in code
     assert 'current.chapters.flatMapIndexed' in code
+
+
+def test_android_library_uses_room_and_persistable_document_access() -> None:
+    root = Path(__file__).parents[1]
+    app_gradle = (root / "apps" / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+    root_gradle = (root / "apps" / "android" / "build.gradle.kts").read_text(encoding="utf-8")
+    database = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "ReaderDatabase.kt").read_text(encoding="utf-8")
+    activity = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt").read_text(encoding="utf-8")
+    assert 'id("org.jetbrains.kotlin.kapt") version "2.0.21" apply false' in root_gradle
+    assert 'id("org.jetbrains.kotlin.kapt")' in app_gradle
+    assert 'androidx.room:room-runtime:2.6.1' in app_gradle
+    assert 'androidx.room:room-ktx:2.6.1' in app_gradle
+    assert 'kapt("androidx.room:room-compiler:2.6.1")' in app_gradle
+    assert '@Entity(tableName = "library_books")' in database
+    assert '@Database(entities = [LibraryBookEntity::class], version = 1' in database
+    assert 'Room.databaseBuilder(' in database
+    assert 'dao.upsert(' in activity
+    assert 'takePersistableUriPermission' in activity
+    assert 'releasePersistableUriPermission' in activity
+    assert 'libraryDatabase.libraryBooks().getAll()' in activity
+    assert 'TextButton(onClick = { loadBook(Uri.parse(entry.documentUri)) })' in activity
+    assert 'libraryDatabase.libraryBooks().delete(entry.versionId)' in activity
