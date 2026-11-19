@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -43,7 +42,7 @@ class JobQueue:
     @staticmethod
     def _canonical_payload(payload: dict[str, Any]) -> tuple[str, str]:
         if not isinstance(payload, dict):
-            raise ValueError("Job payload must be a JSON object")
+            raise TypeError("Job payload must be a JSON object")
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return encoded, hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
