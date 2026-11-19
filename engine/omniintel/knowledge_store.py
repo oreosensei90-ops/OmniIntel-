@@ -76,10 +76,10 @@ class KnowledgeStore:
             conn.execute(
                 """INSERT INTO claim_evidence_refs
                    (id,claim_id,evidence_ref_id,relation,review_state,
-                    relevance_score,rationale,created_at)
-                   VALUES(?,?,?,?,'PENDING',?,?,?)""",
+                    relevance_score,rationale,created_at,element_id)
+                   VALUES(?,?,?,?,'PENDING',?,?,?,?)""",
                 (link_id,data.claim_id,data.evidence_ref_id,data.relation,
-                 data.relevance_score,data.rationale,utc_now()),
+                 data.relevance_score,data.rationale,utc_now(),data.element_id),
             )
         return link_id
 
@@ -92,7 +92,7 @@ class KnowledgeStore:
         with connect(self.database_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
             link = conn.execute(
-                "SELECT claim_id FROM claim_evidence_refs WHERE id=?", (link_id,)
+                "SELECT claim_id,element_id FROM claim_evidence_refs WHERE id=?", (link_id,)
             ).fetchone()
             if link is None:
                 raise ValueError("Claim/evidence reference link does not exist")
@@ -206,12 +206,18 @@ class KnowledgeStore:
                           cer.relevance_score,cer.rationale,cer.reviewed_at,
                           er.id AS evidence_ref_id,er.locator_kind,er.start_ms,er.end_ms,
                           er.page_number,er.source_id,er.source_asset_id,
-                          COALESCE(e.content,dp.text_content) AS content,
-                          COALESCE(e.provenance,'SOURCE') AS evidence_provenance
+                          COALESCE(e.content,NULLIF(dp.text_content,''),ocr.text_content) AS content,
+                          CASE WHEN er.locator_kind='DOCUMENT_PAGE' AND length(trim(dp.text_content))=0
+                               AND ocr.page_id IS NOT NULL THEN 'UNCERTAIN'
+                               ELSE COALESCE(e.provenance,'SOURCE') END AS evidence_provenance,
+                          cer.element_id,de.element_type,de.text_content AS element_text,
+                          de.review_state AS element_review_state
                    FROM claim_evidence_refs cer
                    JOIN evidence_refs er ON er.id=cer.evidence_ref_id
                    LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
                    LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                   LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
+                   LEFT JOIN document_elements de ON de.id=cer.element_id
                    WHERE cer.claim_id=? ORDER BY cer.created_at,cer.id""",
                 (claim_id,),
             ).fetchall()
@@ -236,6 +242,10 @@ class KnowledgeStore:
                          SELECT 1 FROM claim_evidence_refs cer
                          WHERE cer.claim_id=c.id AND cer.relation='SUPPORTS'
                            AND cer.review_state='ACCEPTED'
+                           AND (cer.element_id IS NULL OR EXISTS (
+                             SELECT 1 FROM document_elements de
+                             WHERE de.id=cer.element_id AND de.review_state='ACCEPTED'
+                           ))
                        )
                      )
                      AND NOT EXISTS (
