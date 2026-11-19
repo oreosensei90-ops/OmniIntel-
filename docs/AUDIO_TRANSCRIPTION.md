@@ -28,10 +28,10 @@ Example:
 
 ~~~bash
 omniintel import-file ./omniintel.db ./assets ./lecture.wav
-omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID ASSET_ID --model base --device cpu --compute-type int8 --threads 4 --language en
+omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
 ~~~
 
-Use the source and asset IDs returned by import-file. Model weights are managed by faster-whisper/CTranslate2; the OmniIntel core does not silently download models or select an external provider. Choose an already available model and verify its license and resource requirements.
+Use the source and asset IDs returned by import-file. By default the selected model must be an existing local CTranslate2 model directory. To explicitly permit a download, pass a model name and add --allow-model-download. This is a network operation and must be a deliberate user choice. Verify model license and resource requirements.
 
 ## Adapter contract
 
