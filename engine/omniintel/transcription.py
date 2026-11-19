@@ -502,6 +502,7 @@ def run_wav_transcription(
     chunk_seconds: int = 120,
     max_chunk_bytes: int = 16 * 1024 * 1024,
     max_duration_ms: int = 12 * 60 * 60 * 1000,
+    time_offset_ms: int | None = None,
     progress: Callable[[int,int],None] | None = None,
     max_chunks: int = 10_000,
     max_total_segments: int = 200_000,
@@ -550,7 +551,7 @@ def run_wav_transcription(
                 (json.dumps(reference_ids),utc_now(),run["id"]),
             )
         return TranscriptionRunResult(
-            run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,0,0,
+            run["id"],source_id,duration_ms,run["time_offset_ms"],segment_ids,evidence_ids,reference_ids,0,0,
             run["time_offset_ms"],
         )
 
@@ -610,7 +611,7 @@ def run_wav_transcription(
                 (json.dumps(reference_ids),utc_now(),run["id"]),
             )
         return TranscriptionRunResult(
-            run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,reused,processed,
+            run["id"],source_id,duration_ms,run["time_offset_ms"],segment_ids,evidence_ids,reference_ids,reused,processed,
             run["time_offset_ms"],
         )
     except Exception as error:
