@@ -37,3 +37,10 @@ records relevance review; it does not prove semantic correctness or subject comp
 
 This is an initial PDF-page-oriented slice. It does not yet automatically discover topics or
 compose document topics into textbook chapters.
+
+For a persisted source, the CLI can print the outline and its page references:
+
+\`\`\`bash
+omniintel document-outline ./omniintel.db SOURCE_ID
+\`\`\`
+
