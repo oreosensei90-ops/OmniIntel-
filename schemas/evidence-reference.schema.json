@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/evidence-reference.schema.json",
+  "title": "OmniIntel Unified Evidence Reference",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "source_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "locator_kind": { "enum": ["TRANSCRIPT_INTERVAL", "DOCUMENT_PAGE"] },
+    "evidence_item_id": { "type": ["string", "null"] },
+    "document_page_id": { "type": ["string", "null"] },
+    "source_asset_id": { "type": ["string", "null"] },
+    "start_ms": { "type": ["integer", "null"], "minimum": 0 },
+    "end_ms": { "type": ["integer", "null"], "minimum": 1 },
+    "page_number": { "type": ["integer", "null"], "minimum": 1 },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "required": [
+    "id", "source_id", "locator_kind", "evidence_item_id",
+    "document_page_id", "source_asset_id", "start_ms", "end_ms",
+    "page_number", "created_at"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "locator_kind": { "const": "TRANSCRIPT_INTERVAL" },
+        "evidence_item_id": { "type": "string" },
+        "document_page_id": { "type": "null" },
+        "source_asset_id": { "type": "null" },
+        "start_ms": { "type": "integer", "minimum": 0 },
+        "end_ms": { "type": "integer", "minimum": 1 },
+        "page_number": { "type": "null" }
+      }
+    },
+    {
+      "properties": {
+        "locator_kind": { "const": "DOCUMENT_PAGE" },
+        "evidence_item_id": { "type": "null" },
+        "document_page_id": { "type": "string" },
+        "source_asset_id": { "type": "string" },
+        "start_ms": { "type": "null" },
+        "end_ms": { "type": "null" },
+        "page_number": { "type": "integer", "minimum": 1 }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}
