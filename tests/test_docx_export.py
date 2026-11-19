@@ -50,7 +50,7 @@ def test_docx_exporter_creates_editable_word_document(tmp_path: Path) -> None:
     text = "\n".join(paragraph.text for paragraph in document.paragraphs)
     assert "Physics & Motion" in text
     assert "Velocity" in text
-    assert "OmniIntel" in document.sections[0].header.paragraphs[0].text
+    assert "OMNIINTEL" in document.sections[0].header.paragraphs[0].text
     assert len(document.tables) == 1
 
 
