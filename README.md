@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-This repository is at the beginning of its implementation. The foundation branch introduces the Python engine package, deterministic transcript ingestion, SQLite persistence and migration integrity checks. Android, web, media extraction, AI inference and publishing are planned integrations and must not be mistaken for completed features.
+This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. PDF/DOCX/HTML export, Android, web, media extraction and AI inference are not yet implemented.
 
 ## Engineering principles
 
@@ -38,6 +38,14 @@ python -m venv .venv
 python -m pip install -e '.[dev]'
 pytest
 ```
+
+Audit a saved textbook version before export:
+
+```bash
+omniintel audit-textbook ./omniintel.db VERSION_ID
+```
+
+The command prints a JSON report and exits non-zero when publication gates fail. Passing the deterministic gate is not a substitute for semantic or human review.
 
 Core persistence initially uses the Python standard library. Optional publishing dependencies are installed with `python -m pip install -e '.[publishing]'`.
 
