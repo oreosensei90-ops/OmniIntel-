@@ -125,6 +125,7 @@ function addPersonalTools(block, host) {
 }
 function renderBlock(block) {
   const wrap = element("section", "content-block");
+  if (block.id || block.block_id) wrap.dataset.blockId = block.id || block.block_id;
   const content = block.content || {};
   const kind = block.block_type || "PARAGRAPH";
   const value = content.text ?? content.body ?? content.expression ?? content.description ?? "";
@@ -170,12 +171,44 @@ function saveProgress() {
   if (!state.book) return;
   try { localStorage.setItem(currentKey(), JSON.stringify({ chapter: state.index, savedAt: new Date().toISOString() })); } catch {}
 }
+function blockMatches(block, query) {
+  if (!query) return true;
+  const q = query.toLocaleLowerCase();
+  return JSON.stringify(block.content || {}).toLocaleLowerCase().includes(q)
+    || (block.evidence || []).some((item) => evidenceLabel(item).toLocaleLowerCase().includes(q)
+      || (item.transcript_excerpt || []).some((segment) => String(segment.text || "").toLocaleLowerCase().includes(q))
+      || String(item.document_page?.text_content || "").toLocaleLowerCase().includes(q));
+}
 function visibleBlocks(chapter) {
-  const blocks = chapter?.blocks || [];
-  if (!state.query) return blocks;
-  const q = state.query.toLocaleLowerCase();
-  return blocks.filter((block) => JSON.stringify(block.content || {}).toLocaleLowerCase().includes(q)
-    || (block.evidence || []).some((item) => evidenceLabel(item).toLocaleLowerCase().includes(q)));
+  return (chapter?.blocks || []).filter((block) => blockMatches(block, state.query));
+}
+function renderSearchResults() {
+  const host = $("#search-results");
+  host.replaceChildren();
+  if (!state.query) return;
+  let count = 0;
+  state.chapters.forEach((chapter, chapterIndex) => {
+    const title = chapter.chapter?.title || "Chapter " + (chapterIndex + 1);
+    (chapter.blocks || []).forEach((block) => {
+      if (!blockMatches(block, state.query)) return;
+      count++;
+      const button = element("button", "search-result");
+      button.type = "button";
+      const heading = element("strong", "", title);
+      const preview = block.content?.text || block.content?.body || block.content?.term
+        || block.content?.definition || block.content?.description || block.block_type || "Matching evidence";
+      button.append(heading, element("span", "", String(preview).slice(0, 110)));
+      button.addEventListener("click", () => {
+        state.index = chapterIndex;
+        renderChapter();
+        const target = block.id || block.block_id;
+        if (target) document.querySelector('[data-block-id="' + CSS.escape(target) + '"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      host.append(button);
+    });
+  });
+  if (!count) host.append(element("p", "empty-search", "No matches in this book."));
+  else host.prepend(element("p", "search-count", count + " result" + (count === 1 ? "" : "s") + " across the book"));
 }
 function renderChapter() {
   const chapter = state.chapters[state.index];
@@ -202,6 +235,7 @@ function renderBook(data, filename) {
   state.index = 0;
   state.query = "";
   $("#search").value = "";
+  $("#search-results").replaceChildren();
   $("#book-title").textContent = data.version.textbook_title || data.version.title || filename || "Course textbook";
   $("#book-subtitle").textContent = (data.sources || []).length + " source(s) · " + state.chapters.length + " chapter(s)";
   const nav = $("#chapter-nav");
@@ -236,7 +270,11 @@ $("#clear-button").addEventListener("click", () => {
   state.book = null; state.chapters = []; state.index = 0;
   $("#reader").hidden = true; $("#welcome").hidden = false; $("#clear-button").disabled = true;
 });
-$("#search").addEventListener("input", (event) => { state.query = event.target.value.trim(); renderChapter(); });
+$("#search").addEventListener("input", (event) => {
+  state.query = event.target.value.trim();
+  renderSearchResults();
+  renderChapter();
+});
 $("#previous").addEventListener("click", () => { if (state.index > 0) { state.index--; renderChapter(); } });
 $("#next").addEventListener("click", () => { if (state.index < state.chapters.length - 1) { state.index++; renderChapter(); } });
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
