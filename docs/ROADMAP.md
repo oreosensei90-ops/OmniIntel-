@@ -22,7 +22,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
 - [x] Unified source-bound evidence locator IDs for transcript intervals and PDF pages.
 - [x] Claim and textbook block evidence links support unified references, with review and publication gates spanning both locator types.
-- [ ] Authorized source adapters and metadata inspection.
+- [ ] Authorized source adapters and platform-specific media acquisition.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [x] Initial local PCM WAV transcription adapter with sequential, content-addressed chunk checkpoints and source-linked timestamp evidence (compressed audio/video decoding, native Android ASR and transcript versioning pending).
 - [ ] Video scene/slide extraction and OCR.
