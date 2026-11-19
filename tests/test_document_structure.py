@@ -102,6 +102,9 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     KnowledgeStore(database).review_unit_evidence_reference(
         candidate_bundle["evidence_references"][0]["link_id"],"ACCEPTED"
     )
+    assert KnowledgeStore(database).review_unit(
+        candidate_id,status="VALIDATED",provenance="DERIVED"
+    ) == "VALIDATED"
 
     knowledge = KnowledgeStore(database)
     claim = knowledge.create_claim(ClaimInput(
