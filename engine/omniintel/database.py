@@ -796,6 +796,29 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0017_document_topic_update_guards",
+        """
+        CREATE TRIGGER document_topic_parent_same_source_update
+        BEFORE UPDATE OF source_id,parent_topic_id ON document_topics
+        WHEN NEW.parent_topic_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_topics p
+                WHERE p.id=NEW.parent_topic_id AND p.source_id=NEW.source_id
+            ) THEN RAISE(ABORT,'parent document topic must belong to the same source') END;
+        END;
+        CREATE TRIGGER document_topic_evidence_same_source_update
+        BEFORE UPDATE OF topic_id,evidence_ref_id ON document_topic_evidence_refs
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_topics t
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE t.id=NEW.topic_id AND t.source_id=er.source_id
+            ) THEN RAISE(ABORT,'document topic evidence must belong to the topic source') END;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
