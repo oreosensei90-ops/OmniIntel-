@@ -29,3 +29,10 @@ Knowledge units and claims cannot label themselves SOURCE. This prevents generat
 ## Deliberate limits
 
 This is the deterministic persistence and gating layer, not an automatic topic extractor or semantic entailment model. It does not yet resolve contradiction scope, quantify coverage, prove mathematical derivations, or guarantee a claim is true. Those require dedicated validators and test corpora.
+
+
+## Deterministic audit
+
+`KnowledgeAuditor` reports claims without evidence, claims with accepted support, publishable claims, contested/uncertain claims, accepted contradictions, source-duration boundary violations and unused knowledge units.
+
+Its accepted-support ratio is explicitly a property of the stored claim set. It is not a measure of how much of the original video was understood, whether a claim is true, or whether the broader subject is complete. A semantic verifier and source-level coverage analysis are still required.
