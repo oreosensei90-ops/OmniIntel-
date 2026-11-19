@@ -58,6 +58,8 @@ class FasterWhisperAdapter:
     device: str = "cpu"
     compute_type: str = "int8"
     cpu_threads: int = 4
+    vad_filter: bool = False
+    beam_size: int = 5
     allow_model_download: bool = False
     name: str = "faster-whisper"
     version: str = "1"
@@ -70,8 +72,8 @@ class FasterWhisperAdapter:
             "compute_type":self.compute_type,
             "cpu_threads":self.cpu_threads,
             "allow_model_download":self.allow_model_download,
-            "beam_size":5,
-            "vad_filter":True,
+            "beam_size":self.beam_size,
+            "vad_filter":self.vad_filter,
             "word_timestamps":False,
         }
 
@@ -80,6 +82,8 @@ class FasterWhisperAdapter:
             raise ValueError("faster-whisper model, device and compute type must not be empty")
         if self.cpu_threads < 1:
             raise ValueError("cpu_threads must be positive")
+        if not 1 <= self.beam_size <= 10:
+            raise ValueError("beam_size must be between 1 and 10")
 
     def transcribe_chunk(
         self, wav_path: Path, *, language: str | None
@@ -104,8 +108,8 @@ class FasterWhisperAdapter:
         segments, info = self._model.transcribe(
             str(wav_path),
             language=language,
-            beam_size=5,
-            vad_filter=True,
+            beam_size=self.beam_size,
+            vad_filter=self.vad_filter,
             word_timestamps=False,
         )
         output = []
