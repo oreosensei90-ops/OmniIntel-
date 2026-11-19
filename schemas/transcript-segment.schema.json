@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/transcript-segment.schema.json",
+  "title": "OmniIntel Transcript Segment",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/envelope"
+    }
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/uuid7"
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "deleted_at": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_id": {
+      "$ref": "common.schema.json#/$defs/uuid7"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "start_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "end_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "speaker_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "origin": {
+      "enum": [
+        "caption",
+        "asr",
+        "manual",
+        "imported"
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": [
+    "source_id",
+    "text",
+    "start_ms",
+    "end_ms",
+    "language",
+    "speaker_id",
+    "origin",
+    "confidence"
+  ],
+  "additionalProperties": false
+}
