@@ -514,15 +514,30 @@ def review_document_element(
     review_state: str,
     *,
     rationale: str | None = None,
+    provenance: str | None = None,
 ) -> str:
     if review_state not in {"ACCEPTED","REJECTED","NEEDS_REVIEW"}:
         raise ValueError("Element review state must be ACCEPTED, REJECTED or NEEDS_REVIEW")
+    if provenance is not None and provenance not in {"SOURCE","DERIVED","UNCERTAIN"}:
+        raise ValueError("Element provenance must be SOURCE, DERIVED or UNCERTAIN")
     with connect(database_path) as conn:
+        row = conn.execute(
+            "SELECT content_json FROM document_elements WHERE id=?",(element_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError("Document element does not exist")
+        content = json.loads(row["content_json"])
+        if (
+            content.get("layout_method") == "reviewable-ocr-word-boxes"
+            and provenance == "SOURCE"
+        ):
+            raise ValueError("OCR text cannot be relabelled as source-authored text")
         cursor = conn.execute(
             """UPDATE document_elements
-               SET review_state=?,review_rationale=?,reviewed_at=?
+               SET review_state=?,review_rationale=?,reviewed_at=?,
+                   provenance=COALESCE(?,provenance)
                WHERE id=?""",
-            (review_state,rationale,utc_now(),element_id),
+            (review_state,rationale,utc_now(),provenance,element_id),
         )
         if cursor.rowcount != 1:
             raise ValueError("Document element does not exist")
