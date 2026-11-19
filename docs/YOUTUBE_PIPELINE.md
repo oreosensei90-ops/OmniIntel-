@@ -33,6 +33,17 @@ account credentials, private endpoints, DRM circumvention, video download or aud
 download are used by this adapter. Follow the platform's current terms and the source
 owner's rights.
 
+## Android queue handoff
+
+The Android app can export its saved YouTube links as OMNIINTEL_YOUTUBE_QUEUE JSON. Transfer that file to a computer with the Python engine installed, then process it sequentially:
+
+~~~bash
+python -m pip install -e '.[youtube]'
+omniintel-youtube-queue ./omniintel.db ./omniintel-video-queue.json --output-dir ./exports --approve-network --language en
+~~~
+
+The command validates the complete queue before processing, rejects duplicate or mismatched video IDs, caps a batch at 200 items, continues after individual video failures, and writes queue-results.json plus one reader JSON file for each success. Network approval applies to every queued video. Import successful reader JSON files into Android individually. This is a deliberate user-mediated transfer; the offline Android app does not fetch YouTube content itself.
+
 ## Android offline handoff
 
 Open OmniIntel Android, choose **Import reader JSON**, and select the generated

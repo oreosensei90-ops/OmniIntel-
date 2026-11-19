@@ -31,8 +31,10 @@ using the existing reader tree contract for Android/Web import.
 Generated blocks are `EXPLANATION` or `DERIVED`, never `SOURCE`. All generated blocks
 are `NEEDS_REVIEW`; claim, knowledge-unit and textbook evidence links begin `PENDING`.
 The model cannot accept its own citations or publish claims. A human reviewer must check
-whether each excerpt actually supports its explanation and then use the existing review
-APIs. An allowed citation ID is only a syntactic/source-boundary check, not proof of entailment.
+whether each excerpt actually supports its explanation. Use omniintel-textbook-review
+to list pending items, accept/reject each block and evidence link with a reviewer identity
+and rationale, and inspect the immutable decision history. An allowed citation ID is only
+a syntactic/source-boundary check, not proof of entailment.
 
 ## Install and run
 
@@ -101,3 +103,22 @@ SOURCE_ID="$(python -c "import json; print(json.load(open('./exports/video-reade
 Import `ai-study-guide.json` into Android using **Import reader JSON**. This requires
 Ollama to be installed and running on the same machine as the Python engine. The local
 adapter uses loopback only; it does not remotely run Ollama on the Android phone.
+
+
+## Human review and publication
+
+~~~bash
+# List blocks and citations awaiting review
+omniintel-textbook-review pending ./omniintel.db VERSION_ID
+
+# Review evidence links before accepting dependent generated blocks
+omniintel-textbook-review review-evidence ./omniintel.db VERSION_ID LINK_ID ACCEPTED --reviewer "Your name" --rationale "The cited excerpt directly supports this item."
+
+omniintel-textbook-review review-block ./omniintel.db VERSION_ID BLOCK_ID ACCEPTED --reviewer "Your name" --rationale "Compared the generated explanation with its source."
+
+# Inspect the review trail and run the publication gate
+omniintel-textbook-review history ./omniintel.db VERSION_ID
+omniintel-textbook-review audit ./omniintel.db VERSION_ID
+~~~
+
+Every decision is scoped to the selected version and appended to a review-event ledger. A rejected, pending or unreviewed citation blocks publication. Acceptance records a human decision; it does not automatically prove semantic entailment. Export only after the audit command reports ready=true.

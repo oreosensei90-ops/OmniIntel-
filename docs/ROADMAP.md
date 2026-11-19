@@ -66,6 +66,7 @@ This roadmap is a plan, not a claim that every item exists.
 ## Applications
 - [x] First dependency-free offline Web Reader prototype: local reader JSON import, cross-chapter evidence-aware search, source-specific local audio/video attachment and seeking, PDF page structure review, local IndexedDB notes/bookmarks, local progress and cached static shell (full Web platform and large-library indexing pending).
 - [x] Native Kotlin + Jetpack Compose Android reader with Storage Access Framework import, bounded strict JSON parsing, source/evidence referential integrity, evidence rendering, local source-scoped audio/video playback and timestamp jumps.
+- [x] Android YouTube queue JSON export and explicit local-engine batch caption handoff (manual file transfer; no in-app network access).
 - [x] Room v3 offline Android library with normalized textbook sources, chapters, blocks and evidence; transactional re-import and cascading content cleanup.
 - [x] One-time, transactional migration of existing DataStore notes, bookmarks and chapter positions into Room; all subsequent annotation writes use Room.
 - [x] Per-textbook paragraph-level resume using the last visible block, with automatic position restoration.
