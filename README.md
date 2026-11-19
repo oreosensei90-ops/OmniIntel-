@@ -69,6 +69,16 @@ omniintel import-captions ./omniintel.db ./lecture.vtt --title "Lecture 01" --la
 
 The initial caption adapter preserves cue timestamps and optional WebVTT voice labels. It does not download media or fetch caption URLs. See `docs/CAPTION_INGESTION.md` for supported syntax and boundaries.
 
+## Group independent sources into a course
+
+~~~bash
+omniintel collection-create ./omniintel.db "Physics 101" --type COURSE
+omniintel collection-add-source ./omniintel.db COLLECTION_ID SOURCE_ID --role LEARNING_SOURCE
+omniintel collection-show ./omniintel.db COLLECTION_ID
+~~~
+
+Collections preserve independent source identity and order. Membership does not assert timeline alignment; caption/slide/media links require separate review. See docs/COLLECTIONS.md.
+
 ## Plan a multi-source learning bundle
 
 Before importing a folder of recordings, slides and captions, inspect a read-only plan:
