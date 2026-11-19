@@ -94,3 +94,29 @@ def test_execution_retries_failed_checkpoint_without_losing_stage_identity(tmp_p
     resumed=executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
     assert resumed["status"]=="COMPLETED"
     assert calls==["REGISTER_SOURCE","REGISTER_SOURCE"]
+
+
+def test_execution_reuses_completed_stages_when_later_stage_fails(tmp_path: Path) -> None:
+    plan=make_plan(tmp_path/"multi.wav")
+    executor=PlanExecutor(tmp_path/"db.sqlite")
+    calls=[]
+    fail_once={"value":True}
+    def register(paths,context):
+        calls.append("register")
+        return {"source_id":"source-1"}
+    def transcribe(paths,context):
+        calls.append("transcribe")
+        if fail_once["value"]:
+            fail_once["value"]=False
+            raise RuntimeError("temporary transcription failure")
+        return {"segments":1}
+    stages=[
+        {"stage":"REGISTER_SOURCE","input_indices":[0]},
+        {"stage":"TRANSCRIBE_LOCAL","input_indices":[0]},
+    ]
+    handlers={"REGISTER_SOURCE":register,"TRANSCRIBE_LOCAL":transcribe}
+    with pytest.raises(RuntimeError,match="temporary"):
+        executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
+    result=executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
+    assert result["status"]=="COMPLETED"
+    assert calls==["register","transcribe","transcribe"]
