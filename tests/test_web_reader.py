@@ -36,3 +36,12 @@ def test_reader_has_no_remote_provider_or_analytics_dependencies() -> None:
     assert "XMLHttpRequest" not in app
     assert "WebSocket" not in app
     assert "https://" not in html
+
+
+def test_web_manifest_is_valid_and_standalone() -> None:
+    import json
+
+    manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
+    assert manifest["name"] == "OmniIntel Reader"
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"] == "./"
