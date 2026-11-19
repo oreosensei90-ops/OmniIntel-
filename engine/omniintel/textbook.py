@@ -39,7 +39,7 @@ class BlockInput:
         if self.block_type not in allowed_types:
             raise ValueError("Unsupported textbook block type")
         if not isinstance(self.content, dict):
-            raise ValueError("Block content must be a JSON object")
+            raise TypeError("Block content must be a JSON object")
         if self.provenance not in {"SOURCE", "EXPLANATION", "DERIVED", "EXTERNAL", "UNCERTAIN"}:
             raise ValueError("Unsupported block provenance")
         if self.review_status not in {"DRAFT", "NEEDS_REVIEW", "ACCEPTED", "REJECTED"}:
@@ -274,8 +274,7 @@ class TextbookStore:
                     )
                     if row["evidence_id"] not in claim["evidence_ids"]:
                         claim["evidence_ids"].append(row["evidence_id"])
-                ordinal = 0
-                for claim_id, claim in grouped.items():
+                for ordinal, (claim_id, claim) in enumerate(grouped.items()):
                     block_id = self.add_block(
                         chapter_id,
                         BlockInput(
@@ -288,7 +287,6 @@ class TextbookStore:
                             claim_id=claim_id,
                         ),
                     )
-                    ordinal += 1
                     for evidence_id in claim["evidence_ids"]:
                         self.link_evidence(
                             block_id, evidence_id, relation="SUPPORTS", review_state="ACCEPTED"
