@@ -1,5 +1,6 @@
 package ai.omniintel.reader
 
+import android.content.Context
 import android.net.Uri
 import android.media.MediaPlayer
 import android.widget.MediaController
@@ -24,12 +25,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -42,11 +47,12 @@ private val Panel = Color(0xFF1B1F27)
 private val Gold = Color(0xFFE2BD71)
 private val Muted = Color(0xFF9BA3B2)
 private const val MAX_IMPORT_BYTES = 50L * 1024L * 1024L
+private val Context.readerProgressStore by preferencesDataStore(name = "omniintel_reader_progress")
 
 data class ReaderSource(val id: String, val title: String)
 data class Evidence(val sourceId: String, val source: String, val locator: String, val startMs: Long?, val excerpt: String)
 data class Block(val id: String, val type: String, val text: String, val provenance: String, val evidence: List<Evidence>)
-data class Book(val title: String, val sources: List<ReaderSource>, val chapters: List<ReaderChapter>)
+data class Book(val title: String, val versionId: String, val sources: List<ReaderSource>, val chapters: List<ReaderChapter>)
 data class ReaderChapter(val title: String, val blocks: List<Block>)
 
 class MainActivity : ComponentActivity() {
@@ -90,6 +96,8 @@ class MainActivity : ComponentActivity() {
             .toString()
         val root = JSONObject(raw)
         val version = root.optJSONObject("version") ?: error("Missing textbook version.")
+        val versionId = version.optString("id")
+        require(versionId.isNotBlank()) { "Textbook version ID is missing." }
         val sourcesById = mutableMapOf<String, ReaderSource>()
         val sources = root.optJSONArray("sources") ?: error("Missing course sources.")
         require(sources.length() in 1..500) { "Reader export must contain between 1 and 500 sources." }
@@ -162,7 +170,7 @@ class MainActivity : ComponentActivity() {
             ReaderChapter(chapter.optString("title", "Chapter ${i + 1}"), blocks)
         }
         require(chapters.isNotEmpty()) { "This textbook has no readable chapters." }
-        return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), sourcesById.values.toList(), chapters)
+        return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), versionId, sourcesById.values.toList(), chapters)
     }
 }
 
@@ -170,6 +178,7 @@ class MainActivity : ComponentActivity() {
 private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
     var book by remember { mutableStateOf<Book?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
@@ -186,12 +195,21 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     var audioPlaying by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) open(uri) { result ->
-            result.onSuccess {
-                book = it; chapterIndex = 0; query = ""; error = null
-                selectedSourceId = null; mediaUri = null; mediaMime = null
-                audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
-                videoView?.stopPlayback(); videoView = null
-                mediaStatus = "Select the exact course source, then attach only the matching local media file."
+            result.onSuccess { loadedBook ->
+                scope.launch {
+                    val progressKey = intPreferencesKey("chapter:${loadedBook.versionId}")
+                    val savedChapter = runCatching {
+                        context.readerProgressStore.data.first()[progressKey]
+                    }.getOrNull() ?: 0
+                    book = loadedBook
+                    chapterIndex = savedChapter.coerceIn(0, loadedBook.chapters.lastIndex)
+                    query = ""
+                    error = null
+                    selectedSourceId = null; mediaUri = null; mediaMime = null
+                    audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
+                    videoView?.stopPlayback(); videoView = null
+                    mediaStatus = "Select the exact course source, then attach only the matching local media file."
+                }
             }.onFailure { error = it.message ?: "Could not open reader export." }
         }
     }
@@ -248,6 +266,15 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 audioPlayer?.release()
                 audioPlayer = null
                 mediaStatus = "The selected audio file could not be opened."
+            }
+        }
+    }
+    LaunchedEffect(book?.versionId, chapterIndex) {
+        val currentBook = book ?: return@LaunchedEffect
+        val progressKey = intPreferencesKey("chapter:${currentBook.versionId}")
+        runCatching {
+            context.readerProgressStore.edit { preferences ->
+                preferences[progressKey] = chapterIndex
             }
         }
     }
