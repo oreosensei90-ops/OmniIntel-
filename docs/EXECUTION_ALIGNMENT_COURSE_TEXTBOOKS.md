@@ -6,7 +6,7 @@ PlanExecutor accepts the read-only InputPlan dictionary and a user-approved list
 
 The coordinator validates stage/source modality compatibility and deliberately does not invoke a shell, subprocess or network client. The application injects a local handler for each allowlisted stage (REGISTER_SOURCE, EXTRACT_AUDIO, TRANSCRIBE_LOCAL, EXTRACT_PDF_TEXT, SAMPLE_VIDEO_FRAMES, OCR_LOCAL). A handler must itself enforce format-specific resource limits and revalidate the expected input hash at open/use time. Handlers must be idempotent for the supplied plan/stage/input identity because a crash can occur after a handler's side effect but before its checkpoint is committed. Stage results must be JSON objects. Checkpoints are keyed by plan, stage ordinal/name and input hash. A completed identical plan is reused.
 
-This is a coordinator contract, not a claim that all media handlers have been implemented or that a user interface currently presents the approval dialog.
+This is a coordinator contract, not a claim that all media handlers have been implemented or that a user interface currently presents the approval dialog. The current coordinator is a single-application execution primitive, not a distributed multi-worker scheduler: the application must serialize concurrent submissions for a given plan. Durable worker leases, heartbeats and automatic recovery of a process killed mid-stage remain pending. Handler idempotency is still mandatory because a crash can occur after a side effect but before its completion checkpoint.
 
 ## Cross-source clock alignment
 
