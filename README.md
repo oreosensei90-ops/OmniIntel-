@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF and editable DOCX export are implemented. Android, web, HTML export, media extraction and AI inference are not yet implemented.
+This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX and self-contained HTML export are implemented. Markdown export, Android, web, media extraction and AI inference are not yet implemented.
 
 ## Engineering principles
 
@@ -49,6 +49,9 @@ omniintel export-pdf ./omniintel.db VERSION_ID ./exports/textbook.pdf
 
 # Export an editable Word document
 omniintel export-docx ./omniintel.db VERSION_ID ./exports/textbook.docx
+
+# Export a self-contained HTML textbook
+omniintel export-html ./omniintel.db VERSION_ID ./exports/textbook.html
 ```
 
 The audit command prints a JSON report and exits non-zero when publication gates fail. PDF export runs the same gate before rendering and refuses blocked editions. Passing deterministic checks is not a substitute for semantic or human review. Install `.[publishing]` for ReportLab and python-docx publishing dependencies.
