@@ -1516,6 +1516,105 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0024_document_knowledge_candidates",
+        """
+        ALTER TABLE knowledge_units ADD COLUMN source_element_id TEXT
+            REFERENCES document_elements(id) ON DELETE RESTRICT;
+        CREATE UNIQUE INDEX idx_knowledge_units_source_element
+            ON knowledge_units(source_element_id) WHERE source_element_id IS NOT NULL;
+        CREATE TABLE knowledge_unit_evidence_refs (
+            id TEXT PRIMARY KEY,
+            knowledge_unit_id TEXT NOT NULL REFERENCES knowledge_units(id) ON DELETE RESTRICT,
+            evidence_ref_id TEXT NOT NULL REFERENCES evidence_refs(id) ON DELETE RESTRICT,
+            element_id TEXT REFERENCES document_elements(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN (
+                'SOURCE_EXCERPT','ILLUSTRATES','CONTEXTUALIZES'
+            )),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            UNIQUE(knowledge_unit_id,evidence_ref_id,element_id,relation)
+        );
+        CREATE INDEX idx_knowledge_unit_evidence_unit
+            ON knowledge_unit_evidence_refs(knowledge_unit_id,review_state);
+        CREATE TRIGGER knowledge_unit_element_validate_insert
+        BEFORE INSERT ON knowledge_unit_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'knowledge unit element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'knowledge unit element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER knowledge_unit_element_validate_update
+        BEFORE UPDATE OF element_id,evidence_ref_id,review_state ON knowledge_unit_evidence_refs
+        WHEN NEW.element_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.evidence_ref_id=NEW.evidence_ref_id
+            ) THEN RAISE(ABORT,'knowledge unit element must belong to its evidence reference') END;
+            SELECT CASE WHEN NEW.review_state='ACCEPTED' AND NOT EXISTS(
+                SELECT 1 FROM document_elements de
+                WHERE de.id=NEW.element_id AND de.review_state='ACCEPTED'
+            ) THEN RAISE(ABORT,'knowledge unit element must be accepted before evidence link') END;
+        END;
+        CREATE TRIGGER knowledge_unit_ocr_validate_insert
+        BEFORE INSERT ON knowledge_unit_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before knowledge evidence link');
+        END;
+        CREATE TRIGGER knowledge_unit_ocr_validate_update
+        BEFORE UPDATE OF review_state,evidence_ref_id ON knowledge_unit_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before knowledge evidence link');
+        END;
+        CREATE TRIGGER knowledge_unit_element_review_demotion
+        AFTER UPDATE OF review_state ON document_elements
+        WHEN NEW.review_state <> 'ACCEPTED'
+        BEGIN
+            UPDATE knowledge_unit_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE element_id=NEW.id AND review_state='ACCEPTED';
+        END;
+        CREATE TRIGGER knowledge_unit_ocr_review_demotion
+        AFTER UPDATE OF status ON document_ocr_pages
+        WHEN NEW.status <> 'ACCEPTED'
+        BEGIN
+            UPDATE knowledge_unit_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
