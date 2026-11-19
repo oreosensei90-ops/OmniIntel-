@@ -113,7 +113,7 @@ def create_app(
 
     @app.post("/v1/media/jobs", status_code=202)
     async def submit_media_job(
-        file: UploadFile = File(...),
+        file: UploadFile = File(...),  # noqa: B008
         approve_ai: bool = Form(default=False),
         language: str | None = Form(default=None),
         chapter_minutes: int = Form(default=10),
@@ -122,7 +122,7 @@ def create_app(
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> dict:
         media_type = (file.content_type or "").split(";", 1)[0].strip().lower()
-        if not (media_type.startswith("audio/") or media_type.startswith("video/")):
+        if not media_type.startswith(("audio/", "video/")):
             raise HTTPException(status_code=415, detail="Upload an audio or video file.")
         if not 1 <= chapter_minutes <= 30:
             raise HTTPException(status_code=422, detail="chapter_minutes must be between 1 and 30.")
@@ -164,7 +164,7 @@ def create_app(
         except (ValueError, IdempotencyConflict) as error:
             destination.unlink(missing_ok=True)
             raise HTTPException(status_code=409, detail=str(error)) from error
-        except Exception:  # noqa: BLE001 - remove partial upload before propagating the failure
+        except Exception:
             destination.unlink(missing_ok=True)
             raise
         finally:
@@ -199,7 +199,7 @@ def main() -> None:
     uvicorn.run(
         "omniintel.api:app",
         host=os.environ.get("OMNIINTEL_API_HOST", "127.0.0.1"),
-        port=int(os.environ.get("OMNIINTEL_API_PORT", "8000")),
+        port=int(os.environ.get("PORT", os.environ.get("OMNIINTEL_API_PORT", "8000"))),
         reload=False,
     )
 

@@ -50,7 +50,11 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 compute_type=os.environ.get("OMNIINTEL_ASR_COMPUTE_TYPE", "int8"),
                 cpu_threads=int(os.environ.get("OMNIINTEL_ASR_THREADS", "4")))
             run_wav_transcription(database_path, asset_dir, imported.source_id, extracted.output_asset_id,
-                adapter, language=payload.get("language"))
+                adapter,
+                language=payload.get("language"),
+                progress=lambda _done, _total: queue.heartbeat(
+                    job["id"], job["lease_token"], lease_ms=60 * 60 * 1000
+                ))
             transcript_reader = compose_registered_source(database_path, imported.source_id,
                 chapter_minutes=int(payload.get("chapter_minutes", 10)))
         else:
