@@ -76,3 +76,18 @@ def test_asset_store_detects_post_ingest_corruption(tmp_path: Path) -> None:
     path.write_bytes(b"corrupted")
     with pytest.raises(RuntimeError, match="size does not match"):
         store.resolve_path(asset.id)
+
+
+def test_file_ingestion_rejects_content_changed_after_plan_approval(tmp_path: Path) -> None:
+    import hashlib
+
+    db=tmp_path/"approved.sqlite"
+    source=_source(db)
+    store=AssetStore(db,tmp_path/"assets")
+    path=tmp_path/"frame.png"
+    path.write_bytes(PNG)
+    expected=hashlib.sha256(PNG).hexdigest()
+    path.write_bytes(PNG+b"changed")
+    with pytest.raises(ValueError,match="changed after execution-plan approval"):
+        store.add_file(source,path,role="FRAME",expected_sha256=expected)
+    assert store.list_source_assets(source)==[]
