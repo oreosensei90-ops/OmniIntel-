@@ -81,6 +81,17 @@ def main() -> None:
     extract_frames.add_argument("--max-width", type=int, default=1280)
     extract_frames.add_argument("--max-height", type=int, default=720)
     extract_frames.add_argument("--timeout", type=float, default=600.0)
+    build_visual_timeline = sub.add_parser("build-visual-timeline", help="Create reviewable visual-frame and transcript alignment candidates")
+    build_visual_timeline.add_argument("database", type=Path)
+    build_visual_timeline.add_argument("extraction_id")
+    build_visual_timeline.add_argument("--tolerance-ms", type=int, default=10000)
+    visual_timeline = sub.add_parser("visual-timeline", help="List visual frame events and transcript alignment candidates")
+    visual_timeline.add_argument("database", type=Path)
+    visual_timeline.add_argument("source_id")
+    review_visual_event = sub.add_parser("review-visual-event", help="Review a sampled visual event")
+    review_visual_event.add_argument("database", type=Path)
+    review_visual_event.add_argument("event_id")
+    review_visual_event.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
     extract_audio = sub.add_parser("extract-audio", help="Extract a selected local audio stream to resumable-transcription WAV")
     extract_audio.add_argument("database", type=Path)
     extract_audio.add_argument("asset_dir", type=Path)
@@ -251,6 +262,32 @@ def main() -> None:
             timeout_seconds=args.timeout,
         )
         print(json.dumps(frame_extraction_dict(result),ensure_ascii=False,indent=2))
+    elif args.command == "build-visual-timeline":
+        from .visual_timeline import build_visual_timeline
+
+        result = build_visual_timeline(
+            args.database,args.extraction_id,tolerance_ms=args.tolerance_ms,
+        )
+        print(json.dumps({
+            "source_id": result.source_id,
+            "events_created": result.events_created,
+            "alignments_created": result.alignments_created,
+            "reused_events": result.reused_events,
+        },ensure_ascii=False,indent=2))
+    elif args.command == "visual-timeline":
+        from .visual_timeline import list_visual_timeline
+
+        print(json.dumps(
+            list_visual_timeline(args.database,args.source_id),
+            ensure_ascii=False,indent=2,
+        ))
+    elif args.command == "review-visual-event":
+        from .visual_timeline import review_visual_event
+
+        print(json.dumps({
+            "event_id": args.event_id,
+            "review_state": review_visual_event(args.database,args.event_id,args.state),
+        },indent=2))
     elif args.command == "extract-audio":
         from .audio_extract import audio_extraction_dict, extract_audio
 
