@@ -4,12 +4,12 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1] / "apps" / "web"
 
 
-def test_reader_shell_has_strict_local_only_security_policy() -> None:
+def test_reader_shell_allows_configured_api_connections() -> None:
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert "default-src 'self'" in html
-    assert "connect-src 'none'" in html
+    assert "connect-src 'self' https:" in html
     assert "script-src 'self'" in html
-    assert "https://" not in html
+    assert "api-base-url" in html
 
 
 def test_reader_renders_untrusted_imports_without_html_injection_sinks() -> None:
@@ -29,13 +29,15 @@ def test_service_worker_only_caches_static_shell_not_user_documents() -> None:
     assert "application/json" not in worker
 
 
-def test_reader_has_no_remote_provider_or_analytics_dependencies() -> None:
+def test_online_client_uses_only_user_configured_api_and_never_embeds_provider_keys() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert "fetch(" not in app
-    assert "XMLHttpRequest" not in app
-    assert "WebSocket" not in app
-    assert "https://" not in html
+    assert "fetch(base + path" in app
+    assert "apiBase()" in app
+    assert 'sessionStorage.setItem("omniintel-api-token", token)' in app
+    assert "/v1/youtube/jobs" in app
+    assert "OMNIINTEL_OPENAI_API_KEY" not in app
+    assert "https://" not in app
 
 
 def test_web_manifest_is_valid_and_standalone() -> None:
@@ -53,7 +55,7 @@ def test_reader_stores_personal_notes_in_indexeddb_without_remote_sync() -> None
     assert 'createObjectStore("annotations"' in app
     assert 'createObjectStore("bookmarks"' in app
     assert "PERSONAL STUDY NOTES · THIS BROWSER ONLY" in app
-    assert "fetch(" not in app
+    assert "fetch(base + path" in app
 
 
 def test_reader_search_spans_chapters_and_matches_transcript_and_pdf_evidence() -> None:
@@ -134,3 +136,15 @@ def test_web_reader_bounds_imported_chapter_block_and_evidence_counts() -> None:
     assert "item.transcript_excerpt?.length || 0) > 40" in app
     assert "item.document_elements?.length || 0) > 100" in app
     assert "validateReaderPayload(data);" in app
+
+
+
+def test_video_to_notes_requires_separate_network_and_ai_approval() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="approve-network"' in html
+    assert 'id="approve-ai"' in html
+    assert "approve_network: true" in app
+    assert "approve_ai: true" in app
+    assert "renderBook(reader" in app
+    assert 'sessionStorage.setItem("omniintel-api-token", token)' in app

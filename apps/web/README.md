@@ -1,34 +1,38 @@
-# OmniIntel Web Reader — first offline UI slice
+# OmniIntel Web — online video-to-notes + offline reader
 
-This is a dependency-free, static PWA reader prototype. It opens a **local JSON file** produced by the synchronized reader CLI; it does not connect to a server, upload files, fetch media, or access the OmniIntel database directly.
+The Web client connects to a separately deployed OmniIntel API for consent-gated online video-to-notes processing. It also remains an offline reader for previously generated reader JSON exports.
 
-## Run locally
+## Online video → AI notes
 
-From the repository root:
+1. Deploy the OmniIntel API and worker using the root README and `docs/ONLINE_VIDEO_TO_NOTES.md`.
+2. Serve this directory over HTTPS (or localhost for development).
+3. In **Video → Notes**, enter a YouTube video URL, the API origin and the server-issued bearer token.
+4. Explicitly approve public metadata/caption retrieval and sending the transcript to the server-configured AI provider.
+5. The client submits a background job, displays its progress, and opens the resulting AI-assisted reader export automatically.
 
-```bash
-python -m pip install -e .
-omniintel reader-open ./omniintel.db VERSION_ID > ./course-reader.json
-cd apps/web
-python -m http.server 8080
-```
+The API token is stored only in session storage for the current tab. The API origin is stored locally. The OpenAI key is server-side only and is never embedded in the Web app. CORS must be configured on the server for the exact Web origin.
 
-Open `http://localhost:8080` and choose `course-reader.json`. The service worker caches only the static reader shell. The selected course JSON remains in memory and is not added to the service-worker cache. Reading position is saved in localStorage; per-block notes and bookmarks use IndexedDB. These are device-local and are not yet exported, synced or merged into the canonical OmniIntel database.
+## Supported source processing
 
-## Included
+The current hosted source adapter retrieves bounded public YouTube metadata and public caption sidecars. It does not download video/audio, use cookies, access private captions, or bypass DRM/access controls. If public captions are unavailable, the job fails with an explicit error. User-authorized media upload and hosted ASR fallback are not yet connected to this API.
 
-- Local JSON import with a 50 MiB limit and minimal shape validation.
-- Chapter navigation, current-chapter text search, provenance labels and expandable evidence citations.
-- Cross-chapter search across block content, transcript excerpts and PDF page text.
-- Explicit local audio/video attachment per selected course source; timestamp jumps are enabled only for the exact attached source and never apply unreviewed cross-source offsets.
-- Transcript excerpts, PDF page text and positioned document elements with confidence/review state when present in the reader payload.
-- Local IndexedDB notes and bookmarks per textbook block.
-- User-controlled JSON backup/restore for notes, bookmarks, study ratings and reading positions, with schema/size validation and timestamp-aware merge.
-- Offline active-recall study cards built from existing definition, exercise and flashcard blocks; reveal answers and mark cards known or needing review, with per-browser progress.
-- Per-block personal notes and bookmarks stored in IndexedDB on this browser only; no remote sync.
-- Responsive desktop/mobile layout and reduced-motion support.
-- Offline shell caching; no external fonts, scripts, analytics, APIs or network calls.
+AI output is a structured, timestamp/evidence-linked study-guide draft. Evidence IDs are constrained to the supplied transcript records, but that does not prove semantic entailment or factual correctness. Generated blocks and links require human review.
 
-## Deliberate limits
+## Offline reader
 
-This is not the complete web application. It does not yet provide automatic source-file matching, native math/diagram rendering, full-text indexing at large-library scale, export/import of annotations, account/sync, or a server/API. Local media must be selected by the user and paired with the correct course source. Source-specific times are displayed as citations only; no unsupported cross-source seek is invented. The native Android app remains a separate planned application.
+- Open a local reader JSON export.
+- Navigate chapters and search across the textbook.
+- Inspect source evidence, transcript excerpts and PDF page citations.
+- Attach an exact local audio/video source for timestamp seeking.
+- Save per-block notes and bookmarks in IndexedDB.
+- Study existing definitions, exercises and flashcards with local active recall.
+- Back up and restore notes, bookmarks, study ratings and reading positions.
+
+Offline reading, notes, bookmarks and study progress do not require an API connection.
+
+## Security
+
+- Remote processing requires HTTPS, a configured API origin, bearer authentication and explicit consent.
+- The Web client never accepts a user-entered provider endpoint or API key.
+- The API server must use a long random bearer token, exact CORS allowlist, TLS reverse proxy, persistent storage and operational protections.
+- User-provided reader exports remain untrusted and are rendered with text-only DOM APIs.

@@ -45,9 +45,10 @@ jobs:
       - name: Verify APK and permissions
         run: |
           test -s apps/android/app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions apps/android/app/build/outputs/apk/debug/app-debug.apk
-          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions apps/android/app/build/outputs/apk/debug/app-debug.apk | grep -E 'android.permission.INTERNET|android.permission.ACCESS_NETWORK_STATE'; then
-            echo "Offline reader must not request network permissions"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions apps/android/app/build/outputs/apk/debug/app-debug.apk | tee /tmp/omniintel-apk-permissions.txt
+          grep -q 'android.permission.INTERNET' /tmp/omniintel-apk-permissions.txt
+          if grep -q 'android.permission.ACCESS_NETWORK_STATE' /tmp/omniintel-apk-permissions.txt; then
+            echo "OmniIntel does not need broad network-state access"
             exit 1
           fi
       - name: Create APK checksum

@@ -48,6 +48,8 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 approve_local_model=True,
                 generator=generate_openai_study_json,
             )
+            study_reader["pipeline"]["provider"] = "openai-api"
+            study_reader["pipeline"]["network_access"] = "external-user-approved"
             result["reader"] = study_reader
             result["study_guide_reader"] = study_reader
             result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"

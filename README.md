@@ -28,8 +28,8 @@ The repository is an actively evolving foundation implementation. The feature br
 - `schemas/` — versioned cross-platform data contracts.
 - `tests/` — automated tests.
 - `docs/` — architecture, decisions, research and roadmap.
-- `apps/web/` — static offline Web Reader prototype with cross-chapter evidence search, local media playback and local notes.
-- `apps/android/` — first native Kotlin + Compose offline reader slice; independent Android CI builds a debug APK.
+- `apps/web/` — consent-gated online video-to-AI-notes client plus offline reader, local media playback and notes.
+- `apps/android/` — native Kotlin + Compose client with online API submission/status polling and Room-backed offline library; independent Android CI builds a debug APK.
 
 ## Python development
 

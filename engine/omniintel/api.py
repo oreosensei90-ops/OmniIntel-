@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .jobs import JobQueue
+from .jobs import IdempotencyConflict, JobQueue
 from .youtube_pipeline import normalize_youtube_url
 
 
@@ -50,6 +50,7 @@ def create_app(
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
         )
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     queue = JobQueue(db_path)
     app.state.database_path = db_path
     app.state.job_queue = queue
@@ -100,7 +101,7 @@ def create_app(
                 idempotency_key=idempotency_key,
                 max_attempts=1,
             )
-        except ValueError as error:
+        except (ValueError, IdempotencyConflict) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {
             "job_id": job_id,
