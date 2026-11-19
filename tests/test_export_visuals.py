@@ -90,3 +90,50 @@ def test_image_export_requires_asset_store_directory(tmp_path: Path) -> None:
     database,_asset_dir,version=_image_book(tmp_path)
     with pytest.raises(ValueError,match="supply asset_dir"):
         TextbookHTMLExporter(database).export(version,tmp_path/"book.html")
+
+
+def test_all_exporters_render_pdf_page_citations(tmp_path: Path) -> None:
+    reportlab=pytest.importorskip("reportlab")
+    from reportlab.pdfgen import canvas
+    from pypdf import PdfReader
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.local_files import import_local_file
+    from omniintel.docx_export import TextbookDOCXExporter
+    from omniintel.html_export import TextbookHTMLExporter
+    from omniintel.markdown_export import TextbookMarkdownExporter
+    from omniintel.pdf_export import TextbookPDFExporter
+
+    source_pdf=tmp_path/"source.pdf"
+    page=canvas.Canvas(str(source_pdf))
+    page.drawString(72,720,"A page-cited source statement.")
+    page.showPage()
+    page.save()
+    database=tmp_path/"citations.db"
+    asset_dir=tmp_path/"source-assets"
+    imported=import_local_file(database,asset_dir,source_pdf,title="Page source")
+    extraction=extract_pdf(database,asset_dir,imported.asset.id)
+    reference=extraction.evidence_ref_ids[0]
+    store=TextbookStore(database)
+    textbook=store.create_textbook(imported.source_id,"Page-cited textbook")
+    version=store.create_version(textbook,"Edition 1")
+    chapter=store.add_chapter(version,"Chapter",ordinal=0)
+    block=store.add_block(chapter,BlockInput(
+        "PARAGRAPH",{"text":"A grounded explanation."},"EXPLANATION",
+        review_status="ACCEPTED",
+    ))
+    store.link_evidence_reference(
+        block,reference,relation="SUPPORTS",review_state="ACCEPTED",
+    )
+
+    pdf=TextbookPDFExporter(database).export(version,tmp_path/"out.pdf",asset_dir=asset_dir)
+    docx=TextbookDOCXExporter(database).export(version,tmp_path/"out.docx",asset_dir=asset_dir)
+    html=TextbookHTMLExporter(database).export(version,tmp_path/"out.html",asset_dir=asset_dir)
+    markdown=TextbookMarkdownExporter(database).export(version,tmp_path/"out.md",asset_dir=asset_dir)
+
+    assert "PDF page 1" in (PdfReader(str(pdf)).pages[0].extract_text() or "")
+    import docx
+    docx_text="\n".join(p.text for p in docx.Document(docx).paragraphs)
+    assert "PDF page 1" in docx_text
+    assert "PDF page 1" in html.read_text(encoding="utf-8")
+    assert "PDF page 1" in markdown.read_text(encoding="utf-8")
