@@ -52,6 +52,17 @@ def main() -> None:
     import_file.add_argument("file", type=Path)
     import_file.add_argument("--title", default=None)
     import_file.add_argument("--max-bytes", type=int, default=250 * 1024 * 1024)
+    transcribe_wav = sub.add_parser("transcribe-wav", help="Transcribe a registered local PCM WAV with resumable local ASR")
+    transcribe_wav.add_argument("database", type=Path)
+    transcribe_wav.add_argument("asset_dir", type=Path)
+    transcribe_wav.add_argument("source_id")
+    transcribe_wav.add_argument("asset_id")
+    transcribe_wav.add_argument("--model", default="base")
+    transcribe_wav.add_argument("--device", default="cpu")
+    transcribe_wav.add_argument("--compute-type", default="int8")
+    transcribe_wav.add_argument("--threads", type=int, default=4)
+    transcribe_wav.add_argument("--language", default=None)
+    transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
     extract_pdf_cmd = sub.add_parser("extract-pdf", help="Extract bounded page text from an ingested local PDF asset")
     extract_pdf_cmd.add_argument("database", type=Path)
     extract_pdf_cmd.add_argument("asset_dir", type=Path)
@@ -172,6 +183,25 @@ def main() -> None:
             "byte_size": result.asset.byte_size,
             "rights_status": "UNVERIFIED",
         }, ensure_ascii=False, indent=2))
+    elif args.command == "transcribe-wav":
+        from .transcription import FasterWhisperAdapter, run_wav_transcription
+
+        adapter = FasterWhisperAdapter(
+            model_id=args.model,device=args.device,
+            compute_type=args.compute_type,cpu_threads=args.threads,
+        )
+        result = run_wav_transcription(
+            args.database,args.asset_dir,args.source_id,args.asset_id,adapter,
+            language=args.language,chunk_seconds=args.chunk_seconds,
+        )
+        print(json.dumps({
+            "run_id":result.run_id,"source_id":result.source_id,
+            "duration_ms":result.duration_ms,"segments":len(result.segment_ids),
+            "evidence_items":len(result.evidence_ids),
+            "evidence_references":len(result.evidence_ref_ids),
+            "reused_chunks":result.reused_chunks,
+            "processed_chunks":result.processed_chunks,
+        },ensure_ascii=False,indent=2))
     elif args.command == "extract-pdf":
         from .document_pdf import extract_pdf
 
