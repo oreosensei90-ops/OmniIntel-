@@ -1768,6 +1768,31 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0026_knowledge_unit_source_element_guard",
+        """
+        CREATE TRIGGER knowledge_unit_element_link_source_insert
+        BEFORE INSERT ON knowledge_unit_evidence_refs
+        WHEN EXISTS(
+            SELECT 1 FROM knowledge_units ku
+            WHERE ku.id=NEW.knowledge_unit_id AND ku.source_element_id IS NOT NULL
+              AND NEW.element_id IS NOT ku.source_element_id
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'knowledge unit citation must match its source element');
+        END;
+        CREATE TRIGGER knowledge_unit_element_link_source_update
+        BEFORE UPDATE OF knowledge_unit_id,element_id ON knowledge_unit_evidence_refs
+        WHEN EXISTS(
+            SELECT 1 FROM knowledge_units ku
+            WHERE ku.id=NEW.knowledge_unit_id AND ku.source_element_id IS NOT NULL
+              AND NEW.element_id IS NOT ku.source_element_id
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'knowledge unit citation must match its source element');
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
