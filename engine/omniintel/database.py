@@ -144,6 +144,77 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         CREATE INDEX idx_knowledge_relationships_to ON knowledge_relationships(to_unit_id,relation);
         """,
     ),
+    (
+        "0004_topic_map",
+        """
+        CREATE TABLE topics (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            parent_topic_id TEXT REFERENCES topics(id) ON DELETE RESTRICT,
+            title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+            description TEXT NOT NULL DEFAULT '',
+            start_ms INTEGER NOT NULL CHECK(start_ms >= 0),
+            end_ms INTEGER NOT NULL CHECK(end_ms > start_ms),
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            provenance TEXT NOT NULL CHECK(provenance IN ('EXPLANATION','DERIVED','UNCERTAIN')),
+            status TEXT NOT NULL CHECK(status IN ('DRAFT','NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            confidence REAL CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(source_id,ordinal),
+            CHECK(parent_topic_id IS NULL OR parent_topic_id <> id)
+        );
+        CREATE INDEX idx_topics_source_time ON topics(source_id,start_ms,end_ms);
+        CREATE INDEX idx_topics_parent ON topics(parent_topic_id,ordinal);
+        CREATE TABLE topic_evidence (
+            id TEXT PRIMARY KEY,
+            topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE RESTRICT,
+            evidence_id TEXT NOT NULL REFERENCES evidence_items(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN (
+                'INTRODUCES','DEVELOPS','RECAPITULATES','DEMONSTRATES','CONTRASTS'
+            )),
+            review_state TEXT NOT NULL CHECK(review_state IN (
+                'PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW'
+            )),
+            relevance_score REAL CHECK(relevance_score IS NULL OR (relevance_score >= 0 AND relevance_score <= 1)),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            UNIQUE(topic_id,evidence_id,relation)
+        );
+        CREATE INDEX idx_topic_evidence_topic ON topic_evidence(topic_id,review_state);
+        CREATE TRIGGER topics_validate_source_bounds_insert
+        BEFORE INSERT ON topics
+        BEGIN
+            SELECT CASE WHEN
+                (SELECT duration_ms FROM sources WHERE id=NEW.source_id) IS NOT NULL
+                AND NEW.end_ms > (SELECT duration_ms FROM sources WHERE id=NEW.source_id)
+                THEN RAISE(ABORT,'topic exceeds source duration') END;
+            SELECT CASE WHEN NEW.parent_topic_id IS NOT NULL AND NOT EXISTS(
+                SELECT 1 FROM topics WHERE id=NEW.parent_topic_id AND source_id=NEW.source_id
+            ) THEN RAISE(ABORT,'parent topic must belong to the same source') END;
+        END;
+        CREATE TRIGGER topics_validate_source_bounds_update
+        BEFORE UPDATE OF source_id,parent_topic_id,start_ms,end_ms ON topics
+        BEGIN
+            SELECT CASE WHEN
+                (SELECT duration_ms FROM sources WHERE id=NEW.source_id) IS NOT NULL
+                AND NEW.end_ms > (SELECT duration_ms FROM sources WHERE id=NEW.source_id)
+                THEN RAISE(ABORT,'topic exceeds source duration') END;
+            SELECT CASE WHEN NEW.parent_topic_id IS NOT NULL AND NOT EXISTS(
+                SELECT 1 FROM topics WHERE id=NEW.parent_topic_id AND source_id=NEW.source_id
+            ) THEN RAISE(ABORT,'parent topic must belong to the same source') END;
+        END;
+        CREATE TRIGGER topic_evidence_validate_source_insert
+        BEFORE INSERT ON topic_evidence
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM topics t JOIN evidence_items e ON e.id=NEW.evidence_id
+                WHERE t.id=NEW.topic_id AND t.source_id=e.source_id
+            ) THEN RAISE(ABORT,'topic evidence must belong to the topic source') END;
+        END;
+        """,
+    ),
 )
 
  
