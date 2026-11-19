@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction now stores page-numbered records and indexes them with SQLite FTS5; scanned-page OCR and audio/video decoding remain pending. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Android, web, media extraction adapters and AI inference are not yet implemented.
+This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Android, web, media extraction adapters and AI inference are not yet implemented.
 
 ## Engineering principles
 
@@ -124,3 +124,10 @@ still pending.
 
 PDF pages can also be organized into a page-native topic hierarchy without inventing timestamps.
 See \`docs/DOCUMENT_TOPIC_MAPS.md\` for the API, review rules and source-boundary protections.
+
+
+## Local PDF intelligence
+
+See \`docs/DOCUMENT_PIPELINE.md\` for the end-to-end workflow, \`docs/DOCUMENT_OCR.md\` for
+local OCR, \`docs/DOCUMENT_STRUCTURE.md\` for positioned document elements, and
+\`docs/DOCUMENT_KNOWLEDGE.md\` for the reviewed handoff into knowledge reconstruction.
