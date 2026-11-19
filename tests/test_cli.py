@@ -100,6 +100,19 @@ def test_document_structure_and_knowledge_cli(tmp_path: Path, monkeypatch, capsy
     candidates = json.loads(capsys.readouterr().out)
     assert candidates["created_or_reused"] == 1
     assert candidates["candidate_units"]
+    unit_id = candidates["candidate_units"][0]
+    from omniintel.knowledge_store import KnowledgeStore
+    bundle = KnowledgeStore(database).get_unit_bundle(unit_id)
+    KnowledgeStore(database).review_unit_evidence_reference(
+        bundle["evidence_references"][0]["link_id"],"ACCEPTED"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["omniintel","review-knowledge-unit",str(database),unit_id,"VALIDATED",
+         "--provenance","DERIVED"],
+    )
+    main()
+    assert '"status": "VALIDATED"' in capsys.readouterr().out
 
 
 def test_review_ocr_page_cli(tmp_path: Path, monkeypatch, capsys) -> None:
