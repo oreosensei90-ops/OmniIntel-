@@ -94,7 +94,8 @@ function transactionDone(tx) {
 }
 function blockStorageKey(block) {
   const versionId = state.book?.version?.id || state.book?.version?.version_id || "local";
-  return versionId + ":" + (block.id || block.block_id || "ordinal-" + String(block.ordinal ?? "unknown"));
+  const chapterId = state.chapters[state.index]?.chapter?.id || "chapter-" + state.index;
+  return versionId + ":" + chapterId + ":" + (block.id || block.block_id || "ordinal-" + String(block.ordinal ?? "unknown"));
 }
 function addPersonalTools(block, host) {
   const panel = element("div", "personal-tools");
