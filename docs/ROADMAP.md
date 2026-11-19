@@ -21,7 +21,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial provider-neutral knowledge-unit, claim and relationship persistence.\n- [ ] Automated topic/concept discovery and claim extraction.
 - [x] Reviewed claim/evidence links with conservative publication gating.\n- [ ] Semantic relevance verifier and contradiction-scope analysis.
 - [ ] Knowledge graph and contradiction handling.
-- [ ] Structured textbook composition.
+- [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).\n- [ ] Deterministic topic-to-chapter outline composition and claim placement.
 - [ ] PDF, DOCX, HTML and Markdown exporters.
 
 ## Applications
