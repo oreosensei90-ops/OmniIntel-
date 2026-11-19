@@ -259,7 +259,7 @@ def test_accepted_visual_contradiction_blocks_textbook_publication(tmp_path: Pat
             """INSERT INTO visual_claim_verifications
                (id,source_id,claim_id,visual_event_id,description_id,transcript_segment_id,
                 adapter_name,adapter_version,model_id,verdict,rationale,review_state,created_at)
-               VALUES(?,?,?,?,NULL,?,?,?,?,?,'CONTRADICTS',?,'NEEDS_REVIEW',?)""",
+               VALUES(?,?,?,?,?,NULL,?,?,?,'CONTRADICTS',?,'NEEDS_REVIEW',?)""",
             (verification_id,imported.source_id,claim_id,event_id,description_id,
              "test","1","test-model","The graph direction contradicts the claim.",now),
         )
