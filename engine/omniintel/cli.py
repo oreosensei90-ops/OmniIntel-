@@ -63,6 +63,7 @@ def main() -> None:
     build_document_knowledge.add_argument("database", type=Path)
     build_document_knowledge.add_argument("source_id")
     build_document_knowledge.add_argument("--include-unreviewed", action="store_true")
+    build_document_knowledge.add_argument("--max-total-chars", type=int, default=5000000)
     ocr_pdf_cmd = sub.add_parser("ocr-pdf", help="OCR image-only pages in a registered local PDF")
     ocr_pdf_cmd.add_argument("database", type=Path)
     ocr_pdf_cmd.add_argument("asset_dir", type=Path)
@@ -194,6 +195,7 @@ def main() -> None:
         result = create_knowledge_candidates_from_document_elements(
             args.database,args.source_id,
             accepted_elements_only=not args.include_unreviewed,
+            max_total_chars=args.max_total_chars,
         )
         print(json.dumps({
             "source_id": result.source_id,
