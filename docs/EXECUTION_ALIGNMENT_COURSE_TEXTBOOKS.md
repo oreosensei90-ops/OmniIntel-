@@ -60,4 +60,4 @@ Run only after reviewing the plan and stage list:
 omniintel execute-plan ./omniintel.db ./omniintel-assets ./plan.json ./stages.json --approve
 ```
 
-This CLI does not yet execute ASR, OCR, PDF extraction or video frame sampling. Those require separately implemented and tested local adapters. A process crash between source creation and asset registration can leave an empty source record; the current coordinator records stage checkpoints, but crash-atomic multi-record source registration is still a hardening item.
+This CLI does not yet execute ASR, OCR, PDF extraction or video frame sampling. Those require separately implemented and tested local adapters. Before registration, the coordinator durably reserves a UUIDv7 source ID keyed by plan, stage and path/content identity. Retrying after interruption reuses that ID; source creation and content-addressed asset attachment are idempotent, so a crash between those operations can resume without creating a duplicate source. The reservation is a durable intent record, not a claim that SQLite and filesystem writes form one cross-resource transaction.
