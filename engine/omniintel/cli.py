@@ -62,6 +62,8 @@ def main() -> None:
     transcribe_wav.add_argument("--device", default="cpu")
     transcribe_wav.add_argument("--compute-type", default="int8")
     transcribe_wav.add_argument("--threads", type=int, default=4)
+    transcribe_wav.add_argument("--beam-size", type=int, default=5)
+    transcribe_wav.add_argument("--vad", action="store_true", help="Enable VAD filtering; may omit quiet lecture speech")
     transcribe_wav.add_argument("--language", default=None)
     transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
     probe_media = sub.add_parser("probe-media", help="Inspect a registered local audio/video asset with ffprobe")
@@ -197,6 +199,7 @@ def main() -> None:
         adapter = FasterWhisperAdapter(
             model_id=args.model,device=args.device,
             compute_type=args.compute_type,cpu_threads=args.threads,
+            beam_size=args.beam_size,vad_filter=args.vad,
             allow_model_download=args.allow_model_download,
         )
         result = run_wav_transcription(
