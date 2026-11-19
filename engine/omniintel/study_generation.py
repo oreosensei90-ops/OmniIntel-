@@ -70,7 +70,7 @@ def _study_schema() -> dict[str, Any]:
 def _validate_study_guide(payload: Any, allowed_evidence_ids: set[str]) -> dict[str, Any]:
     """Strict structural and citation validation; citations still require human review."""
     if not isinstance(payload, dict):
-        raise ValueError("Study guide must be a JSON object")
+        raise TypeError("Study guide must be a JSON object")
     required = {"chapter_summary", "summary_evidence_ids", *_ALLOWED_COLLECTIONS}
     if set(payload) != required:
         raise ValueError("Study guide has missing or unexpected top-level fields")
@@ -150,7 +150,7 @@ def _ollama_generate(model: str, prompt: str, *, timeout_seconds: int = 180) -> 
             "the selected model; no external model endpoint will be contacted."
         ) from error
     if not isinstance(result, dict) or not isinstance(result.get("message"), dict):
-        raise RuntimeError("Local model returned an invalid response envelope")
+        raise TypeError("Local model returned an invalid response envelope")
     try:
         return json.loads(result["message"]["content"])
     except (KeyError, TypeError, json.JSONDecodeError) as error:
@@ -284,7 +284,6 @@ def generate_study_guide(
     ):
         for item in items:
             evidence_ids = item["evidence_ids"]
-            evidence_text = " ".join(reference_map[item_id]["content"] for item_id in evidence_ids)
             kind = {
                 "concepts": ("concept", "PARAGRAPH", "EXPLANATION"),
                 "glossary": ("definition", "DEFINITION", "EXPLANATION"),
