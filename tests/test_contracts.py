@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
