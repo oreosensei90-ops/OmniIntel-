@@ -59,6 +59,11 @@ def main() -> None:
     extract_pdf_cmd.add_argument("--max-pages", type=int, default=500)
     extract_pdf_cmd.add_argument("--max-chars-per-page", type=int, default=100_000)
     extract_pdf_cmd.add_argument("--max-total-chars", type=int, default=5_000_000)
+    review_knowledge_unit = sub.add_parser("review-knowledge-unit", help="Review a source-linked knowledge candidate")
+    review_knowledge_unit.add_argument("database", type=Path)
+    review_knowledge_unit.add_argument("unit_id")
+    review_knowledge_unit.add_argument("status", choices=["DRAFT","VALIDATED","NEEDS_REVIEW","REJECTED"])
+    review_knowledge_unit.add_argument("--provenance", choices=["EXPLANATION","DERIVED","UNCERTAIN"], required=True)
     build_document_knowledge = sub.add_parser("build-document-knowledge", help="Create draft knowledge units from accepted document elements")
     build_document_knowledge.add_argument("database", type=Path)
     build_document_knowledge.add_argument("source_id")
@@ -189,6 +194,13 @@ def main() -> None:
                 for page in result.pages
             ],
         }, ensure_ascii=False, indent=2))
+    elif args.command == "review-knowledge-unit":
+        from .knowledge_store import KnowledgeStore
+
+        status = KnowledgeStore(args.database).review_unit(
+            args.unit_id,status=args.status,provenance=args.provenance,
+        )
+        print(json.dumps({"unit_id": args.unit_id,"status": status},indent=2))
     elif args.command == "build-document-knowledge":
         from .document_knowledge import create_knowledge_candidates_from_document_elements
 
