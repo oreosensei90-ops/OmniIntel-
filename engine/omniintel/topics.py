@@ -251,7 +251,7 @@ class TopicStore:
                           er.locator_kind,er.page_number,er.source_asset_id,
                           er.start_ms,er.end_ms,te.relation,te.review_state,
                           te.element_id,de.element_type,de.text_content AS element_text,
-                          de.review_state AS element_review_state
+                          de.review_state AS element_review_state,de.provenance AS element_provenance
                    FROM document_topics t
                    JOIN document_topic_evidence_refs te ON te.topic_id=t.id
                    JOIN evidence_refs er ON er.id=te.evidence_ref_id
