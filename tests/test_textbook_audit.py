@@ -170,3 +170,102 @@ def test_document_topic_composition_builds_page_cited_textbook(tmp_path: Path) -
     assert block["evidence_references"][0]["evidence_ref_id"] == reference_id
     assert block["evidence_references"][0]["page_number"] == 1
 
+
+
+def test_accepted_visual_contradiction_blocks_textbook_publication(tmp_path: Path) -> None:
+    import json
+
+    from omniintel.assets import AssetStore
+    from omniintel.database import connect
+    from omniintel.ids import uuid7
+    from omniintel.knowledge import ClaimEvidenceReferenceInput, ClaimInput
+    from omniintel.knowledge_store import KnowledgeStore
+    from omniintel.models import utc_now
+    from omniintel.video_intelligence import review_visual_record
+    from omniintel.visual_timeline import review_visual_event
+
+    path, imported, store, version, chapter = _book(tmp_path)
+    knowledge = KnowledgeStore(path)
+    claim_id = knowledge.create_claim(ClaimInput("The diagram shows an increasing trend."))
+    link = knowledge.link_evidence_reference(
+        ClaimEvidenceReferenceInput(claim_id, imported.reference_ids[0], "SUPPORTS", 0.99)
+    )
+    assert knowledge.review_evidence_reference_link(link, "ACCEPTED") == "SUPPORTED"
+    block = store.add_block(chapter, BlockInput(
+        "PARAGRAPH", {"text": "The diagram shows an increasing trend."}, "EXPLANATION",
+        review_status="ACCEPTED", claim_id=claim_id,
+    ))
+    store.link_evidence_reference(
+        block, imported.reference_ids[0], relation="SUPPORTS", review_state="ACCEPTED",
+    )
+
+    asset_dir = tmp_path / "assets"
+    assets = AssetStore(path, asset_dir)
+    video = assets.add_bytes(
+        imported.source_id, b"\x00\x00\x00\x18ftypisom" + b"\x00" * 64,
+        role="VIDEO", display_name="source.mp4",
+    )
+    frame_png = (
+        b"\x89PNG\r\n\x1a\n" +
+        __import__("base64").b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZ9sAAAAASUVORK5CYII="
+        )
+    )
+    frame = assets.add_bytes(
+        imported.source_id, frame_png, role="FRAME", display_name="frame.png",
+    )
+    extraction_id, frame_id, event_id = uuid7(), uuid7(), uuid7()
+    now = utc_now()
+    with connect(path) as conn:
+        conn.execute(
+            """INSERT INTO frame_extractions
+               (id,source_asset_id,source_sha256,config_sha256,tool_name,tool_version,
+                video_stream_index,sample_interval_ms,frame_count,total_bytes,total_pixels,
+                metadata_json,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (extraction_id,video.id,video.sha256,"a"*64,"ffmpeg","test",0,1000,1,
+             frame.byte_size,1,json.dumps({}),now),
+        )
+        conn.execute(
+            """INSERT INTO video_frames
+               (id,extraction_id,source_asset_id,frame_asset_id,frame_index,timestamp_ms,
+                width,height,byte_size,sha256,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (frame_id,extraction_id,video.id,frame.id,0,0,1,1,frame.byte_size,frame.sha256,now),
+        )
+        conn.execute(
+            """INSERT INTO visual_events
+               (id,source_id,source_asset_id,frame_id,timestamp_ms,event_kind,review_state,created_at)
+               VALUES(?,?,?,?,?,'FRAME_SAMPLE','NEEDS_REVIEW',?)""",
+            (event_id,imported.source_id,video.id,frame_id,0,now),
+        )
+    assert review_visual_event(path,event_id,"ACCEPTED") == "ACCEPTED"
+
+    description_id = uuid7()
+    with connect(path) as conn:
+        conn.execute(
+            """INSERT INTO visual_descriptions
+               (id,source_id,visual_event_id,adapter_name,adapter_version,model_id,
+                prompt_sha256,description,review_state,created_at)
+               VALUES(?,?,?,?,?,?,?,?, 'NEEDS_REVIEW',?)""",
+            (description_id,imported.source_id,event_id,"test","1","test-model","b"*64,
+             "A downward sloping graph.",now),
+        )
+    assert review_visual_record(path,"visual_descriptions",description_id,"ACCEPTED") == "ACCEPTED"
+
+    verification_id = uuid7()
+    with connect(path) as conn:
+        conn.execute(
+            """INSERT INTO visual_claim_verifications
+               (id,source_id,claim_id,visual_event_id,description_id,transcript_segment_id,
+                adapter_name,adapter_version,model_id,verdict,rationale,review_state,created_at)
+               VALUES(?,?,?,?,NULL,?,?,?,?,?,'CONTRADICTS',?,'NEEDS_REVIEW',?)""",
+            (verification_id,imported.source_id,claim_id,event_id,description_id,
+             "test","1","test-model","The graph direction contradicts the claim.",now),
+        )
+    assert review_visual_record(
+        path,"visual_claim_verifications",verification_id,"ACCEPTED"
+    ) == "ACCEPTED"
+    report = TextbookPublicationAuditor(path).audit(version)
+    assert not report.ready
+    assert any(item.code == "CLAIM_VISUALLY_CONTRADICTED" for item in report.findings)
