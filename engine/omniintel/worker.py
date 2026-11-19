@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import socket
 import time
 from pathlib import Path
 
-from .jobs import JobQueue
+from .jobs import JobQueue, LeaseLost
 from .remote_generation import generate_openai_study_json
 from .study_generation import generate_study_guide
 from .youtube_pipeline import process_youtube_video
@@ -62,8 +61,8 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 f"{type(error).__name__}: {error}",
                 retry_delay_ms=0,
             )
-        except Exception:
-            pass
+        except LeaseLost:
+            return True
     return True
 
 

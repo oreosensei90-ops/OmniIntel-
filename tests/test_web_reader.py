@@ -31,7 +31,6 @@ def test_service_worker_only_caches_static_shell_not_user_documents() -> None:
 
 def test_online_client_uses_only_user_configured_api_and_never_embeds_provider_keys() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
-    html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert "fetch(base + path" in app
     assert "apiBase()" in app
     assert 'sessionStorage.setItem("omniintel-api-token", token)' in app

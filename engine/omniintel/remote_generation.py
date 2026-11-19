@@ -71,5 +71,5 @@ def generate_openai_study_json(model: str, prompt: str) -> dict[str, Any]:
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
         raise RuntimeError("OpenAI API did not return the expected structured study guide") from error
     if not isinstance(parsed, dict):
-        raise RuntimeError("OpenAI API returned a non-object study guide")
+        raise TypeError("OpenAI API returned a non-object study guide")
     return parsed
