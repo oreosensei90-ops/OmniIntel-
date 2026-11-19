@@ -3,6 +3,7 @@ from pathlib import Path
 from omniintel.alignment import AlignmentStore, estimate_offset
 from omniintel.collections import CollectionStore
 from omniintel.course_textbook import CourseTextbookStore
+from omniintel.database import connect
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.reader import SynchronizedReader
 from omniintel.store import OmniIntelStore
@@ -67,3 +68,29 @@ def test_reader_rejects_foreign_session_source(tmp_path: Path) -> None:
     with pytest.raises(ReaderError,match="not in the course"):
         reader.save_position("session",version,anchor_source_id=foreign.source_id,
                              current_source_id=source.source_id,position_ms=0)
+
+
+def test_reader_fails_closed_on_inconsistent_accepted_alignment_cycle(tmp_path: Path) -> None:
+    db=tmp_path/"cycle.sqlite"
+    a,b,c=(add_source(db,name) for name in ("A","B","C"))
+    collection=CollectionStore(db).create("Three recordings")
+    for item in (a,b,c):
+        CollectionStore(db).add_source(collection,item.source_id)
+    with connect(db) as conn:
+        for index,(left,right,offset) in enumerate((
+            (a.source_id,b.source_id,100),
+            (a.source_id,c.source_id,500),
+            (b.source_id,c.source_id,100),
+        )):
+            conn.execute(
+                """INSERT INTO source_clock_alignments
+                   (id,collection_id,source_a_id,source_b_id,offset_ms,sample_interval_ms,
+                    correlation,runner_up_correlation,method,algorithm_version,input_hash,
+                    rationale,review_state,created_at)
+                   VALUES(?,?,?,?,?,100,0.95,0.2,'TEST','1',?,'fixture','ACCEPTED','now')""",
+                (f"alignment-{index}",collection,left,right,offset,str(index)*64),
+            )
+    offsets=SynchronizedReader(db)._clock_offsets(collection,a.source_id)
+    assert offsets[a.source_id] is None
+    assert offsets[b.source_id] is None
+    assert offsets[c.source_id] is None
