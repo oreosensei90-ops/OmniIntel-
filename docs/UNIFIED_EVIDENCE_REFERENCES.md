@@ -38,4 +38,4 @@ fails and requires a parser-version bump rather than silently invalidating exist
 
 This is the shared citation-location layer. Claim and textbook relationship tables still use their
 original transcript evidence links; integrating all relationships with the new reference IDs is
-the next migration. The reference layer itself does not assert that a cited passage supports a claim.
+the next migration. Claims and textbook blocks can now link directly to unified evidence references, and their review/publication gates aggregate old transcript links with new native-location links. The reference layer itself does not assert that a cited passage supports a claim.
