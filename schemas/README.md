@@ -23,3 +23,5 @@ JSON Schema Draft 2020-12 is the initial canonical wire-contract format for Pyth
 - `event-envelope.schema.json`: versioned domain event envelope.\n- `knowledge-unit.schema.json`: typed pedagogical knowledge records.\n- `claim.schema.json`: atomic claims with provenance and review status.\n- `claim-evidence.schema.json`: reviewed claim/evidence relationship records.
 
 These schemas describe data contracts; they do not imply that all corresponding application features have been implemented.
+
+- `textbook-block.schema.json`: canonical structured textbook block with provenance and review state.
