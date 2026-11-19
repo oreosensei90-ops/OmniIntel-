@@ -134,6 +134,9 @@ def plan_local_inputs(
             "Confirm whether the selected audio/video files share one recording timeline or need measured alignment."
         )
     if sum(item.modality == "CAPTIONS" for item in inputs) and speech_inputs:
+        questions.append(
+            "Confirm which media source each caption file belongs to; filenames alone do not establish alignment."
+        )
         warnings.append(
             "Captions and media are separate source records; alignment must be validated, not assumed from filenames."
         )
