@@ -189,3 +189,40 @@ def test_topic_evidence_must_overlap_topic_time_range(tmp_path: Path):
         topics.link_evidence(
             TopicEvidenceInput(topic_id, evidence_id, "DEVELOPS")
         )
+
+def test_document_page_reference_can_support_and_contest_claim(tmp_path: Path):
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.evidence_refs import register_document_page_references
+    from omniintel.local_files import import_local_file
+    from omniintel.knowledge import ClaimEvidenceReferenceInput
+
+    pdf = tmp_path / "lecture.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.drawString(72, 720, "Momentum is conserved in an isolated system.")
+    output.showPage()
+    output.save()
+    database = tmp_path / "knowledge.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database, assets, pdf)
+    extraction = extract_pdf(database, assets, imported.asset.id)
+    refs = register_document_page_references(database, extraction.extraction_id)
+    assert refs == extraction.evidence_ref_ids
+
+    store = KnowledgeStore(database)
+    claim = store.create_claim(ClaimInput("Momentum is conserved in an isolated system."))
+    support = store.link_evidence_reference(
+        ClaimEvidenceReferenceInput(claim, refs[0], "SUPPORTS", 0.99)
+    )
+    assert store.review_evidence_reference_link(support, "ACCEPTED") == "SUPPORTED"
+    bundle = store.get_claim_bundle(claim)
+    assert bundle["evidence_references"][0]["page_number"] == 1
+    assert store.publishable_claims()[0]["id"] == claim
+
+    contradiction = store.link_evidence_reference(
+        ClaimEvidenceReferenceInput(claim, refs[0], "CONTRADICTS", 0.8)
+    )
+    assert store.review_evidence_reference_link(contradiction, "ACCEPTED") == "CONTESTED"
+    assert store.publishable_claims() == []
+
