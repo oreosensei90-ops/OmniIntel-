@@ -34,7 +34,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
 - [x] Unified source-bound evidence locator IDs for transcript intervals and PDF pages.
 - [x] Claim and textbook block evidence links support unified references, with review and publication gates spanning both locator types.
-- [x] Initial authenticated online video-to-notes API, durable job submission/status, background worker, YouTube public-caption intake and authorized audio/video upload with FFmpeg + local faster-whisper ASR; Web supports both paths, Android currently supports YouTube URL submission.\n- [ ] Authorized source adapters and platform-specific media acquisition.
+- [x] Initial authenticated online video-to-notes API, durable job submission/status, background worker, YouTube public-caption intake and authorized audio/video upload with FFmpeg + local faster-whisper ASR; Web and Android support both URL and authorized media-upload paths.\n- [ ] Authorized source adapters and platform-specific media acquisition.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [x] Initial local PCM WAV transcription adapter with sequential, content-addressed chunk checkpoints and source-linked timestamp evidence (native Android ASR and transcript versioning pending).
 - [ ] Slide classification, visual topic discovery and semantic scene segmentation.

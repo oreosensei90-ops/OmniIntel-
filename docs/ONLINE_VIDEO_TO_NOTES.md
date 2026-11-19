@@ -49,7 +49,7 @@ The job request accepts `url`, `approve_network`, `approve_ai`, optional `langua
 
 - The hosted YouTube adapter retrieves metadata and public caption sidecars only. It does not download video/audio, bypass DRM, use cookies, or access private captions.
 - The Web client also supports direct user-authorized audio/video upload (maximum 250 MiB). The worker registers the original asset, uses FFmpeg/ffprobe to extract audio, and transcribes it with a preinstalled local faster-whisper/CTranslate2 model. Configure `OMNIINTEL_UPLOAD_DIR`, `OMNIINTEL_ASSET_DIR`, `OMNIINTEL_ASR_MODEL_PATH`, and install FFmpeg/ffprobe on the worker host.
-- When YouTube captions are unavailable, the user can provide an authorized media file through the upload route. The Android client currently submits YouTube URLs; direct media upload is available in the Web client.
+- When YouTube captions are unavailable, the user can provide an authorized media file through the upload route. Both Android and Web clients support direct media upload with explicit upload and AI-processing consent.
 - AI generation is an evidence-cited draft, not a verified answer key. Citation IDs are structurally constrained to supplied source evidence, but semantic entailment, factual correctness, completeness and contradiction resolution still require review.
 - This is a single-token service foundation, not a multi-tenant account/billing system. Production deployment still needs rate limiting, abuse controls, observability, backup/restore, security review and operational monitoring.
 - A server and worker must actually be deployed and configured. The repository does not include a production API hostname or secrets.

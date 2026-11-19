@@ -24,7 +24,7 @@ The app stores the imported reader content on-device in Room v3: sources, chapte
 
 ## Online video → notes
 
-On the library screen, paste a supported YouTube URL, enter the HTTPS OmniIntel API address and server-issued bearer token, and approve both public metadata/caption retrieval and external AI processing. The app submits a durable job, polls its status, downloads the generated reader JSON and imports it directly into Room. The API token remains in the current app session; only the API origin is saved locally. The server must be deployed and configured with its worker, YouTube adapter and AI provider. Videos without retrievable public captions currently fail with an explicit explanation; no DRM or access-control bypass is performed.
+On the library screen, paste a supported YouTube URL, enter the HTTPS OmniIntel API address and server-issued bearer token, and approve both public metadata/caption retrieval and external AI processing. The app submits a durable job, polls its status, downloads the generated reader JSON and imports it directly into Room. The API token remains in the current app session; only the API origin is saved locally. The server must be deployed and configured with its worker, YouTube adapter and AI provider. Videos without retrievable public captions can use the authorized media-upload fallback from the same screen. Choose an audio/video file (up to 250 MiB), approve uploading it to your server and approve AI processing. The worker needs FFmpeg, ffprobe and a preinstalled local faster-whisper model directory. No DRM or access-control bypass is performed.
 
 Online processing requires Android INTERNET permission. Local reading, annotations, playback and backups continue to work offline.
 

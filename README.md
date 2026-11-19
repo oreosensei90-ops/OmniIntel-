@@ -29,7 +29,7 @@ The repository is an actively evolving foundation implementation. The feature br
 - `tests/` — automated tests.
 - `docs/` — architecture, decisions, research and roadmap.
 - `apps/web/` — consent-gated online video-to-AI-notes client plus offline reader, local media playback and notes.
-- `apps/android/` — native Kotlin + Compose client with online API submission/status polling and Room-backed offline library; independent Android CI builds a debug APK.
+- `apps/android/` — native Kotlin + Compose client with consent-gated online URL/media upload, ASR fallback and Room-backed offline library; independent Android CI builds a debug APK.
 
 ## Python development
 

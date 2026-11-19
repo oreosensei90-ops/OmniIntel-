@@ -261,6 +261,8 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var networkApproved by remember { mutableStateOf(false) }
     var aiApproved by remember { mutableStateOf(false) }
     var onlineBusy by remember { mutableStateOf(false) }
+    var uploadUri by remember { mutableStateOf<Uri?>(null) }
+    var uploadConsent by remember { mutableStateOf(false) }
     var annotationBackupMessage by remember { mutableStateOf<String?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
@@ -479,6 +481,16 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 valid
             }.onSuccess { annotationBackupMessage = "Restored or merged $it annotation records. Newer local edits were preserved." }
              .onFailure { annotationBackupMessage = "Restore failed: " + (it.message ?: "invalid backup") }
+        }
+    }
+    val uploadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            uploadUri = uri
+            uploadConsent = false
+            videoImportMessage = "Media selected. Approve upload and AI processing below."
         }
     }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -743,6 +755,71 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                         }
                     }
                 ) { Text(if (onlineBusy) "Processing…" else "Generate video notes online") }
+                Button(
+                    enabled = !onlineBusy,
+                    onClick = { uploadPicker.launch(arrayOf("video/*", "audio/*")) }
+                ) { Text(uploadUri?.lastPathSegment?.let { "Selected media: $it" } ?: "Choose media for transcription") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = uploadConsent, onCheckedChange = { uploadConsent = it })
+                    Text("I authorize uploading this media to my OmniIntel server for transcription.", color = Muted, fontSize = 11.sp)
+                }
+                Button(
+                    enabled = !onlineBusy && uploadUri != null && apiBaseDraft.isNotBlank() &&
+                        apiTokenDraft.isNotBlank() && uploadConsent && aiApproved,
+                    onClick = {
+                        val selectedUri = uploadUri
+                        if (selectedUri != null) {
+                            onlineBusy = true
+                            videoImportMessage = "Uploading media to OmniIntel…"
+                            val apiBase = apiBaseDraft
+                            val apiToken = apiTokenDraft
+                            scope.launch {
+                                try {
+                                    val created = withContext(Dispatchers.IO) {
+                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri)
+                                    }
+                                    val statusPath = created.getString("status_url")
+                                    val jobId = created.getString("job_id")
+                                    videoImportMessage = "Upload accepted · transcribing media · job $jobId"
+                                    var attempts = 0
+                                    var readerJson: String? = null
+                                    while (attempts < 1800 && readerJson == null) {
+                                        delay(2_000)
+                                        val status = withContext(Dispatchers.IO) {
+                                            getRemoteVideoJob(apiBase, apiToken, statusPath)
+                                        }
+                                        when (status.optString("status")) {
+                                            "COMPLETED" -> {
+                                                val result = status.optJSONObject("result")
+                                                    ?: error("The server returned no job result.")
+                                                val reader = result.optJSONObject("reader")
+                                                    ?: error("The server completed without a reader export.")
+                                                readerJson = reader.toString()
+                                            }
+                                            "FAILED" -> error(status.optString("error").ifBlank { "Media transcription failed." })
+                                            else -> {
+                                                val statusText = status.optString("status")
+                                                videoImportMessage = "Transcribing media · $statusText · job $jobId"
+                                            }
+                                        }
+                                        attempts++
+                                    }
+                                    val json = readerJson ?: error("The job is still processing. Check again later.")
+                                    val cached = File(context.cacheDir, "omniintel-media-$jobId.json")
+                                    withContext(Dispatchers.IO) { cached.writeText(json, Charsets.UTF_8) }
+                                    loadBook(Uri.fromFile(cached))
+                                    uploadUri = null
+                                    uploadConsent = false
+                                    videoImportMessage = "AI notes generated. Importing into your on-device library…"
+                                } catch (failure: Throwable) {
+                                    videoImportMessage = failure.message ?: "Media upload or transcription failed."
+                                } finally {
+                                    onlineBusy = false
+                                }
+                            }
+                        }
+                    }
+                ) { Text(if (onlineBusy) "Processing…" else "Upload and generate notes") }
                 if (videoImports.isNotEmpty()) {
                     Text(
                         "VIDEO QUEUE · ${videoImports.size}",
