@@ -56,3 +56,4 @@ class ImportResult:
     source_id: str
     segment_ids: tuple[str, ...]
     evidence_ids: tuple[str, ...]
+    evidence_ref_ids: tuple[str, ...] = ()
