@@ -45,6 +45,19 @@ function renderEvidence(items) {
     if (item.document_page?.text_content) {
       row.append(element("p", "", "Page text: " + item.document_page.text_content.slice(0, 1200)));
     }
+    if (Array.isArray(item.document_elements) && item.document_elements.length) {
+      const structure = element("details", "document-structure");
+      structure.append(element("summary", "", "Page structure · " + item.document_elements.length + " positioned elements"));
+      item.document_elements.slice(0, 20).forEach((part) => {
+        const line = element("p", "document-element");
+        const confidence = Number.isFinite(Number(part.confidence)) ? " · confidence " + Number(part.confidence).toFixed(2) : "";
+        line.append(element("span", "tag", part.element_type || "ELEMENT"),
+          document.createTextNode(" " + (part.text_content || part.content?.text || part.content?.label || "Visual element") +
+            " · " + (part.review_state || "UNREVIEWED") + confidence));
+        structure.append(line);
+      });
+      row.append(structure);
+    }
     details.append(row);
   }
   return details;
