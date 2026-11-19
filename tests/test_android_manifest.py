@@ -109,3 +109,17 @@ def test_android_reader_keeps_existing_book_visible_when_replacement_import_fail
     header = code.split('Text(current.title', 1)[1].split('Spacer(Modifier.height(8.dp))', 1)[0]
     assert "error?.let" in header
     assert "Color(0xFFFF8C82)" in header
+
+
+def test_android_reader_restores_chapter_progress_per_textbook_version() -> None:
+    root = Path(__file__).parents[1]
+    source = root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    gradle = (root / "apps" / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+    code = source.read_text(encoding="utf-8")
+    assert 'androidx.datastore:datastore-preferences:1.1.1' in gradle
+    assert 'preferencesDataStore(name = "omniintel_reader_progress")' in code
+    assert 'intPreferencesKey("chapter:${loadedBook.versionId}")' in code
+    assert "readerProgressStore.data.first()" in code
+    assert "chapterIndex = savedChapter.coerceIn" in code
+    assert "LaunchedEffect(book?.versionId, chapterIndex)" in code
+    assert "preferences[progressKey] = chapterIndex" in code
