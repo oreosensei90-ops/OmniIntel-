@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/document-element.schema.json",
+  "title": "OmniIntel Document Element",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "page_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "evidence_ref_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "element_type": { "enum": ["HEADING","PARAGRAPH","EQUATION","TABLE","FIGURE","CAPTION","LIST_ITEM"] },
+    "ordinal": { "type": "integer", "minimum": 0 },
+    "text_content": { "type": "string" },
+    "content": { "type": "object" },
+    "bbox": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "x0": { "type": "number", "minimum": 0, "maximum": 1 },
+            "y0": { "type": "number", "minimum": 0, "maximum": 1 },
+            "x1": { "type": "number", "minimum": 0, "maximum": 1 },
+            "y1": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["x0","y0","x1","y1"],
+          "additionalProperties": false
+        },
+        { "type": "null" }
+      ]
+    },
+    "asset_id": { "oneOf": [{ "$ref": "common.schema.json#/$defs/uuid7" }, { "type": "null" }] },
+    "confidence": { "type": ["number","null"], "minimum": 0, "maximum": 1 },
+    "provenance": { "enum": ["SOURCE","DERIVED","UNCERTAIN"] },
+    "review_state": { "enum": ["PENDING","ACCEPTED","REJECTED","NEEDS_REVIEW"] },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "required": ["id","page_id","evidence_ref_id","element_type","ordinal","text_content","content","bbox","asset_id","confidence","provenance","review_state","created_at"],
+  "unevaluatedProperties": false
+}
