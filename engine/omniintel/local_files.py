@@ -36,6 +36,7 @@ def import_local_file(
     *,
     title: str | None = None,
     max_bytes: int = 250 * 1024 * 1024,
+    expected_sha256: str | None = None,
 ) -> LocalFileImportResult:
     """Register one explicitly selected local file; never fetch URLs or unpack archives.
 
@@ -71,7 +72,10 @@ def import_local_file(
     try:
         asset = AssetStore(
             database_path, storage_dir, max_bytes=max_bytes
-        ).add_file(source_id, path, role=role, display_name=path.name)
+        ).add_file(
+            source_id,path,role=role,display_name=path.name,
+            expected_sha256=expected_sha256,
+        )
     except Exception:
         store.delete_empty_source(source_id)
         raise
