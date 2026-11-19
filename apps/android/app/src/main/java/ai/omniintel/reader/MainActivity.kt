@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
         val root = JSONObject(raw)
         val version = root.optJSONObject("version") ?: error("Missing textbook version.")
         val versionId = version.optString("id")
-        require(versionId.isNotBlank()) { "Textbook version ID is missing." }
+        require(versionId.isNotBlank() && versionId.length <= 128) { "Textbook version ID is missing or invalid." }
         val sourcesById = mutableMapOf<String, ReaderSource>()
         val sources = root.optJSONArray("sources") ?: error("Missing course sources.")
         require(sources.length() in 1..500) { "Reader export must contain between 1 and 500 sources." }
