@@ -188,7 +188,7 @@ def test_accepted_visual_contradiction_blocks_textbook_publication(tmp_path: Pat
     knowledge = KnowledgeStore(path)
     claim_id = knowledge.create_claim(ClaimInput("The diagram shows an increasing trend."))
     link = knowledge.link_evidence_reference(
-        ClaimEvidenceReferenceInput(claim_id, imported.reference_ids[0], "SUPPORTS", 0.99)
+        ClaimEvidenceReferenceInput(claim_id, imported.evidence_ref_ids[0], "SUPPORTS", 0.99)
     )
     assert knowledge.review_evidence_reference_link(link, "ACCEPTED") == "SUPPORTED"
     block = store.add_block(chapter, BlockInput(
@@ -196,7 +196,7 @@ def test_accepted_visual_contradiction_blocks_textbook_publication(tmp_path: Pat
         review_status="ACCEPTED", claim_id=claim_id,
     ))
     store.link_evidence_reference(
-        block, imported.reference_ids[0], relation="SUPPORTS", review_state="ACCEPTED",
+        block, imported.evidence_ref_ids[0], relation="SUPPORTS", review_state="ACCEPTED",
     )
 
     asset_dir = tmp_path / "assets"
