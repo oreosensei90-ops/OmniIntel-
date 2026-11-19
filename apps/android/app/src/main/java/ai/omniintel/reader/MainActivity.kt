@@ -86,7 +86,11 @@ class MainActivity : ComponentActivity() {
         require(sources.length() in 1..500) { "Reader export must contain between 1 and 500 sources." }
         for (i in 0 until sources.length()) {
             val source = sources.getJSONObject(i)
-            sourceTitles[source.optString("source_id")] = source.optString("title", "Course source")
+            val sourceId = source.optString("source_id")
+            require(sourceId.isNotBlank() && !sourceTitles.containsKey(sourceId)) {
+                "Course source IDs must be non-empty and unique."
+            }
+            sourceTitles[sourceId] = source.optString("title", "Course source")
         }
         val rawChapters = root.optJSONArray("chapters") ?: error("Missing chapters.")
         require(rawChapters.length() in 1..500) { "Reader export must contain between 1 and 500 chapters." }
@@ -100,7 +104,9 @@ class MainActivity : ComponentActivity() {
             require(totalBlocks <= 25000) { "Reader export exceeds the 25,000 block safety limit." }
             val blocks = (0 until rawBlocks.length()).map { j ->
                 val block = rawBlocks.getJSONObject(j)
-                val content = block.optJSONObject("content") ?: JSONObject()
+                val blockType = block.optString("block_type")
+                require(blockType.isNotBlank()) { "A textbook block is missing its type." }
+                val content = block.optJSONObject("content") ?: error("Block content is missing.")
                 val evidenceArray = block.optJSONArray("evidence") ?: error("Block evidence list is missing.")
                 require(evidenceArray.length() <= 100) { "A block exceeds the 100 evidence-reference safety limit." }
                 val evidence = (0 until evidenceArray.length()).map { k ->
@@ -117,6 +123,7 @@ class MainActivity : ComponentActivity() {
                         excerpts.getJSONObject(n).optString("text")
                     }.joinToString(" ")
                     val sourceId = item.optString("source_id")
+                    require(sourceTitles.containsKey(sourceId)) { "Evidence references an unknown course source." }
                     val pageNo = if (page == null || page.isNull("page_number")) null else page.optInt("page_number")
                     val start = if (item.isNull("local_start_ms")) null else item.optLong("local_start_ms")
                     Evidence(
@@ -135,7 +142,7 @@ class MainActivity : ComponentActivity() {
                 }
                 Block(
                     stableId,
-                    block.optString("block_type", "PARAGRAPH"),
+                    blockType,
                     text,
                     block.optString("provenance", "UNSPECIFIED"),
                     evidence
