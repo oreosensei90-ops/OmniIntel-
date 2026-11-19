@@ -2449,6 +2449,63 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ON quality_benchmark_runs(suite_name,created_at);
         """
     ),
+    (
+        "0038_collection_evidence_update_guards",
+        """
+        CREATE TRIGGER source_clock_alignment_update_guard
+        BEFORE UPDATE OF collection_id,source_a_id,source_b_id ON source_clock_alignments
+        WHEN NOT EXISTS(
+            SELECT 1 FROM collection_sources ca
+            JOIN collection_sources cb ON cb.collection_id=ca.collection_id
+            WHERE ca.collection_id=NEW.collection_id
+              AND ca.source_id=NEW.source_a_id AND cb.source_id=NEW.source_b_id
+        )
+        BEGIN SELECT RAISE(ABORT,'both aligned sources must belong to the collection'); END;
+        CREATE TRIGGER course_textbook_chapter_source_update_guard
+        BEFORE UPDATE OF source_id,version_id ON course_textbook_chapters
+        WHEN NEW.source_id IS NOT NULL AND NOT EXISTS(
+            SELECT 1 FROM course_textbooks t JOIN collection_sources cs
+              ON cs.collection_id=t.collection_id
+            WHERE t.id=(SELECT textbook_id FROM course_textbook_versions WHERE id=NEW.version_id)
+              AND cs.source_id=NEW.source_id
+        )
+        BEGIN SELECT RAISE(ABORT,'chapter source must belong to the textbook collection'); END;
+        CREATE TRIGGER course_textbook_evidence_update_guard
+        BEFORE UPDATE OF block_id,evidence_ref_id ON course_textbook_block_evidence
+        WHEN NOT EXISTS(
+            SELECT 1 FROM course_textbook_blocks b
+            JOIN course_textbook_chapters ch ON ch.id=b.chapter_id
+            JOIN course_textbook_versions v ON v.id=ch.version_id
+            JOIN course_textbooks t ON t.id=v.textbook_id
+            JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+            JOIN collection_sources cs ON cs.collection_id=t.collection_id AND cs.source_id=er.source_id
+            WHERE b.id=NEW.block_id
+              AND (ch.source_id IS NULL OR ch.source_id=er.source_id)
+        )
+        BEGIN SELECT RAISE(ABORT,'course textbook evidence must belong to the collection and chapter source'); END;
+        CREATE TRIGGER collection_source_delete_guard
+        BEFORE DELETE ON collection_sources
+        WHEN EXISTS(
+            SELECT 1 FROM source_clock_alignments a
+            WHERE a.collection_id=OLD.collection_id
+              AND (a.source_a_id=OLD.source_id OR a.source_b_id=OLD.source_id)
+        ) OR EXISTS(
+            SELECT 1 FROM course_textbooks t
+            JOIN course_textbook_versions v ON v.textbook_id=t.id
+            JOIN course_textbook_chapters ch ON ch.version_id=v.id
+            WHERE t.collection_id=OLD.collection_id AND ch.source_id=OLD.source_id
+        ) OR EXISTS(
+            SELECT 1 FROM course_textbooks t
+            JOIN course_textbook_versions v ON v.textbook_id=t.id
+            JOIN course_textbook_chapters ch ON ch.version_id=v.id
+            JOIN course_textbook_blocks b ON b.chapter_id=ch.id
+            JOIN course_textbook_block_evidence l ON l.block_id=b.id
+            JOIN evidence_refs er ON er.id=l.evidence_ref_id
+            WHERE t.collection_id=OLD.collection_id AND er.source_id=OLD.source_id
+        )
+        BEGIN SELECT RAISE(ABORT,'collection source is referenced by alignments or course textbook evidence'); END;
+        """
+    ),
 )
  
 class MigrationError(RuntimeError):
