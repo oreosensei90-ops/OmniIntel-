@@ -172,8 +172,28 @@ class CourseTextbookStore:
                 if block["claim_id"]:
                     with connect(self.database_path) as conn:
                         claim=conn.execute("SELECT status FROM claims WHERE id=?",(block["claim_id"],)).fetchone()
+                        claim_refs=conn.execute(
+                            """SELECT evidence_ref_id,relation,review_state FROM claim_evidence_refs
+                               WHERE claim_id=?""",(block["claim_id"],)
+                        ).fetchall()
+                        claim_items=conn.execute(
+                            """SELECT er.id AS evidence_ref_id,ce.relation,ce.review_state
+                               FROM claim_evidence ce JOIN evidence_refs er
+                                 ON er.evidence_item_id=ce.evidence_id
+                               WHERE ce.claim_id=?""",(block["claim_id"],)
+                        ).fetchall()
+                    accepted_claim_support={row["evidence_ref_id"] for row in list(claim_refs)+list(claim_items)
+                                            if row["relation"]=="SUPPORTS" and row["review_state"]=="ACCEPTED"}
+                    accepted_block_support={row["evidence_ref_id"] for row in links
+                                            if row["relation"]=="SUPPORTS" and row["review_state"]=="ACCEPTED"}
+                    claim_contradiction=any(row["relation"]=="CONTRADICTS" and row["review_state"]=="ACCEPTED"
+                                            for row in list(claim_refs)+list(claim_items))
                     if claim is None or claim["status"]!="SUPPORTED":
                         reasons.append("CLAIM_NOT_SUPPORTED")
+                    elif not accepted_claim_support.intersection(accepted_block_support):
+                        reasons.append("CLAIM_SUPPORT_NOT_CARRIED")
+                    if claim_contradiction:
+                        reasons.append("CLAIM_CONTRADICTED")
                 if reasons:
                     findings.append({"block_id":block["id"],"errors":reasons})
                 else:
