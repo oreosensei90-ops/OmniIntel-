@@ -335,3 +335,6 @@ Open \`http://localhost:8080\` and choose \`course-reader.json\`. See [apps/web/
 A separate Kotlin + Jetpack Compose app lives in `apps/android/`. It opens a user-selected reader JSON export through Android's Storage Access Framework, parses it off the main thread with a 50 MiB input cap, and renders chapter content and source evidence. It deliberately requests no network or broad storage permission.
 
 The Android CI workflow builds a debug APK and checks the packaged manifest for network permissions. This is an early reader prototype, not the complete Android application: durable library storage, media playback, annotations, study tools and background processing remain unimplemented.
+
+
+The native Android reader now includes a local Room-backed library catalog for reader exports. It retains Storage Access Framework read access where the document provider permits it, supports reopening/removing saved entries, and does not copy or upload original documents. The catalog stores metadata and document references; full content normalization and annotation migration remain future work.
