@@ -15,7 +15,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Caption/transcript ingestion and timestamp alignment.
 - [ ] Local audio transcription adapter.
 - [ ] Video scene/slide extraction and OCR.
-- [ ] Evidence coverage and uncertainty reports.
+- [x] Deterministic claim/evidence audit and uncertainty counters (initial slice).\n- [ ] Source-level topic coverage, semantic entailment and uncertainty analysis.
 
 ## Knowledge and publishing
 - [x] Initial provider-neutral knowledge-unit, claim and relationship persistence.\n- [ ] Automated topic/concept discovery and claim extraction.
