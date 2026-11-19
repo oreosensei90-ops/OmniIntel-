@@ -27,7 +27,8 @@ def test_android_reader_uses_storage_access_framework_without_broad_storage_perm
 def test_android_reader_bounds_untrusted_json_structure_and_deduplicates_block_ids() -> None:
     source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
     code = source.read_text(encoding="utf-8")
-    assert "size <= 50 * 1024 * 1024" in code
+    assert "MAX_IMPORT_BYTES = 50L * 1024L * 1024L" in code
+    assert "size <= MAX_IMPORT_BYTES" in code
     assert "sources.length() in 1..500" in code
     assert "rawChapters.length() in 1..500" in code
     assert "totalBlocks <= 25000" in code
