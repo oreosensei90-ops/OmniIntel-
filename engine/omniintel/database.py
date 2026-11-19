@@ -435,6 +435,60 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         );
         CREATE INDEX idx_source_assets_source ON source_assets(source_id,role,created_at);
         """
+    ),
+    (
+        "0010_textbook_asset_links",
+        """
+        CREATE TABLE block_assets (
+            id TEXT PRIMARY KEY,
+            block_id TEXT NOT NULL REFERENCES chapter_blocks(id) ON DELETE RESTRICT,
+            asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+            ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal >= 0),
+            caption TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(block_id,asset_id),
+            UNIQUE(block_id,ordinal)
+        );
+        CREATE INDEX idx_block_assets_block ON block_assets(block_id,ordinal);
+        CREATE TRIGGER block_asset_validate_source_insert
+        BEFORE INSERT ON block_assets
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks b
+                JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                JOIN textbook_versions v ON v.id=ch.version_id
+                JOIN textbooks t ON t.id=v.textbook_id
+                JOIN source_assets sa ON sa.id=NEW.asset_id
+                JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
+                WHERE b.id=NEW.block_id AND t.source_id=sa.source_id
+                  AND b.block_type IN ('IMAGE','DIAGRAM')
+                  AND ab.media_type LIKE 'image/%'
+                  AND (
+                    (b.block_type='IMAGE' AND sa.role IN ('THUMBNAIL','FRAME','SLIDE','DIAGRAM'))
+                    OR (b.block_type='DIAGRAM' AND sa.role IN ('DIAGRAM','FRAME','SLIDE'))
+                  )
+            ) THEN RAISE(ABORT,'textbook asset must be a compatible image from the same source') END;
+        END;
+        CREATE TRIGGER block_asset_validate_source_update
+        BEFORE UPDATE OF block_id,asset_id ON block_assets
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks b
+                JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                JOIN textbook_versions v ON v.id=ch.version_id
+                JOIN textbooks t ON t.id=v.textbook_id
+                JOIN source_assets sa ON sa.id=NEW.asset_id
+                JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
+                WHERE b.id=NEW.block_id AND t.source_id=sa.source_id
+                  AND b.block_type IN ('IMAGE','DIAGRAM')
+                  AND ab.media_type LIKE 'image/%'
+                  AND (
+                    (b.block_type='IMAGE' AND sa.role IN ('THUMBNAIL','FRAME','SLIDE','DIAGRAM'))
+                    OR (b.block_type='DIAGRAM' AND sa.role IN ('DIAGRAM','FRAME','SLIDE'))
+                  )
+            ) THEN RAISE(ABORT,'textbook asset must be a compatible image from the same source') END;
+        END;
+        """
     )
 )
  
