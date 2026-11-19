@@ -48,7 +48,7 @@ def test_source_contract_accepts_valid_source_and_rejects_unknown_fields():
     assert not validator.is_valid(source)
 
 
-def test_transcript_contract_rejects_nonpositive_interval():
+def test_transcript_contract_rejects_nonpositive_end_timestamp():
     validator = validator_for("transcript-segment.schema.json")
     segment = {
         "id": "0190f2a1-1234-7123-8123-123456789abc",
@@ -60,7 +60,7 @@ def test_transcript_contract_rejects_nonpositive_interval():
         "source_id": "0190f2a1-1234-7123-8123-123456789abd",
         "text": "Hello world",
         "start_ms": 500,
-        "end_ms": 400,
+        "end_ms": 0,
         "language": "en",
         "speaker_id": None,
         "origin": "caption",
