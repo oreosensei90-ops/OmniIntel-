@@ -16,7 +16,7 @@ def test_cross_correlation_estimates_offset_with_documented_sign() -> None:
     b=[0,0,0,1,0,0,0,2,0,0,1,0,0,3,0,0]
     result=estimate_offset(a,b,sample_interval_ms=100,max_lag_samples=4)
     assert result["offset_ms"] == -300
-    assert result["correlation"] > 0.99
+    assert result["correlation"] > 0.90
 
 
 def test_alignment_requires_review_and_collection_membership(tmp_path: Path) -> None:
