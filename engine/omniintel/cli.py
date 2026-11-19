@@ -70,6 +70,11 @@ def main() -> None:
     search_pages.add_argument("database", type=Path)
     search_pages.add_argument("query")
     search_pages.add_argument("--limit", type=int, default=20)
+    compose_document = sub.add_parser("compose-document-textbook", help="Compose a draft textbook from accepted document topics and claims")
+    compose_document.add_argument("database", type=Path)
+    compose_document.add_argument("source_id")
+    compose_document.add_argument("title")
+    compose_document.add_argument("--version-title", default="Draft 1")
     document_outline = sub.add_parser("document-outline", help="Show the reviewed page-native topic outline for a document source")
     document_outline.add_argument("database", type=Path)
     document_outline.add_argument("source_id")
@@ -164,6 +169,13 @@ def main() -> None:
 
         results = search_document_pages(args.database, args.query, limit=args.limit)
         print(json.dumps(results, ensure_ascii=False, indent=2))
+    elif args.command == "compose-document-textbook":
+        from .textbook import TextbookStore
+
+        version_id = TextbookStore(args.database).compose_from_accepted_document_topics(
+            args.source_id,args.title,version_title=args.version_title,
+        )
+        print(json.dumps({"version_id": version_id}, indent=2))
     elif args.command == "document-outline":
         from .topics import TopicStore
 
