@@ -13,7 +13,6 @@ import subprocess
 import tempfile
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 from typing import Any
 
 from .assets import AssetStore
