@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .store import OmniIntelStore
 from .textbook_audit import TextbookPublicationAuditor
+from .pdf_export import TextbookPDFExporter
 
 
 def main() -> None:
@@ -20,6 +21,11 @@ def main() -> None:
     audit = sub.add_parser("audit-textbook", help="Check whether a textbook version passes publication gates")
     audit.add_argument("database", type=Path)
     audit.add_argument("version_id")
+    export_pdf = sub.add_parser("export-pdf", help="Export a publication-ready textbook version to PDF")
+    export_pdf.add_argument("database", type=Path)
+    export_pdf.add_argument("version_id")
+    export_pdf.add_argument("output", type=Path)
+    export_pdf.add_argument("--font", type=Path, default=None, help="Unicode TTF font, required for scripts not covered by built-in fonts")
     args = parser.parse_args()
     if args.command == "init":
         OmniIntelStore(args.database)
@@ -37,3 +43,8 @@ def main() -> None:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
         if not report.ready:
             raise SystemExit(1)
+    elif args.command == "export-pdf":
+        output = TextbookPDFExporter(args.database).export(
+            args.version_id, args.output, font_path=args.font
+        )
+        print(f"Exported PDF: {output}")
