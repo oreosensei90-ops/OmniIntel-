@@ -364,7 +364,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
-                    singleLine = true, label = { Text("Search this chapter") }
+                    singleLine = true, label = { Text("Search all chapters") }
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }, enabled = chapterIndex > 0) { Text("Previous") }
@@ -373,17 +373,24 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Text("CHAPTER ${chapterIndex + 1} / ${current.chapters.size}", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
                 Text(current.chapters[chapterIndex].title, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
             }
-            val blocks = current.chapters[chapterIndex].blocks.filter { block ->
-                query.isBlank() || block.text.contains(query, true) ||
-                    block.evidence.any { it.excerpt.contains(query, true) || it.source.contains(query, true) }
+            val blocks: List<Pair<String, Block>> = if (query.isBlank()) {
+                current.chapters[chapterIndex].blocks.map { current.chapters[chapterIndex].title to it }
+            } else {
+                current.chapters.flatMap { chapter ->
+                    chapter.blocks.filter { block ->
+                        block.text.contains(query, true) ||
+                            block.evidence.any { it.excerpt.contains(query, true) || it.source.contains(query, true) }
+                    }.map { chapter.title to it }
+                }
             }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(blocks, key = { it.id }) { block ->
+                items(blocks, key = { it.second.id }) { (chapterTitle, block) ->
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                            if (query.isNotBlank()) Text(chapterTitle, color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
                             Text(block.text, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 7.dp))
                             Text("PROVENANCE · ${block.provenance}", color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 8.dp))
@@ -416,7 +423,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                         }
                     }
                 }
-                if (blocks.isEmpty()) item { Text("No matching blocks in this chapter.", color = Muted) }
+                if (blocks.isEmpty()) item { Text("No matching blocks in this textbook.", color = Muted) }
             }
         }
     }
