@@ -4,7 +4,7 @@ import pytest
 
 from omniintel.quality_eval import (
     QualityBenchmarkStore, error_rate, evaluate_suite, section_coverage,
-    set_precision_recall, timestamp_mae_ms,
+    set_precision_recall, timestamp_mae_ms, timestamp_match_counts,
 )
 
 
@@ -22,6 +22,9 @@ def test_precision_recall_coverage_and_timing() -> None:
     assert section_coverage(["one","two"],["one"])["recall"]==0.5
     assert timestamp_mae_ms([(0,100),(200,300)],[(10,110),(190,310)])==10
     assert timestamp_mae_ms([],[]) is None
+    assert timestamp_match_counts([(0,100),(200,300)],[(10,110)])=={
+        "matched_segments":1,"missing_hypothesis_segments":1,"extra_hypothesis_segments":0,
+    }
 
 
 def test_suite_aggregates_and_persists_versioned_report(tmp_path: Path) -> None:
