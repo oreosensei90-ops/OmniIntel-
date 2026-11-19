@@ -158,7 +158,7 @@ def _config_hash(
         "max_chunk_bytes": max_chunk_bytes,
         "time_offset_ms": time_offset_ms,
         "timestamp_unit": "milliseconds",
-        "schema_version": 1,
+        "schema_version": 2,
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -291,7 +291,7 @@ def _get_or_create_run(
         timeline_end_ms = time_offset_ms + duration_ms
         if source["duration_ms"] is not None and timeline_end_ms > source["duration_ms"] + 1_000:
             raise ValueError("WAV audio extends beyond the registered source timeline")
-        if source["duration_ms"] is None:
+        if source["duration_ms"] is None or timeline_end_ms > source["duration_ms"]:
             conn.execute("UPDATE sources SET duration_ms=? WHERE id=?", (timeline_end_ms, source_id))
         run_id = uuid7()
         conn.execute(
@@ -512,7 +512,7 @@ def run_wav_transcription(
 
     A rerun with the same source bytes, adapter identity and settings reuses
     completed chunks. The original asset is never modified. This first adapter
-    accepts WAV only; compressed audio/video decoding is a separate stage.
+    accepts normalized PCM WAV; local compressed-media decoding is a separate stage.
     """
     if not 1 <= chunk_seconds <= 600:
         raise ValueError("chunk_seconds must be between 1 and 600")
