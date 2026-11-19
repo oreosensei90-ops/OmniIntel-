@@ -69,7 +69,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
 - [x] First interactive Web and Android reader UIs with chapter navigation and search; Web also has local source playback, notes and bookmarks, while Android supports source-specific local media playback and evidence jumps.
-- [ ] Android Room-backed library, persistent annotations/bookmarks, background media controls, shared offline library and cross-device search.
+- [x] Initial Android Room-backed offline library catalog with persistable SAF document references, reopen/remove actions and local metadata.
+- [ ] Normalize textbook chapters/blocks and annotations into Room; add database migrations, paragraph-level resume, background media controls, library-wide FTS and optional cross-device sync.
 - [ ] Flashcards, practice and study planning.
 
 ## Intelligence and operations
