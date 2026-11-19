@@ -152,7 +152,7 @@ class TesseractOCR:
 
 def _validate_ocr_result(result: OCRResult) -> None:
     if not isinstance(result.text,str):
-        raise ValueError("OCR adapter text output must be a string")
+        raise TypeError("OCR adapter text output must be a string")
     if result.mean_confidence is not None and (
         not math.isfinite(result.mean_confidence)
         or not 0 <= result.mean_confidence <= 100
