@@ -34,3 +34,10 @@ These are user-supplied research leads, not approved dependencies or endorsement
 - Maintenance activity and reproducibility.
 
 No source code is approved for copying merely because it appears in this register.
+
+
+## Additional GitHub discovery topics
+- https://github.com/topics/ai-learning-assistant
+- https://github.com/topics/ai-note-taking-app
+
+These topic pages are broad discovery indexes. Select repositories for deeper review based on relevance to OmniIntel, source availability, maintenance, security, architecture and verified licensing. Topic membership alone is not evidence of quality or permission to reuse code.
