@@ -158,6 +158,7 @@ def test_execute_plan_cli_requires_approval_and_registers_local_source(tmp_path:
 
     from omniintel.input_plan import plan_local_inputs
     from omniintel.database import connect
+    from omniintel.execution import PlanExecutionError
 
     wav=tmp_path/"lesson.wav"
     with wave.open(str(wav),"wb") as handle:
@@ -180,7 +181,7 @@ def test_execute_plan_cli_requires_approval_and_registers_local_source(tmp_path:
         "sys.argv",["omniintel","execute-plan",str(db),str(assets),
                     str(plan_path),str(stages_path)],
     )
-    with pytest.raises(Exception,match="approval"):
+    with pytest.raises(PlanExecutionError,match="approval"):
         main()
     with connect(db) as conn:
         assert conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]==0
