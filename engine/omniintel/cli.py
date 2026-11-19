@@ -63,6 +63,13 @@ def main() -> None:
     transcribe_wav.add_argument("--threads", type=int, default=4)
     transcribe_wav.add_argument("--language", default=None)
     transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
+    probe_media = sub.add_parser("probe-media", help="Inspect a registered local audio/video asset with ffprobe")
+    probe_media.add_argument("database", type=Path)
+    probe_media.add_argument("asset_dir", type=Path)
+    probe_media.add_argument("asset_id")
+    probe_media.add_argument("--timeout", type=float, default=30.0)
+    probe_media.add_argument("--max-streams", type=int, default=32)
+    probe_media.add_argument("--max-output-bytes", type=int, default=1000000)
     extract_pdf_cmd = sub.add_parser("extract-pdf", help="Extract bounded page text from an ingested local PDF asset")
     extract_pdf_cmd.add_argument("database", type=Path)
     extract_pdf_cmd.add_argument("asset_dir", type=Path)
@@ -202,6 +209,15 @@ def main() -> None:
             "reused_chunks":result.reused_chunks,
             "processed_chunks":result.processed_chunks,
         },ensure_ascii=False,indent=2))
+    elif args.command == "probe-media":
+        from .media_probe import media_probe_dict, probe_local_media
+
+        result = probe_local_media(
+            args.database,args.asset_dir,args.asset_id,
+            timeout_seconds=args.timeout,max_streams=args.max_streams,
+            max_output_bytes=args.max_output_bytes,
+        )
+        print(json.dumps(media_probe_dict(result),ensure_ascii=False,indent=2))
     elif args.command == "extract-pdf":
         from .document_pdf import extract_pdf
 
