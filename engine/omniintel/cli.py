@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 from pathlib import Path
 
 from .store import OmniIntelStore
+from .textbook_audit import TextbookPublicationAuditor
 
 
 def main() -> None:
@@ -15,6 +17,9 @@ def main() -> None:
     init.add_argument("database", type=Path)
     check = sub.add_parser("check", help="Run SQLite integrity checks")
     check.add_argument("database", type=Path)
+    audit = sub.add_parser("audit-textbook", help="Check whether a textbook version passes publication gates")
+    audit.add_argument("database", type=Path)
+    audit.add_argument("version_id")
     args = parser.parse_args()
     if args.command == "init":
         OmniIntelStore(args.database)
@@ -26,4 +31,9 @@ def main() -> None:
         print(f"integrity_check: {result}")
         print(f"foreign_key_violations: {len(fk)}")
         if result != "ok" or fk:
+            raise SystemExit(1)
+    elif args.command == "audit-textbook":
+        report = TextbookPublicationAuditor(args.database).audit(args.version_id)
+        print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+        if not report.ready:
             raise SystemExit(1)
