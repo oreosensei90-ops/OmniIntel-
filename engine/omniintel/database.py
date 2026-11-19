@@ -1081,6 +1081,198 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0020_document_review_and_search_guards",
+        """
+        CREATE TRIGGER document_elements_fts_update
+        AFTER UPDATE OF text_content,element_type ON document_elements
+        BEGIN
+            DELETE FROM document_elements_fts WHERE element_id=NEW.id;
+            INSERT INTO document_elements_fts(
+                element_id,page_id,evidence_ref_id,element_type,content
+            )
+            SELECT NEW.id,NEW.page_id,NEW.evidence_ref_id,NEW.element_type,NEW.text_content
+            WHERE length(trim(NEW.text_content)) > 0;
+            DELETE FROM evidence_refs_fts WHERE evidence_ref_id=NEW.evidence_ref_id;
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' ||
+                        COALESCE(ocr.text_content,'') || ' ' ||
+                        COALESCE((SELECT group_concat(de.text_content,' ')
+                                  FROM document_elements de
+                                  WHERE de.evidence_ref_id=er.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
+            WHERE er.id=NEW.evidence_ref_id;
+        END;
+        DROP TRIGGER document_ocr_fts_insert;
+        DROP TRIGGER document_ocr_fts_update;
+        DROP TRIGGER document_ocr_fts_delete;
+        CREATE TRIGGER document_ocr_fts_insert
+        AFTER INSERT ON document_ocr_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' || NEW.text_content || ' ' ||
+                        COALESCE((SELECT group_concat(de.text_content,' ')
+                                  FROM document_elements de
+                                  WHERE de.evidence_ref_id=er.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.document_page_id=NEW.page_id;
+        END;
+        CREATE TRIGGER document_ocr_fts_update
+        AFTER UPDATE OF text_content ON document_ocr_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' || NEW.text_content || ' ' ||
+                        COALESCE((SELECT group_concat(de.text_content,' ')
+                                  FROM document_elements de
+                                  WHERE de.evidence_ref_id=er.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.document_page_id=NEW.page_id;
+        END;
+        CREATE TRIGGER document_ocr_fts_delete
+        AFTER DELETE ON document_ocr_pages
+        BEGIN
+            DELETE FROM evidence_refs_fts
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=OLD.page_id
+            );
+            INSERT INTO evidence_refs_fts(evidence_ref_id,content,locator_kind)
+            SELECT er.id,
+                   trim(COALESCE(dp.text_content,'') || ' ' ||
+                        COALESCE((SELECT group_concat(de.text_content,' ')
+                                  FROM document_elements de
+                                  WHERE de.evidence_ref_id=er.id),''))
+                   ,er.locator_kind
+            FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.document_page_id=OLD.page_id;
+        END;
+        CREATE TRIGGER claim_ocr_review_guard_insert
+        BEFORE INSERT ON claim_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before claim evidence link');
+        END;
+        CREATE TRIGGER claim_ocr_review_guard_update
+        BEFORE UPDATE OF review_state,evidence_ref_id ON claim_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before claim evidence link');
+        END;
+        CREATE TRIGGER block_ocr_review_guard_insert
+        BEFORE INSERT ON block_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before block evidence link');
+        END;
+        CREATE TRIGGER block_ocr_review_guard_update
+        BEFORE UPDATE OF review_state,evidence_ref_id ON block_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before block evidence link');
+        END;
+        CREATE TRIGGER topic_ocr_review_guard_insert
+        BEFORE INSERT ON document_topic_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before topic evidence link');
+        END;
+        CREATE TRIGGER topic_ocr_review_guard_update
+        BEFORE UPDATE OF review_state,evidence_ref_id ON document_topic_evidence_refs
+        WHEN NEW.review_state='ACCEPTED' AND EXISTS(
+            SELECT 1 FROM evidence_refs er
+            JOIN document_pages dp ON dp.id=er.document_page_id
+            WHERE er.id=NEW.evidence_ref_id AND length(trim(dp.text_content))=0
+              AND NOT EXISTS(
+                SELECT 1 FROM document_ocr_pages o
+                WHERE o.page_id=dp.id AND o.status='ACCEPTED'
+                  AND length(trim(o.text_content))>0
+              )
+        )
+        BEGIN
+            SELECT RAISE(ABORT,'OCR page must be accepted before topic evidence link');
+        END;
+        CREATE TRIGGER document_ocr_review_demotion
+        AFTER UPDATE OF status ON document_ocr_pages
+        WHEN NEW.status <> 'ACCEPTED'
+        BEGIN
+            UPDATE claim_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+            UPDATE block_evidence_refs SET review_state='NEEDS_REVIEW'
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+            UPDATE document_topic_evidence_refs SET review_state='NEEDS_REVIEW',reviewed_at=NULL
+            WHERE evidence_ref_id IN (
+                SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+            ) AND review_state='ACCEPTED';
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
