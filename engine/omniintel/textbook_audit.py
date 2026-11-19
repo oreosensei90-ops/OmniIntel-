@@ -117,6 +117,17 @@ class TextbookPublicationAuditor:
                    ORDER BY c.id,ce.id""",
                 (version_id,),
             ).fetchall()
+            visual_verification_rows = conn.execute(
+                """SELECT claim_id,verdict,review_state,id
+                   FROM visual_claim_verifications
+                   WHERE claim_id IN (
+                       SELECT claim_id FROM chapter_blocks b
+                       JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                       WHERE ch.version_id=? AND claim_id IS NOT NULL
+                   )
+                   ORDER BY claim_id,id""",
+                (version_id,),
+            ).fetchall()
             claim_reference_rows = conn.execute(
                 """SELECT c.id,c.status,c.provenance,cer.evidence_ref_id,
                           cer.relation,cer.review_state,cer.element_id,
@@ -159,6 +170,11 @@ class TextbookPublicationAuditor:
                 "status": row["status"], "provenance": row["provenance"]
             }
             by_claim.setdefault(row["id"], []).append(dict(row))
+
+        visual_contradictions = {
+            row["claim_id"] for row in visual_verification_rows
+            if row["review_state"] == "ACCEPTED" and row["verdict"] == "CONTRADICTS"
+        }
 
         blocked_ids: set[str] = set()
         if not blocks:
@@ -237,6 +253,9 @@ class TextbookPublicationAuditor:
                     reasons.append(("CLAIM_NOT_SUPPORTED", "Referenced claim is not marked SUPPORTED."))
                 if accepted_contradiction:
                     reasons.append(("CLAIM_CONTRADICTED", "Referenced claim has accepted contradictory evidence."))
+                if claim_id in visual_contradictions:
+                    reasons.append(("CLAIM_VISUALLY_CONTRADICTED",
+                                    "An accepted cross-modal review found visual evidence contradicting this claim."))
                 if not accepted_support_ids or not block_support_ids.intersection(accepted_support_ids):
                     reasons.append(("CLAIM_SUPPORT_NOT_CARRIED",
                                     "Block must carry at least one accepted support link from its claim."))
