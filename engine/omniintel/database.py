@@ -1,10 +1,11 @@
 """SQLite initialization and immutable, checksum-verified migrations."""
 from __future__ import annotations
 
-import hashlib
-import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
+
+import hashlib
+import sqlite3
 
 
 MIGRATIONS: tuple[tuple[str, str], ...] = (
