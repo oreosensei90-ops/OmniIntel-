@@ -22,7 +22,7 @@ def _book(tmp_path: Path):
 
 def test_publication_gate_accepts_reviewed_explanation_block(tmp_path: Path) -> None:
     path, _, store, version, chapter = _book(tmp_path)
-    block = store.add_block(chapter, BlockInput(
+    store.add_block(chapter, BlockInput(
         "PARAGRAPH", {"text": "An explanation."}, "EXPLANATION",
         review_status="ACCEPTED",
     ))
