@@ -27,6 +27,7 @@ JSON Schema Draft 2020-12 is the initial canonical wire-contract format for Pyth
 - `textbook-block.schema.json`: canonical structured textbook block with provenance and review state.
 - `source-clock-alignment.schema.json`: measured, explicitly reviewed cross-source clock offset with a fixed sign convention.
 - `reader-session.schema.json`: durable local course-reader position and source anchors.
+- `reader-export.schema.json`: portable synchronized-reader payload shared by the Web and Android reader prototypes.
 - `execution-plan.schema.json`: read-only local input inventory and network-disabled plan metadata.
 - `quality-benchmark-report.schema.json`: versioned deterministic quality metrics and per-case results.
 
