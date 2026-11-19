@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/textbook-block.schema.json",
+  "title": "OmniIntel Textbook Block",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "chapter_id", "ordinal", "block_type", "content", "provenance", "review_status"],
+  "properties": {
+    "id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "chapter_id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "parent_block_id": {"anyOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]},
+    "ordinal": {"type": "integer", "minimum": 0},
+    "block_type": {"enum": ["HEADING","PARAGRAPH","DEFINITION","EQUATION","TABLE","DIAGRAM","IMAGE","CODE","EXAMPLE","WORKED_SOLUTION","WARNING","MISCONCEPTION","SUMMARY","EXERCISE","SOURCE_REFERENCE","FOOTNOTE"]},
+    "content": {"type": "object"},
+    "provenance": {"enum": ["SOURCE","EXPLANATION","DERIVED","EXTERNAL","UNCERTAIN"]},
+    "review_status": {"enum": ["DRAFT","NEEDS_REVIEW","ACCEPTED","REJECTED"]},
+    "knowledge_unit_id": {"anyOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]},
+    "claim_id": {"anyOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]}
+  }
+}
