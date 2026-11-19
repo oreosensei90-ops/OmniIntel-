@@ -17,7 +17,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial local-file signature classification and source metadata registration (deep content extraction pending).
 - [x] Bounded local ffprobe inspection for registered audio/video assets with immutable stream metadata and idempotent tool-version fingerprints.
 - [x] Bounded local FFmpeg audio extraction to content-addressed mono 16 kHz PCM WAV derivatives, including source stream start-offset provenance.
-- [ ] Video frame/slide extraction and transcript-to-visual grounding.
+- [x] Initial bounded timestamped local video-frame extraction with content-addressed frame assets (semantic scene understanding pending).\n- [x] Source-bound visual frame events and reviewable transcript-time alignment candidates (temporal grounding only; semantic matching pending).
 - [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search.
 - [x] Optional local OCR adapter for image-only pages with pixel/time limits, word boxes, source-owned render assets and mandatory review before evidence acceptance.
 - [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
@@ -26,7 +26,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Authorized source adapters and platform-specific media acquisition.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [x] Initial local PCM WAV transcription adapter with sequential, content-addressed chunk checkpoints and source-linked timestamp evidence (native Android ASR and transcript versioning pending).
-- [ ] Video scene/slide extraction and OCR.
+- [ ] Scene-change detection, slide OCR/classification and visual semantic descriptions.
 - [x] Document structure elements carry page/element citations, review state and same-source guards.
 - [x] Deterministic claim/evidence audit and uncertainty counters (initial slice).
 - [ ] Source-level topic coverage, semantic entailment and uncertainty analysis.
