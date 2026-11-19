@@ -1,3 +1,26 @@
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from omniintel.store import OmniIntelStore
+from omniintel.models import TranscriptImport, TranscriptSegmentInput
+from omniintel.textbook import BlockInput, TextbookStore
+
+
+def sample() -> TranscriptImport:
+    return TranscriptImport(
+        title="Intro to physics",
+        source_uri="imported-transcript://physics-01",
+        language="en",
+        duration_ms=12_000,
+        segments=(
+            TranscriptSegmentInput("Motion describes change in position.", 0, 3_000),
+            TranscriptSegmentInput("Velocity includes direction.", 3_000, 6_000),
+        ),
+    )
+
+
 from omniintel.textbook import BlockInput, TextbookStore
 
 
@@ -57,3 +80,4 @@ def test_textbook_parent_block_must_be_in_same_chapter(tmp_path: Path) -> None:
         store.add_block(chapter_b, BlockInput(
             "PARAGRAPH", {"text": "Body"}, "EXPLANATION", parent_block_id=parent
         ))
+
