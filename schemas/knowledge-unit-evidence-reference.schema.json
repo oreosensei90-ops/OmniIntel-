@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/knowledge-unit-evidence-reference.schema.json",
+  "title": "OmniIntel Knowledge Unit Evidence Reference",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "knowledge_unit_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "evidence_ref_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "element_id": { "oneOf": [{ "$ref": "common.schema.json#/$defs/uuid7" }, { "type": "null" }] },
+    "relation": { "enum": ["SOURCE_EXCERPT","ILLUSTRATES","CONTEXTUALIZES"] },
+    "review_state": { "enum": ["PENDING","ACCEPTED","REJECTED","NEEDS_REVIEW"] },
+    "rationale": { "type": ["string","null"] },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "reviewed_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/timestamp" }, { "type": "null" }] }
+  },
+  "required": ["id","knowledge_unit_id","evidence_ref_id","element_id","relation","review_state","rationale","created_at","reviewed_at"],
+  "unevaluatedProperties": false
+}
