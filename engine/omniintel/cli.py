@@ -69,6 +69,22 @@ def main() -> None:
     course_book_audit = sub.add_parser("course-book-audit", help="Audit a course textbook version for publication")
     course_book_audit.add_argument("database", type=Path)
     course_book_audit.add_argument("version_id")
+    propose_alignment = sub.add_parser("propose-source-alignment", help="Propose a measured source-clock offset from feature-envelope JSON")
+    propose_alignment.add_argument("database", type=Path)
+    propose_alignment.add_argument("collection_id")
+    propose_alignment.add_argument("source_a_id")
+    propose_alignment.add_argument("source_b_id")
+    propose_alignment.add_argument("signals_json", type=Path, help="JSON object with signal_a and signal_b arrays")
+    propose_alignment.add_argument("--sample-interval-ms", type=int, required=True)
+    propose_alignment.add_argument("--max-lag-samples", type=int, required=True)
+    propose_alignment.add_argument("--rationale", required=True)
+    review_alignment = sub.add_parser("review-source-alignment", help="Review a proposed cross-source clock offset")
+    review_alignment.add_argument("database", type=Path)
+    review_alignment.add_argument("alignment_id")
+    review_alignment.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
+    list_alignments = sub.add_parser("list-source-alignments", help="List clock alignment proposals for a course")
+    list_alignments.add_argument("database", type=Path)
+    list_alignments.add_argument("collection_id")
     plan_inputs = sub.add_parser("plan-inputs", help="Create a read-only plan for selected local learning sources")
     plan_inputs.add_argument("paths", nargs="+", type=Path, help="Files or directories selected by the user")
     plan_inputs.add_argument("--recursive", action="store_true", help="Include files in selected directories recursively")
@@ -345,6 +361,33 @@ def main() -> None:
         print(json.dumps(report,ensure_ascii=False,indent=2))
         if not report["publishable"]:
             raise SystemExit(1)
+    elif args.command == "propose-source-alignment":
+        from .alignment import AlignmentStore, estimate_offset
+
+        signals=json.loads(args.signals_json.read_text(encoding="utf-8"))
+        signal_a=signals["signal_a"]
+        signal_b=signals["signal_b"]
+        estimate=estimate_offset(
+            signal_a,signal_b,sample_interval_ms=args.sample_interval_ms,
+            max_lag_samples=args.max_lag_samples,
+        )
+        record_id=AlignmentStore(args.database).propose(
+            args.collection_id,args.source_a_id,args.source_b_id,estimate,
+            rationale=args.rationale,signal_a=signal_a,signal_b=signal_b,
+        )
+        print(json.dumps({"alignment_id":record_id,"review_state":"NEEDS_REVIEW",**estimate},indent=2))
+    elif args.command == "review-source-alignment":
+        from .alignment import AlignmentStore
+
+        state=AlignmentStore(args.database).review(args.alignment_id,args.state)
+        print(json.dumps({"alignment_id":args.alignment_id,"review_state":state},indent=2))
+    elif args.command == "list-source-alignments":
+        from .alignment import AlignmentStore
+
+        print(json.dumps(
+            AlignmentStore(args.database).list(args.collection_id),
+            ensure_ascii=False,indent=2,
+        ))
     if args.command == "plan-inputs":
         from .input_plan import plan_local_inputs
 
