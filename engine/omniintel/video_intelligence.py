@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+from itertools import pairwise
 import json
 import math
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ from typing import Protocol
 
 from .assets import AssetStore
 from .database import connect, migrate
-from .document_ocr import OCRResult, TesseractOCR, _validate_ocr_result
+from .document_ocr import TesseractOCR, _validate_ocr_result
 from .ids import uuid7
 from .models import utc_now
 
@@ -99,7 +100,7 @@ def detect_scene_changes(
     if len(rows)<2:
         return {"source_id":source_id,"comparisons":0,"candidates":[]}
     candidates=[]
-    for previous,current in zip(rows,rows[1:]):
+    for previous,current in pairwise(rows):
         left=store.resolve_path(previous["frame_asset_id"],verify_hash=True).read_bytes()
         right=store.resolve_path(current["frame_asset_id"],verify_hash=True).read_bytes()
         score=normalized_frame_difference(left,right)
