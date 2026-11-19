@@ -283,7 +283,7 @@ def extract_video_frames(
     video_stream_index: int | None = None,
     min_interval_ms: int = 5_000,
     max_frames: int = 500,
-    max_frame_bytes: int = 8 * 1024 * 1024,
+    max_frame_bytes: int = 2 * 1024 * 1024,
     max_total_bytes: int = 256 * 1024 * 1024,
     max_frame_pixels: int = 20_000_000,
     max_total_pixels: int = 100_000_000,
@@ -308,6 +308,8 @@ def extract_video_frames(
         raise ValueError("max_total_pixels must be between max_frame_pixels and 1 billion")
     if not 16 <= max_width <= 8192 or not 16 <= max_height <= 8192:
         raise ValueError("Maximum frame dimensions must be between 16 and 8192")
+    if max_width * max_height > max_frame_pixels:
+        raise ValueError("Maximum frame dimensions exceed the per-frame pixel budget")
 
     store = AssetStore(database_path, asset_dir, max_bytes=max_frame_bytes)
     source_asset = store.get_asset(source_asset_id)
@@ -338,7 +340,8 @@ def extract_video_frames(
     )
     pixels_per_frame_bound = min(source_pixels,max_width * max_height)
     frames_by_pixel_budget = max_total_pixels // pixels_per_frame_bound
-    effective_max_frames = min(max_frames,frames_by_pixel_budget)
+    frames_by_byte_budget = max_total_bytes // max_frame_bytes
+    effective_max_frames = min(max_frames,frames_by_pixel_budget,frames_by_byte_budget)
     if effective_max_frames < 1:
         raise ValueError("Total pixel budget cannot hold one sampled frame")
     sample_interval_ms = max(
