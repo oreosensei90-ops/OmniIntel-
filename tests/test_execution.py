@@ -151,3 +151,41 @@ def test_registration_stage_does_not_misclassify_caption_files(tmp_path: Path) -
             plan,[{"stage":"REGISTER_SOURCE","input_indices":[0]}],
             user_approved=True,handlers={"REGISTER_SOURCE":lambda *_:{}},
         )
+
+
+def test_interrupted_registration_reuses_source_and_asset_on_retry(tmp_path: Path) -> None:
+    import hashlib
+
+    from omniintel.database import connect
+    from omniintel.input_plan import plan_local_inputs
+    from omniintel.local_files import import_local_file
+
+    path=tmp_path/"lecture.pdf"
+    path.write_bytes(b"%PDF-1.7\n% retry-safe fixture\n")
+    plan=plan_local_inputs([path]).to_dict()
+    executor=PlanExecutor(tmp_path/"retry-safe.sqlite")
+    calls=[]
+
+    def register(paths,context):
+        for selected,expected in zip(paths,context["expected_sha256"],strict=True):
+            effect=hashlib.sha256((expected+"\\0"+str(selected.resolve())).encode()).hexdigest()
+            source_id=executor.reserve_source_id(context["plan_id"],context["stage_key"],effect)
+            imported=import_local_file(
+                tmp_path/"retry-safe.sqlite",tmp_path/"assets",selected,
+                expected_sha256=expected,source_id=source_id,
+            )
+            calls.append(imported.source_id)
+        if len(calls)==1:
+            raise RuntimeError("simulated interruption after durable source import")
+        return {"source_ids":calls}
+
+    stages=[{"stage":"REGISTER_SOURCE","input_indices":[0]}]
+    handlers={"REGISTER_SOURCE":register}
+    with pytest.raises(RuntimeError,match="simulated interruption"):
+        executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
+    resumed=executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
+    assert resumed["status"]=="COMPLETED"
+    assert len(set(calls))==1
+    with connect(tmp_path/"retry-safe.sqlite") as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]==1
+        assert conn.execute("SELECT COUNT(*) FROM source_assets").fetchone()[0]==1
