@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from omniintel.captions import parse_caption_text
@@ -8,6 +10,7 @@ from omniintel.youtube_pipeline import (
     compose_transcript_textbook,
     normalize_youtube_url,
     compose_registered_source,
+    process_youtube_queue,
 )
 
 
@@ -105,3 +108,63 @@ Local audio transcription remains available offline.
     assert result["source"]["id"] == imported.source_id
     assert result["version"]["source_id"] == imported.source_id
     assert result["pipeline"]["transcript_origin"] == "caption"
+
+
+
+def test_android_queue_handoff_processes_each_video_and_records_failures(tmp_path, monkeypatch):
+    import omniintel.youtube_pipeline as pipeline
+
+    queue = tmp_path / "queue.json"
+    queue.write_text(json.dumps({
+        "schema_version": 1,
+        "queue_type": "OMNIINTEL_YOUTUBE_QUEUE",
+        "items": [
+            {"video_id": "AbCdEf12345", "url": "https://youtu.be/AbCdEf12345"},
+            {"video_id": "ZyXwVu98765", "url": "https://youtu.be/ZyXwVu98765"},
+        ],
+    }), encoding="utf-8")
+    calls = []
+
+    def fake_process(database, url, **kwargs):
+        calls.append((url, kwargs))
+        if "ZyXwVu98765" in url:
+            raise RuntimeError("captions unavailable")
+        return {
+            "source": {"id": "source-one"},
+            "pipeline": {"status": "TRANSCRIPT_DRAFT_READY"},
+        }
+
+    monkeypatch.setattr(pipeline, "process_youtube_video", fake_process)
+    report = process_youtube_queue(
+        tmp_path / "engine.db", queue, tmp_path / "exports",
+        user_approved_network=True, language="en",
+    )
+    assert report["total"] == 2
+    assert report["completed"] == 1
+    assert report["failed"] == 1
+    assert len(calls) == 2
+    assert (tmp_path / "exports" / "AbCdEf12345-reader.json").is_file()
+    results = json.loads((tmp_path / "exports" / "queue-results.json").read_text())
+    assert results["items"][1]["status"] == "FAILED"
+
+
+def test_android_queue_handoff_requires_approval_and_rejects_duplicate_ids(tmp_path):
+    queue = tmp_path / "queue.json"
+    queue.write_text(json.dumps({
+        "schema_version": 1,
+        "queue_type": "OMNIINTEL_YOUTUBE_QUEUE",
+        "items": [
+            {"video_id": "AbCdEf12345", "url": "https://youtu.be/AbCdEf12345"},
+            {"video_id": "AbCdEf12345", "url": "https://youtube.com/watch?v=AbCdEf12345"},
+        ],
+    }), encoding="utf-8")
+    with pytest.raises(PermissionError):
+        process_youtube_queue(
+            tmp_path / "engine.db", queue, tmp_path / "out",
+            user_approved_network=False,
+        )
+    with pytest.raises(ValueError, match="duplicate"):
+        process_youtube_queue(
+            tmp_path / "engine.db", queue, tmp_path / "out",
+            user_approved_network=True,
+        )
