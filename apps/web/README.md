@@ -13,13 +13,14 @@ cd apps/web
 python -m http.server 8080
 ```
 
-Open `http://localhost:8080` and choose `course-reader.json`. The service worker caches only the static reader shell. The selected course JSON remains in memory and is not added to the service-worker cache. A small reading-position record is saved in this browser's localStorage.
+Open `http://localhost:8080` and choose `course-reader.json`. The service worker caches only the static reader shell. The selected course JSON remains in memory and is not added to the service-worker cache. Reading position is saved in localStorage; per-block notes and bookmarks use IndexedDB. These are device-local and are not yet exported, synced or merged into the canonical OmniIntel database.
 
 ## Included
 
 - Local JSON import with a 50 MiB limit and minimal shape validation.
 - Chapter navigation, current-chapter text search, provenance labels and expandable evidence citations.
 - Transcript excerpts and PDF page text when present in the reader payload.
+- Per-block personal notes and bookmarks stored in IndexedDB on this browser only; no remote sync.
 - Responsive desktop/mobile layout and reduced-motion support.
 - Offline shell caching; no external fonts, scripts, analytics, APIs or network calls.
 
