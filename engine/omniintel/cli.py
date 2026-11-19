@@ -80,6 +80,8 @@ def main() -> None:
     structure_pdf.add_argument("asset_id")
     structure_pdf.add_argument("--max-pages", type=int, default=500)
     structure_pdf.add_argument("--max-elements", type=int, default=20000)
+    structure_pdf.add_argument("--max-total-chars", type=int, default=5000000)
+    structure_pdf.add_argument("--max-figure-pixels", type=int, default=20000000)
     structure_pdf.add_argument("--no-figure-assets", action="store_true")
     review_element = sub.add_parser("review-document-element", help="Review one extracted document element")
     review_element.add_argument("database", type=Path)
@@ -229,6 +231,8 @@ def main() -> None:
         result = extract_document_structure(
             args.database,args.asset_dir,args.asset_id,
             max_pages=args.max_pages,max_elements=args.max_elements,
+            max_total_chars=args.max_total_chars,
+            max_figure_pixels=args.max_figure_pixels,
             extract_figure_assets=not args.no_figure_assets,
         )
         print(json.dumps({
