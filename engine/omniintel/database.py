@@ -48,9 +48,42 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         CREATE INDEX idx_evidence_source_time ON evidence_items(source_id, start_ms);
         """,
     ),
+    (
+        "0002_durable_jobs",
+        """
+        CREATE TABLE jobs (
+            id TEXT PRIMARY KEY,
+            job_type TEXT NOT NULL CHECK(length(trim(job_type)) > 0),
+            payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+            state TEXT NOT NULL CHECK(state IN ('QUEUED','RUNNING','RETRYING','COMPLETED','FAILED','CANCELLED')),
+            idempotency_key TEXT UNIQUE,
+            payload_hash TEXT NOT NULL,
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+            max_attempts INTEGER NOT NULL DEFAULT 3 CHECK(max_attempts > 0),
+            available_at_ms INTEGER NOT NULL,
+            lease_owner TEXT,
+            lease_token TEXT,
+            lease_expires_at_ms INTEGER,
+            result_json TEXT CHECK(result_json IS NULL OR json_valid(result_json)),
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT,
+            CHECK (
+                (state = 'RUNNING' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL
+                 AND lease_expires_at_ms IS NOT NULL)
+                OR
+                (state <> 'RUNNING' AND lease_owner IS NULL AND lease_token IS NULL
+                 AND lease_expires_at_ms IS NULL)
+            )
+        );
+        CREATE INDEX idx_jobs_ready ON jobs(state, available_at_ms, created_at);
+        CREATE INDEX idx_jobs_lease ON jobs(state, lease_expires_at_ms);
+        """,
+    ),
 )
 
-
+ 
 class MigrationError(RuntimeError):
     pass
 
