@@ -46,7 +46,14 @@
           <audio id="local-audio" controls preload="metadata" hidden></audio>
           <p id="media-status" class="muted" role="status">No media attached.</p>
         </section>
-        <div class="reading-head"><div><p class="eyebrow" id="chapter-count"></p><h1 id="chapter-title"></h1></div><span id="progress" class="progress"></span></div>
+        <div class="reading-head"><div><p class="eyebrow" id="chapter-count"></p><h1 id="chapter-title"></h1></div><div class="reading-actions"><span id="progress" class="progress"></span><button id="study-toggle" class="quiet" type="button">Study mode</button></div></div>
+        <section id="study-panel" class="study-panel" hidden aria-label="Offline flashcards">
+          <div class="study-top"><div><p class="eyebrow">OFFLINE ACTIVE RECALL</p><h2>Study cards</h2><p id="study-count" class="muted"></p></div><span id="study-position" class="tag"></span></div>
+          <div class="study-card"><p id="study-kind" class="tag"></p><h3 id="study-front"></h3><div id="study-answer" hidden></div><p id="study-provenance" class="muted"></p></div>
+          <div class="study-controls"><button id="study-prev" class="quiet" type="button">← Previous</button><button id="study-reveal" class="primary-button" type="button">Reveal answer</button><button id="study-next" class="quiet" type="button">Next →</button></div>
+          <div class="study-rating"><button id="study-review" class="quiet" type="button">Review again</button><button id="study-known" class="primary-button" type="button">I know this</button></div>
+          <p class="muted">Cards are built only from existing definition and exercise blocks. OmniIntel does not invent missing answers; use the cited source when an answer is unavailable. Progress stays in this browser.</p>
+        </section>
         <div id="blocks" class="blocks" aria-live="polite"></div>
         <div class="chapter-controls"><button id="previous" class="quiet" type="button">← Previous</button><button id="next" class="primary-button" type="button">Next chapter →</button></div>
       </article>

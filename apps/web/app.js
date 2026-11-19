@@ -1,6 +1,6 @@
 "use strict";
 const $ = (selector) => document.querySelector(selector);
-const state = { book: null, chapters: [], index: 0, query: "", mediaSourceId: null, mediaUrl: null };
+const state = { book: null, chapters: [], index: 0, query: "", mediaSourceId: null, mediaUrl: null, studyCards: [], studyIndex: 0, studyRevealed: false };
 const fileInput = $("#reader-file");
 const escapeText = (value) => String(value ?? "");
 const element = (tag, className, text) => {
@@ -74,11 +74,12 @@ let localDBPromise;
 function openLocalDB() {
   if (localDBPromise) return localDBPromise;
   localDBPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open("omniintel-reader-local", 1);
+    const request = indexedDB.open("omniintel-reader-local", 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("annotations")) db.createObjectStore("annotations", { keyPath: "key" });
       if (!db.objectStoreNames.contains("bookmarks")) db.createObjectStore("bookmarks", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("studyProgress")) db.createObjectStore("studyProgress", { keyPath: "key" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -412,3 +413,110 @@ $("#next").addEventListener("click", () => { if (state.index < state.chapters.le
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {}));
 }
+
+function buildStudyCards() {
+  const cards = [];
+  const versionId = state.book?.version?.id || state.book?.version?.version_id || "local";
+  state.chapters.forEach((chapter, chapterIndex) => {
+    (chapter.blocks || []).forEach((block, blockIndex) => {
+      const content = block.content || {};
+      const kind = String(block.block_type || "").toUpperCase();
+      let front = "", back = "", label = "";
+      if (kind === "DEFINITION") {
+        front = content.term || content.title || "Define this concept";
+        back = content.definition || content.text || content.body || "";
+        label = "DEFINITION";
+      } else if (kind === "EXERCISE") {
+        front = content.prompt || content.question || content.text || content.body || "";
+        back = content.answer || content.solution || content.expected_answer || "";
+        label = "PRACTICE";
+      } else if (kind === "FLASHCARD" || kind === "QUESTION") {
+        front = content.front || content.question || content.prompt || content.term || "";
+        back = content.back || content.answer || content.definition || content.solution || "";
+        label = "SOURCE FLASHCARD";
+      }
+      if (!String(front).trim()) return;
+      if (!String(back).trim()) back = "No answer is supplied in this block. Review its source evidence and assess your response yourself.";
+      const blockId = block.id || block.block_id || "block-" + blockIndex;
+      cards.push({
+        key: versionId + ":study:" + blockId,
+        front: String(front),
+        back: String(back),
+        label,
+        provenance: block.provenance || "UNSPECIFIED",
+        evidence: Array.isArray(block.evidence) ? block.evidence : [],
+        chapterTitle: chapter.chapter?.title || "Chapter " + (chapterIndex + 1)
+      });
+    });
+  });
+  return cards;
+}
+async function renderStudyCard() {
+  const cards = state.studyCards;
+  const panel = $("#study-panel");
+  if (!cards.length) {
+    $("#study-count").textContent = "No definition, exercise or flashcard blocks are available in this book.";
+    $("#study-position").textContent = "0 CARDS";
+    $("#study-front").textContent = "Add reviewed definitions or practice questions to this textbook to create a study deck.";
+    $("#study-answer").hidden = true;
+    $("#study-prev").disabled = $("#study-next").disabled = $("#study-reveal").disabled = true;
+    $("#study-known").disabled = $("#study-review").disabled = true;
+    return;
+  }
+  state.studyIndex = Math.max(0, Math.min(state.studyIndex, cards.length - 1));
+  const card = cards[state.studyIndex];
+  const db = await openLocalDB();
+  const tx = db.transaction("studyProgress", "readonly");
+  const all = await requestResult(tx.objectStore("studyProgress").getAll());
+  const known = all.filter(item => item.key.startsWith((state.book?.version?.id || state.book?.version?.version_id || "local") + ":study:") && item.status === "KNOWN").length;
+  $("#study-count").textContent = cards.length + " cards · " + known + " marked known";
+  $("#study-position").textContent = (state.studyIndex + 1) + " / " + cards.length;
+  $("#study-kind").textContent = card.label + " · " + card.chapterTitle;
+  $("#study-front").textContent = card.front;
+  $("#study-answer").textContent = card.back;
+  $("#study-answer").hidden = !state.studyRevealed;
+  $("#study-provenance").textContent = "PROVENANCE · " + card.provenance + " · " + card.evidence.length + " evidence reference(s)";
+  $("#study-prev").disabled = state.studyIndex === 0;
+  $("#study-next").disabled = state.studyIndex === cards.length - 1;
+  $("#study-reveal").disabled = state.studyRevealed;
+  $("#study-reveal").textContent = state.studyRevealed ? "Answer revealed" : "Reveal answer";
+  $("#study-known").disabled = !state.studyRevealed;
+  $("#study-review").disabled = !state.studyRevealed;
+}
+function moveStudy(delta) {
+  state.studyIndex = Math.max(0, Math.min(state.studyCards.length - 1, state.studyIndex + delta));
+  state.studyRevealed = false;
+  renderStudyCard().catch(() => { $("#study-count").textContent = "Local study progress is unavailable."; });
+}
+$("#study-toggle").addEventListener("click", () => {
+  const panel = $("#study-panel");
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) {
+    state.studyCards = buildStudyCards();
+    state.studyIndex = 0;
+    state.studyRevealed = false;
+    renderStudyCard().catch(() => { $("#study-count").textContent = "Local study progress is unavailable."; });
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+$("#study-prev").addEventListener("click", () => moveStudy(-1));
+$("#study-next").addEventListener("click", () => moveStudy(1));
+$("#study-reveal").addEventListener("click", () => {
+  state.studyRevealed = true;
+  renderStudyCard().catch(() => {});
+});
+async function markStudy(status) {
+  const card = state.studyCards[state.studyIndex];
+  if (!card) return;
+  try {
+    const db = await openLocalDB();
+    const tx = db.transaction("studyProgress", "readwrite");
+    tx.objectStore("studyProgress").put({ key: card.key, status, updatedAt: new Date().toISOString() });
+    await transactionDone(tx);
+    moveStudy(status === "KNOWN" ? 1 : 0);
+  } catch {
+    $("#study-count").textContent = "Could not save study progress in this browser.";
+  }
+}
+$("#study-known").addEventListener("click", () => markStudy("KNOWN"));
+$("#study-review").addEventListener("click", () => markStudy("REVIEW"));
