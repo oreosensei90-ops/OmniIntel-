@@ -272,6 +272,25 @@ class AssetStore:
             for row in rows
         ]
 
+    def get_asset(self, asset_id: str) -> AssetRecord:
+        """Resolve an asset record without trusting caller-supplied storage paths."""
+        with connect(self.database_path) as conn:
+            row = conn.execute(
+                """SELECT sa.id,sa.source_id,sa.blob_sha256,ab.media_type,ab.byte_size,
+                          ab.storage_key,sa.role,sa.display_name,sa.created_at
+                   FROM source_assets sa JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
+                   WHERE sa.id=?""",
+                (asset_id,),
+            ).fetchone()
+        if row is None:
+            raise ValueError("Asset does not exist")
+        return AssetRecord(
+            id=row["id"],source_id=row["source_id"],sha256=row["blob_sha256"],
+            media_type=row["media_type"],byte_size=row["byte_size"],
+            storage_key=row["storage_key"],role=row["role"],
+            display_name=row["display_name"],created_at=row["created_at"],
+        )
+
     def resolve_path(self, asset_id: str, *, verify_hash: bool = True) -> Path:
         with connect(self.database_path) as conn:
             row = conn.execute(
