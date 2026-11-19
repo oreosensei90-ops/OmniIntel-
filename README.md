@@ -69,6 +69,17 @@ omniintel import-captions ./omniintel.db ./lecture.vtt --title "Lecture 01" --la
 
 The initial caption adapter preserves cue timestamps and optional WebVTT voice labels. It does not download media or fetch caption URLs. See `docs/CAPTION_INGESTION.md` for supported syntax and boundaries.
 
+## Plan a multi-source learning bundle
+
+Before importing a folder of recordings, slides and captions, inspect a read-only plan:
+
+~~~bash
+omniintel plan-inputs ./course-folder --recursive
+omniintel plan-inputs ./lecture.mp4 ./slides.pdf ./captions.vtt --language en,hi
+~~~
+
+The planner classifies supported files, reports next stages and resource/network requirements, and asks for spoken-language or multi-recording alignment decisions rather than guessing. It does not import, decode, transcribe, OCR or write files. See docs/INPUT_PLANNING.md.
+
 ## Local media metadata probing
 
 Inspect a registered local audio/video asset's container and stream metadata without decoding it or contacting a remote service:
