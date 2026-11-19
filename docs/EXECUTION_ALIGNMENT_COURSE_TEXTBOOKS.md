@@ -4,7 +4,7 @@
 
 PlanExecutor accepts the read-only InputPlan dictionary and a user-approved list of stages. It refuses unresolved planner questions, missing approval, unsupported stage names, network-enabled stages, invalid input indices and inputs whose size or SHA-256 changed since the plan snapshot.
 
-The coordinator deliberately does not invoke a shell, subprocess or network client. The application injects a local handler for each allowlisted stage (REGISTER_SOURCE, EXTRACT_AUDIO, TRANSCRIBE_LOCAL, EXTRACT_PDF_TEXT, SAMPLE_VIDEO_FRAMES, OCR_LOCAL). A handler must itself enforce format-specific resource limits and revalidate the expected input hash at open/use time. Stage results must be JSON objects. Checkpoints are keyed by plan, stage ordinal/name and input hash. A completed identical plan is reused.
+The coordinator validates stage/source modality compatibility and deliberately does not invoke a shell, subprocess or network client. The application injects a local handler for each allowlisted stage (REGISTER_SOURCE, EXTRACT_AUDIO, TRANSCRIBE_LOCAL, EXTRACT_PDF_TEXT, SAMPLE_VIDEO_FRAMES, OCR_LOCAL). A handler must itself enforce format-specific resource limits and revalidate the expected input hash at open/use time. Handlers must be idempotent for the supplied plan/stage/input identity because a crash can occur after a handler's side effect but before its checkpoint is committed. Stage results must be JSON objects. Checkpoints are keyed by plan, stage ordinal/name and input hash. A completed identical plan is reused.
 
 This is a coordinator contract, not a claim that all media handlers have been implemented or that a user interface currently presents the approval dialog.
 
