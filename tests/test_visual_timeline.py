@@ -37,7 +37,7 @@ def test_timestamp_alignment_does_not_link_far_away_speech() -> None:
 
 
 @pytest.mark.parametrize("timestamp", [-1, 1.5])
-def test_timestamp_alignment_rejects_invalid_time(timestamp: int | float) -> None:
+def test_timestamp_alignment_rejects_invalid_time(timestamp: float) -> None:
     with pytest.raises(ValueError):
         align_timestamp(timestamp, [])
 
