@@ -214,3 +214,12 @@ or nearest-segment distance; it does not establish that speech describes the ima
 See `docs/DOCUMENT_PIPELINE.md` for the end-to-end workflow, `docs/DOCUMENT_OCR.md` for
 local OCR, `docs/DOCUMENT_STRUCTURE.md` for positioned document elements, and
 `docs/DOCUMENT_KNOWLEDGE.md` for the reviewed handoff into knowledge reconstruction.
+
+## Research and architecture decisions
+
+The video-to-notes and lecture-learning research batch is recorded in
+[docs/RESEARCH_REGISTER.md](docs/RESEARCH_REGISTER.md). The accepted design decisions,
+rejected patterns and implementation sequence are summarized in
+[docs/REFERENCE_IMPLEMENTATION_PLAN.md](docs/REFERENCE_IMPLEMENTATION_PLAN.md).
+These references inform our own implementation; they are not automatically approved
+dependencies or permission to copy third-party code.
