@@ -124,8 +124,9 @@ def test_document_page_search_index_tracks_page_deletion(tmp_path: Path) -> None
 
     assert search_document_pages(database, "Unique searchable")
     with connect(database) as conn:
-        conn.execute("DELETE FROM document_pages WHERE id=?", (extraction.pages[0].id,))
-    assert search_document_pages(database, "Unique searchable") == []
+        with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+            conn.execute("DELETE FROM document_pages WHERE id=?", (extraction.pages[0].id,))
+    assert search_document_pages(database, "Unique searchable")
 
 
 def test_document_page_search_handles_empty_and_invalid_limits(tmp_path: Path) -> None:
