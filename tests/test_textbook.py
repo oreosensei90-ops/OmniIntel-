@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from omniintel.database import connect\nfrom omniintel.store import OmniIntelStore
+from omniintel.database import connect
+from omniintel.store import OmniIntelStore
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.textbook import BlockInput, TextbookStore
 
