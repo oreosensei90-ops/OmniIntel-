@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/reader-export.schema.json",
+  "title": "OmniIntel Synchronized Reader Export",
+  "description": "Portable, local-only reader payload consumed by the Web and Android reader prototypes. Source-local and accepted course-clock times are distinct.",
+  "type": "object",
+  "required": ["version", "sources", "chapters", "alignment_policy"],
+  "properties": {
+    "version": {
+      "type": "object",
+      "required": ["id", "textbook_title"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "textbook_title": {"type": "string"},
+        "version_label": {"type": ["string", "null"]},
+        "collection_id": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "anchor_source_id": {"type": ["string", "null"]},
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_id", "title"],
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1},
+          "title": {"type": "string"},
+          "duration_ms": {"type": ["integer", "null"], "minimum": 0},
+          "language": {"type": ["string", "null"]}
+        },
+        "additionalProperties": true
+      }
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chapter", "blocks"],
+        "properties": {
+          "chapter": {"type": "object"},
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "block_type", "content", "provenance", "evidence"],
+              "properties": {
+                "id": {"type": "string", "minLength": 1},
+                "block_type": {"type": "string"},
+                "content": {"type": "object"},
+                "provenance": {"enum": ["SOURCE", "EXPLANATION", "DERIVED", "EXTERNAL", "UNCERTAIN"]},
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["source_id", "locator_kind", "relation", "review_state", "seek_available"],
+                    "properties": {
+                      "source_id": {"type": "string", "minLength": 1},
+                      "locator_kind": {"type": "string"},
+                      "relation": {"type": "string"},
+                      "review_state": {"type": "string"},
+                      "local_start_ms": {"type": ["integer", "null"], "minimum": 0},
+                      "local_end_ms": {"type": ["integer", "null"], "minimum": 0},
+                      "course_time_ms": {"type": ["integer", "null"]},
+                      "seek_available": {"type": "boolean"},
+                      "transcript_excerpt": {"type": "array"},
+                      "document_page": {"type": ["object", "null"]},
+                      "document_elements": {"type": "array"}
+                    },
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "alignment_policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}
