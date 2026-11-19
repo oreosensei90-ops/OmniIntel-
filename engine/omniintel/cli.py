@@ -33,6 +33,42 @@ def main() -> None:
     collection_show = sub.add_parser("collection-show", help="Show a collection and its ordered source members")
     collection_show.add_argument("database", type=Path)
     collection_show.add_argument("collection_id")
+    course_book_create = sub.add_parser("course-book-create", help="Create a collection-level textbook")
+    course_book_create.add_argument("database", type=Path)
+    course_book_create.add_argument("collection_id")
+    course_book_create.add_argument("title")
+    course_book_version = sub.add_parser("course-book-version", help="Create a course textbook version")
+    course_book_version.add_argument("database", type=Path)
+    course_book_version.add_argument("textbook_id")
+    course_book_version.add_argument("title")
+    course_book_version.add_argument("--mode", default="HYBRID", choices=["SOURCE_ORDER","CONCEPTUAL","HYBRID"])
+    course_book_chapter = sub.add_parser("course-book-chapter", help="Add a source-attributed course chapter")
+    course_book_chapter.add_argument("database", type=Path)
+    course_book_chapter.add_argument("version_id")
+    course_book_chapter.add_argument("title")
+    course_book_chapter.add_argument("ordinal", type=int)
+    course_book_chapter.add_argument("--source-id", default=None)
+    course_book_chapter.add_argument("--summary", default="")
+    course_book_block = sub.add_parser("course-book-block", help="Add a structured course textbook block")
+    course_book_block.add_argument("database", type=Path)
+    course_book_block.add_argument("chapter_id")
+    course_book_block.add_argument("block_type")
+    course_book_block.add_argument("content_json")
+    course_book_block.add_argument("--provenance", default="EXPLANATION", choices=["SOURCE","EXPLANATION","DERIVED","EXTERNAL","UNCERTAIN"])
+    course_book_block.add_argument("--review", default="DRAFT", choices=["DRAFT","NEEDS_REVIEW","ACCEPTED","REJECTED"])
+    course_book_block.add_argument("--ordinal", type=int, default=0)
+    course_book_link = sub.add_parser("course-book-link-evidence", help="Link a block to a source evidence reference")
+    course_book_link.add_argument("database", type=Path)
+    course_book_link.add_argument("block_id")
+    course_book_link.add_argument("evidence_ref_id")
+    course_book_link.add_argument("--relation", default="SUPPORTS", choices=["SUPPORTS","ILLUSTRATES","CONTEXTUALIZES","CONTRADICTS"])
+    course_book_review = sub.add_parser("course-book-review-evidence", help="Review a course textbook evidence link")
+    course_book_review.add_argument("database", type=Path)
+    course_book_review.add_argument("link_id")
+    course_book_review.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
+    course_book_audit = sub.add_parser("course-book-audit", help="Audit a course textbook version for publication")
+    course_book_audit.add_argument("database", type=Path)
+    course_book_audit.add_argument("version_id")
     plan_inputs = sub.add_parser("plan-inputs", help="Create a read-only plan for selected local learning sources")
     plan_inputs.add_argument("paths", nargs="+", type=Path, help="Files or directories selected by the user")
     plan_inputs.add_argument("--recursive", action="store_true", help="Include files in selected directories recursively")
@@ -261,6 +297,54 @@ def main() -> None:
         if result is None:
             raise SystemExit("Collection not found")
         print(json.dumps(result,ensure_ascii=False,indent=2))
+    elif args.command == "course-book-create":
+        from .course_textbook import CourseTextbookStore
+
+        book_id=CourseTextbookStore(args.database).create(args.collection_id,args.title)
+        print(json.dumps({"textbook_id":book_id},indent=2))
+    elif args.command == "course-book-version":
+        from .course_textbook import CourseTextbookStore
+
+        version_id=CourseTextbookStore(args.database).create_version(
+            args.textbook_id,args.title,composition_mode=args.mode,
+        )
+        print(json.dumps({"version_id":version_id},indent=2))
+    elif args.command == "course-book-chapter":
+        from .course_textbook import CourseTextbookStore
+
+        chapter_id=CourseTextbookStore(args.database).add_chapter(
+            args.version_id,args.title,ordinal=args.ordinal,
+            source_id=args.source_id,summary=args.summary,
+        )
+        print(json.dumps({"chapter_id":chapter_id},indent=2))
+    elif args.command == "course-book-block":
+        from .course_textbook import CourseTextbookStore
+
+        content=json.loads(args.content_json)
+        block_id=CourseTextbookStore(args.database).add_block(
+            args.chapter_id,args.block_type,content,provenance=args.provenance,
+            review_status=args.review,ordinal=args.ordinal,
+        )
+        print(json.dumps({"block_id":block_id},indent=2))
+    elif args.command == "course-book-link-evidence":
+        from .course_textbook import CourseTextbookStore
+
+        link_id=CourseTextbookStore(args.database).link_evidence(
+            args.block_id,args.evidence_ref_id,relation=args.relation,
+        )
+        print(json.dumps({"link_id":link_id,"review_state":"PENDING"},indent=2))
+    elif args.command == "course-book-review-evidence":
+        from .course_textbook import CourseTextbookStore
+
+        state=CourseTextbookStore(args.database).review_evidence(args.link_id,args.state)
+        print(json.dumps({"link_id":args.link_id,"review_state":state},indent=2))
+    elif args.command == "course-book-audit":
+        from .course_textbook import CourseTextbookStore
+
+        report=CourseTextbookStore(args.database).audit(args.version_id)
+        print(json.dumps(report,ensure_ascii=False,indent=2))
+        if not report["publishable"]:
+            raise SystemExit(1)
     if args.command == "plan-inputs":
         from .input_plan import plan_local_inputs
 
