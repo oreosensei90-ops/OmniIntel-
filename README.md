@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Registered local audio/video assets can also be inspected with bounded, hash-verified ffprobe metadata probing. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. PDF, DOCX, HTML and Markdown exporters now render linked visual assets with source ownership checks and page-aware citations. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Registered compressed audio/video can be decoded locally to a normalized PCM WAV derivative with its original stream offset preserved. A read-only plan-first local input planner now classifies mixed source bundles and surfaces language, caption-association and multi-recording clock questions before any work starts. Approved plan execution, native Android ASR, web apps, automated knowledge generation and full general AI orchestration remain pending.
+The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Registered local audio/video assets can also be inspected with bounded, hash-verified ffprobe metadata probing. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. PDF, DOCX, HTML and Markdown exporters now render linked visual assets with source ownership checks and page-aware citations. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Registered compressed audio/video can be decoded locally to a normalized PCM WAV derivative with its original stream offset preserved. A read-only plan-first local input planner now classifies mixed source bundles and surfaces language, caption-association and multi-recording clock questions before any work starts. A narrow approved execution path registers selected local files with explicit approval, input revalidation, ingestion-time SHA-256 checks and retry-safe source identity; it does not run ASR/OCR/frame extraction automatically. The first dependency-free offline Web Reader prototype opens reader JSON exports with chapter navigation, search, evidence citations and local progress. Full Web/Android applications, native Android ASR, automated semantic knowledge generation and general AI orchestration remain pending.
 
 ## Engineering principles
 
@@ -28,7 +28,7 @@ The repository is an actively evolving foundation implementation. The feature br
 - `schemas/` — versioned cross-platform data contracts.
 - `tests/` — automated tests.
 - `docs/` — architecture, decisions, research and roadmap.
-- `apps/` — future Android and web applications.
+- `apps/web/` — first static offline Web Reader prototype; Android app and full web platform remain future work.
 
 ## Python development
 
@@ -315,3 +315,15 @@ omniintel quality-list ./omniintel.db --suite lecture-golden
 ```
 
 See [SYNCHRONIZED_READER.md](docs/SYNCHRONIZED_READER.md) and [QUALITY_BENCHMARKS.md](docs/QUALITY_BENCHMARKS.md). The metric suite is deterministic and offline; it does not replace expert review of semantic evidence support, subject correctness or pedagogical quality.
+
+## First offline Web Reader prototype
+
+The initial browser reader consumes a local JSON export from the synchronized course reader. It has chapter navigation, local text search, source provenance and expandable transcript/PDF evidence, responsive layout and an offline-cached application shell. It does not upload the book or cache the selected JSON in the service worker.
+
+\`\`\`bash
+omniintel reader-open ./omniintel.db VERSION_ID > ./course-reader.json
+cd apps/web
+python -m http.server 8080
+\`\`\`
+
+Open \`http://localhost:8080\` and choose \`course-reader.json\`. See [apps/web/README.md](apps/web/README.md) for scope and limitations. This is a first UI slice, not the completed web app.
