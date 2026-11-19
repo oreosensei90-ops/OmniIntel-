@@ -17,7 +17,7 @@ omniintel review-ocr-page ./omniintel.db PAGE_ID ACCEPTED
 # 4. Extract structure; inspect and review headings, paragraphs, equations, tables and figures.
 omniintel structure-pdf ./omniintel.db ./omniintel-assets ASSET_ID
 omniintel list-document-elements ./omniintel.db
-omniintel review-document-element ./omniintel.db ELEMENT_ID ACCEPTED
+omniintel review-document-element ./omniintel.db ELEMENT_ID ACCEPTED --provenance DERIVED
 
 # 5. Create draft knowledge units from accepted elements.
 omniintel build-document-knowledge ./omniintel.db SOURCE_ID
