@@ -51,7 +51,12 @@ def align_timestamp(
             overlapping.append(AlignmentCandidate(segment_id, "OVERLAPS", 0))
             continue
         distance = start_ms - timestamp_ms if timestamp_ms < start_ms else timestamp_ms - end_ms
-        if nearest is None or distance < nearest[0]:
+        prefer_prior_on_tie = (
+            nearest is not None
+            and distance == nearest[0]
+            and end_ms <= timestamp_ms
+        )
+        if nearest is None or distance < nearest[0] or prefer_prior_on_tie:
             nearest = (distance, segment_id)
     if overlapping:
         return tuple(overlapping)
