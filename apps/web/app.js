@@ -25,6 +25,12 @@ function renderEvidence(items) {
     const row = element("div", "citation");
     const tag = element("span", "tag", item.relation || "EVIDENCE");
     row.append(tag, document.createTextNode(evidenceLabel(item)));
+    if (item.alignment_status) {
+      row.append(element("span", "tag", "CLOCK · " + String(item.alignment_status).replaceAll("_", " ")));
+    }
+    if (item.course_time_ms !== null && item.course_time_ms !== undefined) {
+      row.append(element("span", "tag", "COURSE CLOCK · " + (Number(item.course_time_ms) / 1000).toFixed(2) + "s"));
+    }
     if (item.local_start_ms !== null && item.local_start_ms !== undefined) {
       const seek = element("button", "seek-button", "▶ " + (Number(item.local_start_ms) / 1000).toFixed(1) + "s");
       seek.type = "button";
