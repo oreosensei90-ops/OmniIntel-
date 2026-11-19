@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -144,7 +145,7 @@ def test_evidence_reference_rejects_cross_source_page_locator(tmp_path: Path) ->
         database, assets, tmp_path / "source.pdf", title="Second source"
     )
     with connect(database) as conn:
-        with pytest.raises(Exception, match="document page reference"):
+        with pytest.raises(sqlite3.IntegrityError, match="document page reference"):
             conn.execute(
                 """INSERT INTO evidence_refs
                    (id,source_id,locator_kind,document_page_id,source_asset_id,page_number,created_at)
