@@ -103,7 +103,7 @@ class OllamaLocalVisionAdapter:
             raise ValueError("Local model returned an invalid response envelope")
         result=json.loads(content)
         if not isinstance(result,dict):
-            raise ValueError("Local model response must be a JSON object")
+            raise TypeError("Local model response must be a JSON object")
         return result
 
     def describe(self,image_bytes: bytes,*,mime_type: str,timestamp_ms: int) -> VisualDescription:
@@ -129,7 +129,7 @@ class OllamaLocalVisionAdapter:
         score=result.get("score")
         rationale=result.get("rationale")
         if isinstance(score,bool) or not isinstance(score,(int,float)) or not isinstance(rationale,str):
-            raise ValueError("Local semantic model returned invalid score/rationale")
+            raise TypeError("Local semantic model returned invalid score/rationale")
         return SemanticMatch(float(score),rationale[:5000])
 
     def verify(
@@ -146,7 +146,7 @@ class OllamaLocalVisionAdapter:
         verdict=result.get("verdict")
         rationale=result.get("rationale")
         if not isinstance(verdict,str) or not isinstance(rationale,str):
-            raise ValueError("Local cross-modal verifier returned invalid output")
+            raise TypeError("Local cross-modal verifier returned invalid output")
         return ClaimVerdict(verdict,rationale[:10000])
 
 def normalized_frame_difference(left: bytes, right: bytes, *, size: tuple[int,int]=(64,36)) -> float:
