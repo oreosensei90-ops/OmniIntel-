@@ -411,7 +411,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ) THEN RAISE(ABORT,'block hierarchy cannot contain a cycle') END;
         END;
         """
-    ),,
+    ),
     (
         "0009_content_addressed_assets",
         """
