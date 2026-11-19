@@ -160,3 +160,40 @@ def test_ocr_skips_native_text_pages_and_validates_limits(tmp_path: Path) -> Non
     assert run.skipped_pages == (1,)
     with pytest.raises(ValueError,match="DPI"):
         ocr_pdf(database,assets,imported.asset.id,adapter=FakeOCR(),dpi=600)
+
+def test_ocr_adapter_geometry_and_text_budgets_are_enforced(tmp_path: Path) -> None:
+    pdf = tmp_path / "bounded-scan.pdf"
+    _scan_pdf(pdf)
+    database = tmp_path / "bounded.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database,assets,pdf)
+    extract_pdf(database,assets,imported.asset.id)
+
+    class InvalidGeometryOCR:
+        name = "invalid-geometry"
+        version = "1"
+
+        def recognize_png(self, png_bytes: bytes, *, timeout_seconds: int) -> OCRResult:
+            return OCRResult(
+                "bad box",
+                (OCRWord("bad",-0.1,0.1,0.2,0.2,90.0),),
+                90.0,
+            )
+
+    with pytest.raises(ValueError,match="normalized"):
+        ocr_pdf(database,assets,imported.asset.id,adapter=InvalidGeometryOCR())
+
+    class OversizedOCR:
+        name = "oversized"
+        version = "1"
+
+        def recognize_png(self, png_bytes: bytes, *, timeout_seconds: int) -> OCRResult:
+            return OCRResult("x" * 11,(),90.0)
+
+    with pytest.raises(ValueError,match="character limit"):
+        ocr_pdf(
+            database,assets,imported.asset.id,adapter=OversizedOCR(),
+            max_chars_per_page=10,
+        )
+    assert get_ocr_page(database,extract_pdf(database,assets,imported.asset.id).pages[0].id) is None
+
