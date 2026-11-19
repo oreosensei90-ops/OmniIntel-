@@ -50,11 +50,12 @@ def test_web_manifest_is_valid_and_standalone() -> None:
 
 def test_reader_stores_personal_notes_in_indexeddb_without_remote_sync() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
-    assert 'indexedDB.open("omniintel-reader-local", 2)' in app
+    assert 'indexedDB.open("omniintel-reader-local", 3)' in app
     assert 'createObjectStore("annotations"' in app
     assert 'createObjectStore("bookmarks"' in app
     assert "PERSONAL STUDY NOTES · THIS BROWSER ONLY" in app
     assert "fetch(base + path" in app
+    assert "createObjectStore(\"readerBooks\"" in app
 
 
 def test_reader_search_spans_chapters_and_matches_transcript_and_pdf_evidence() -> None:
@@ -147,3 +148,21 @@ def test_video_to_notes_requires_separate_network_and_ai_approval() -> None:
     assert "approve_ai: true" in app
     assert "renderBook(reader" in app
     assert 'sessionStorage.setItem("omniintel-api-token", token)' in app
+
+
+def test_online_reader_saves_generated_books_for_local_reopening() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'db.transaction("readerBooks", "readwrite")' in app
+    assert "async function restoreLatestReaderBook()" in app
+    assert "restoreLatestReaderBook();" in app
+
+
+def test_web_supports_authorized_media_upload_for_no_caption_transcription_fallback() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="online-media-form"' in html
+    assert 'id="approve-upload-ai"' in html
+    assert 'accept="audio/*,video/*"' in html
+    assert '"/v1/media/jobs"' in app
+    assert 'form.append("file", file, file.name)' in app
+    assert "250 * 1024 * 1024" in app

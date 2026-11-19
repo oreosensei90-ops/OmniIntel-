@@ -74,12 +74,13 @@ let localDBPromise;
 function openLocalDB() {
   if (localDBPromise) return localDBPromise;
   localDBPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open("omniintel-reader-local", 2);
+    const request = indexedDB.open("omniintel-reader-local", 3);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("annotations")) db.createObjectStore("annotations", { keyPath: "key" });
       if (!db.objectStoreNames.contains("bookmarks")) db.createObjectStore("bookmarks", { keyPath: "key" });
       if (!db.objectStoreNames.contains("studyProgress")) db.createObjectStore("studyProgress", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("readerBooks")) db.createObjectStore("readerBooks", { keyPath: "key" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -329,6 +330,17 @@ function validateReaderPayload(data) {
 }
 function renderBook(data, filename) {
   validateReaderPayload(data);
+  openLocalDB().then(async (db) => {
+    const key = data.version.id || data.version.version_id;
+    const tx = db.transaction("readerBooks", "readwrite");
+    tx.objectStore("readerBooks").put({
+      key,
+      title: data.version.textbook_title || data.version.title || filename || "Course textbook",
+      data,
+      updatedAt: Date.now()
+    });
+    await transactionDone(tx);
+  }).catch(() => {});
   state.book = data;
   state.chapters = data.chapters;
   state.index = 0;
@@ -666,6 +678,8 @@ if (onlineForm) {
   const apiInput = $("#api-base-url");
   const savedApi = localStorage.getItem("omniintel-api-base-url");
   if (savedApi) apiInput.value = savedApi;
+  const savedToken = sessionStorage.getItem("omniintel-api-token");
+  if (savedToken) $("#api-token").value = savedToken;
 
   function setOnlineStatus(message, isError = false) {
     onlineStatus.textContent = message;
@@ -736,4 +750,73 @@ if (onlineForm) {
       onlineButton.disabled = false;
     }
   });
+
+  const mediaUploadForm = $("#online-media-form");
+  if (mediaUploadForm) {
+    const uploadButton = $("#media-upload-submit");
+    const uploadStatus = $("#media-upload-status");
+    mediaUploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!mediaUploadForm.reportValidity()) return;
+      uploadButton.disabled = true;
+      try {
+        const base = apiBase();
+        const token = $("#api-token").value.trim();
+        const file = $("#media-upload-file").files?.[0];
+        if (!token) throw new Error("Enter the server API token above.");
+        if (!file) throw new Error("Choose an audio or video file.");
+        if (file.size > 250 * 1024 * 1024) throw new Error("Media upload exceeds the 250 MiB limit.");
+        if (!file.type.startsWith("audio/") && !file.type.startsWith("video/")) {
+          throw new Error("Choose a supported audio or video file.");
+        }
+        if (!$("#approve-upload-ai").checked) {
+          throw new Error("Approve sending the generated transcript to the server-configured AI provider.");
+        }
+        sessionStorage.setItem("omniintel-api-token", token);
+        localStorage.setItem("omniintel-api-base-url", base);
+        uploadStatus.textContent = "Uploading media securely…";
+        const form = new FormData();
+        form.append("file", file, file.name);
+        form.append("approve_ai", "true");
+        form.append("language", $("#upload-language").value.trim());
+        form.append("title", file.name);
+        const created = await apiRequest(base, token, "/v1/media/jobs", {
+          method: "POST",
+          body: form
+        });
+        uploadStatus.textContent = "Upload accepted · transcription job " + created.job_id;
+        for (let attempt = 0; attempt < 1800; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const job = await apiRequest(base, token, created.status_url);
+          if (job.status === "COMPLETED") {
+            const reader = job.result?.reader;
+            if (!reader) throw new Error("Processing completed without a reader export.");
+            uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
+            renderBook(reader, (job.result.title || file.name) + ".json");
+            return;
+          }
+          if (job.status === "FAILED") throw new Error(job.error || "Media processing failed.");
+          uploadStatus.textContent = "Transcribing media · " + job.status.toLowerCase();
+        }
+        throw new Error("The job is still running. Check its status with the server later.");
+      } catch (error) {
+        uploadStatus.textContent = error.message || "Media processing failed.";
+        uploadStatus.classList.add("error");
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
+  }
 }
+
+
+async function restoreLatestReaderBook() {
+  try {
+    const db = await openLocalDB();
+    const tx = db.transaction("readerBooks", "readonly");
+    const books = await requestResult(tx.objectStore("readerBooks").getAll());
+    books.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    if (!state.book && books[0]?.data) renderBook(books[0].data, books[0].title);
+  } catch {}
+}
+restoreLatestReaderBook();

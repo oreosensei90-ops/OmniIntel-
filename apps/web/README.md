@@ -14,7 +14,7 @@ The API token is stored only in session storage for the current tab. The API ori
 
 ## Supported source processing
 
-The current hosted source adapter retrieves bounded public YouTube metadata and public caption sidecars. It does not download video/audio, use cookies, access private captions, or bypass DRM/access controls. If public captions are unavailable, the job fails with an explicit error. User-authorized media upload and hosted ASR fallback are not yet connected to this API.
+The current hosted source adapter retrieves bounded public YouTube metadata and public caption sidecars. It does not download video/audio, use cookies, access private captions, or bypass DRM/access controls. If public captions are unavailable, upload an audio/video file you are authorized to process (up to 250 MiB). The worker requires FFmpeg, ffprobe and a preinstalled local faster-whisper model configured through `OMNIINTEL_ASR_MODEL_PATH`.
 
 AI output is a structured, timestamp/evidence-linked study-guide draft. Evidence IDs are constrained to the supplied transcript records, but that does not prove semantic entailment or factual correctness. Generated blocks and links require human review.
 
@@ -24,7 +24,7 @@ AI output is a structured, timestamp/evidence-linked study-guide draft. Evidence
 - Navigate chapters and search across the textbook.
 - Inspect source evidence, transcript excerpts and PDF page citations.
 - Attach an exact local audio/video source for timestamp seeking.
-- Save per-block notes and bookmarks in IndexedDB.
+- Save generated/imported reader books, per-block notes and bookmarks in IndexedDB, then reopen the most recent book automatically.
 - Study existing definitions, exercises and flashcards with local active recall.
 - Back up and restore notes, bookmarks, study ratings and reading positions.
 

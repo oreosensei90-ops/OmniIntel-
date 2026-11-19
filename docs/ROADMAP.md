@@ -34,7 +34,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
 - [x] Unified source-bound evidence locator IDs for transcript intervals and PDF pages.
 - [x] Claim and textbook block evidence links support unified references, with review and publication gates spanning both locator types.
-- [x] Initial authenticated online YouTube caption-to-reader API, durable job submission/status, background worker and Web/Android clients (public captions only; no-caption media acquisition and upload transcription remain pending).\n- [ ] Authorized source adapters and platform-specific media acquisition.
+- [x] Initial authenticated online video-to-notes API, durable job submission/status, background worker, YouTube public-caption intake and authorized audio/video upload with FFmpeg + local faster-whisper ASR; Web supports both paths, Android currently supports YouTube URL submission.\n- [ ] Authorized source adapters and platform-specific media acquisition.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [x] Initial local PCM WAV transcription adapter with sequential, content-addressed chunk checkpoints and source-linked timestamp evidence (native Android ASR and transcript versioning pending).
 - [ ] Slide classification, visual topic discovery and semantic scene segmentation.
@@ -64,7 +64,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Native math rendering across formats.
 
 ## Applications
-- [x] First dependency-free Web Reader with consent-gated online video-to-AI-notes submission and offline reader fallback (hosted API/worker deployment and no-caption media upload remain operator-configured/pending): local reader JSON import, cross-chapter evidence-aware search, source-specific local audio/video attachment and seeking, PDF page structure review, local IndexedDB notes/bookmarks, local progress and cached static shell (full Web platform and large-library indexing pending).
+- [x] Web Reader with consent-gated online YouTube caption processing, authorized media upload/ASR fallback, AI study-note generation, local reader-library persistence and offline reading (hosted API/worker deployment remains operator-configured): local reader JSON import, cross-chapter evidence-aware search, source-specific local audio/video attachment and seeking, PDF page structure review, local IndexedDB notes/bookmarks, local progress and cached static shell (full Web platform and large-library indexing pending).
 - [x] Native Kotlin + Jetpack Compose Android reader with Storage Access Framework import, bounded strict JSON parsing, source/evidence referential integrity, evidence rendering, local source-scoped audio/video playback and timestamp jumps.
 - [x] Android YouTube queue JSON export and explicit local-engine batch caption handoff (manual file transfer; no in-app network access).
 - [x] Room v3 offline Android library with normalized textbook sources, chapters, blocks and evidence; transactional re-import and cascading content cleanup.

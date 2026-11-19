@@ -63,3 +63,34 @@ def test_api_rejects_untrusted_youtube_host(tmp_path):
         json={"url": "https://youtube.com.attacker.example/watch?v=abcdefghijk", "approve_network": True},
     )
     assert response.status_code == 422
+
+
+def test_authorized_media_upload_creates_a_durable_transcription_job(tmp_path):
+    app = create_app(tmp_path / "api.db", api_token="test-secret")
+    client = TestClient(app)
+    response = client.post(
+        "/v1/media/jobs",
+        headers={"Authorization": "Bearer test-secret"},
+        data={"approve_ai": "false", "language": "en", "title": "Lecture"},
+        files={"file": ("lecture.mp4", b"not-a-real-video-yet", "video/mp4")},
+    )
+    assert response.status_code == 202
+    created = response.json()
+    assert created["status"] == "QUEUED"
+    status = client.get(
+        created["status_url"],
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert status.status_code == 200
+    assert status.json()["job_type"] == "UPLOADED_MEDIA_TO_NOTES"
+
+
+def test_media_upload_rejects_non_media_content_type(tmp_path):
+    app = create_app(tmp_path / "api.db", api_token="test-secret")
+    client = TestClient(app)
+    response = client.post(
+        "/v1/media/jobs",
+        headers={"Authorization": "Bearer test-secret"},
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+    )
+    assert response.status_code == 415

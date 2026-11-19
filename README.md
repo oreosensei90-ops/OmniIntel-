@@ -365,12 +365,15 @@ The Web app now includes an online YouTube-to-notes client. It submits a consent
 Install and run the service on a trusted server:
 
 ```bash
-python -m pip install -e '.[service,youtube]'
+python -m pip install -e '.[service,youtube,asr]'
 export OMNIINTEL_DATABASE=/srv/omniintel/omniintel.db
 export OMNIINTEL_API_TOKEN='replace-with-a-long-random-secret'
 export OMNIINTEL_CORS_ORIGINS='https://your-web-app.example'
 export OMNIINTEL_OPENAI_API_KEY='server-side-key'
 export OMNIINTEL_OPENAI_MODEL='gpt-4.1-mini'
+export OMNIINTEL_UPLOAD_DIR=/srv/omniintel/uploads
+export OMNIINTEL_ASSET_DIR=/srv/omniintel/assets
+export OMNIINTEL_ASR_MODEL_PATH=/models/faster-whisper-small
 omniintel-api
 ```
 

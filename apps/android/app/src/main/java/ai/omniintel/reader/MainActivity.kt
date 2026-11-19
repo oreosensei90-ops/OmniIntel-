@@ -644,7 +644,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                 }.onSuccess { saved ->
                                     videoImports = saved
                                     videoUrlDraft = ""
-                                    videoImportMessage = "Saved on this device. Video processing is not connected yet."
+                                    videoImportMessage = "Added to the local queue. Use online processing or export the queue for the local engine."
                                 }.onFailure {
                                     videoImportMessage = "Could not save this video to the on-device queue."
                                 }
@@ -722,7 +722,10 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                                 readerJson = reader.toString()
                                             }
                                             "FAILED" -> error(status.optString("error").ifBlank { "Video processing failed." })
-                                            else -> videoImportMessage = "Processing video · \${status.optString("status")} · job $jobId"
+                                            else -> {
+                                                val statusText = status.optString("status")
+                                                videoImportMessage = "Processing video · $statusText · job $jobId"
+                                            }
                                         }
                                         attempts++
                                     }
@@ -756,7 +759,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                         ) {
                             Column(Modifier.padding(10.dp)) {
                                 Text(item.url, color = Color.White, fontSize = 11.sp)
-                                Text("QUEUED · export JSON for local processing", color = Muted, fontSize = 9.sp)
+                                Text("QUEUED · ready for online processing or local handoff", color = Muted, fontSize = 9.sp)
                             }
                         }
                     }
