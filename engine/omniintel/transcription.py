@@ -507,13 +507,11 @@ def run_wav_transcription(
     max_chunks: int = 10_000,
     max_total_segments: int = 200_000,
     max_total_chars: int = 5_000_000,
-    time_offset_ms: int = 0,
 ) -> TranscriptionRunResult:
-    """Transcribe a user-selected PCM WAV, persisting each completed chunk.
+    """Transcribe a registered PCM WAV and persist each completed chunk.
 
-    A rerun with the same source bytes, adapter identity and settings reuses
-    completed chunks. The original asset is never modified. This first adapter
-    accepts normalized PCM WAV; local compressed-media decoding is a separate stage.
+    A derivative created by media_audio automatically supplies its source-timeline
+    offset. Direct WAV sources default to zero. The original media is never changed.
     """
     if not 1 <= chunk_seconds <= 600:
         raise ValueError("chunk_seconds must be between 1 and 600")
@@ -523,17 +521,34 @@ def run_wav_transcription(
         raise ValueError("max_duration_ms must be positive")
     if max_chunks < 1 or max_total_segments < 1 or max_total_chars < 1:
         raise ValueError("Transcription output limits must be positive")
-    if type(time_offset_ms) is not int or time_offset_ms < 0:
-        raise ValueError("time_offset_ms must be a non-negative integer")
+
     asset_store=AssetStore(database_path,asset_dir)
     audio_path=asset_store.resolve_path(asset_id)
     input_sha256=_sha256_file(audio_path)
     channels,sample_width,sample_rate,total_frames,duration_ms=_read_wav_info(
         audio_path,max_duration_ms=max_duration_ms
     )
+    if time_offset_ms is None:
+        with connect(database_path) as conn:
+            derivative=conn.execute(
+                "SELECT time_offset_ms FROM media_derivatives WHERE output_asset_id=?",
+                (asset_id,),
+            ).fetchone()
+        time_offset_ms=derivative["time_offset_ms"] if derivative else 0
+    if type(time_offset_ms) is not int or time_offset_ms < 0:
+        raise ValueError("time_offset_ms must be a non-negative integer")
+
+    frames_per_chunk=_frames_per_chunk(
+        sample_rate=sample_rate,channels=channels,sample_width=sample_width,
+        chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
+    )
+    total_chunks=(total_frames+frames_per_chunk-1)//frames_per_chunk
+    if total_chunks > max_chunks:
+        raise ValueError("WAV audio exceeds the configured transcription chunk-count limit")
+
     config_sha256=_config_hash(
-        adapter,language=language,chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
-        time_offset_ms=time_offset_ms,
+        adapter,language=language,chunk_seconds=chunk_seconds,
+        max_chunk_bytes=max_chunk_bytes,time_offset_ms=time_offset_ms,
     )
     run=_get_or_create_run(
         database_path,source_id=source_id,asset_id=asset_id,input_sha256=input_sha256,
@@ -551,8 +566,10 @@ def run_wav_transcription(
                 (json.dumps(reference_ids),utc_now(),run["id"]),
             )
         return TranscriptionRunResult(
-            run["id"],source_id,duration_ms,run["time_offset_ms"],segment_ids,evidence_ids,reference_ids,0,0,
-            run["time_offset_ms"],
+            run_id=run["id"],source_id=source_id,duration_ms=duration_ms,
+            segment_ids=segment_ids,evidence_ids=evidence_ids,
+            evidence_ref_ids=reference_ids,reused_chunks=0,processed_chunks=0,
+            time_offset_ms=run["time_offset_ms"],
         )
 
     with connect(database_path) as conn:
@@ -563,13 +580,6 @@ def run_wav_transcription(
     processed=0
     reused=0
     combined: list[tuple[int,int,ChunkTranscription]]=[]
-    frames_per_chunk=_frames_per_chunk(
-        sample_rate=sample_rate,channels=channels,sample_width=sample_width,
-        chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
-    )
-    total_chunks=(total_frames+frames_per_chunk-1)//frames_per_chunk
-    if total_chunks > max_chunks:
-        raise ValueError("WAV audio exceeds the configured transcription chunk-count limit")
     total_segments=0
     total_chars=0
     try:
@@ -596,9 +606,9 @@ def run_wav_transcription(
                         start_ms=start_ms,end_ms=end_ms,result=result,
                     )
                     processed+=1
-                total_segments += len(result.segments)
-                total_chars += sum(len(segment.text) for segment in result.segments)
-                if total_segments > max_total_segments or total_chars > max_total_chars:
+                total_segments+=len(result.segments)
+                total_chars+=sum(len(segment.text) for segment in result.segments)
+                if total_segments>max_total_segments or total_chars>max_total_chars:
                     raise ValueError("Transcription output exceeds configured total limits")
                 combined.append((start_ms,end_ms,result))
                 if progress:
@@ -611,8 +621,10 @@ def run_wav_transcription(
                 (json.dumps(reference_ids),utc_now(),run["id"]),
             )
         return TranscriptionRunResult(
-            run["id"],source_id,duration_ms,run["time_offset_ms"],segment_ids,evidence_ids,reference_ids,reused,processed,
-            run["time_offset_ms"],
+            run_id=run["id"],source_id=source_id,duration_ms=duration_ms,
+            segment_ids=segment_ids,evidence_ids=evidence_ids,
+            evidence_ref_ids=reference_ids,reused_chunks=reused,processed_chunks=processed,
+            time_offset_ms=run["time_offset_ms"],
         )
     except Exception as error:
         with connect(database_path) as conn:
