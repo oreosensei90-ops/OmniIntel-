@@ -41,3 +41,6 @@ The native Android prototype stores the last-opened chapter index in Preferences
 
 
 Android block notes and bookmarks are stored locally in Preferences DataStore, keyed by textbook version and stable block ID. Notes are limited to 5,000 characters per block and can be cleared by saving an empty note. Bookmark state is independent per block. These are device-local reader conveniences, not yet a full annotation model: there is no paragraph-level anchoring, highlight ranges, export/import of annotations, conflict handling or cross-device sync. Replacing a textbook version does not silently merge notes into a different version.
+
+
+The Android reader can filter the library view to bookmarked blocks across all chapters and search block text, evidence excerpts, source titles and saved private notes. Search results retain their chapter label and can jump back to the owning chapter. This is a local reader index, not a full-text database or semantic search engine.
