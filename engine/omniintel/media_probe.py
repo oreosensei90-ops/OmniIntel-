@@ -36,6 +36,7 @@ class MediaStreamInfo:
     codec_type: str
     codec_name: str | None
     duration_ms: int | None
+    start_ms: int | None
     width: int | None
     height: int | None
     sample_rate: int | None
@@ -128,6 +129,22 @@ def _duration_ms(value: Any) -> int | None:
     milliseconds = int((seconds * 1000).to_integral_value())
     if milliseconds <= 0 or milliseconds > 2**63 - 1:
         raise ValueError("Media duration is outside the supported range")
+    return milliseconds
+
+
+
+def _timestamp_ms(value: Any) -> int | None:
+    if value is None or (isinstance(value, str) and value in {"", "N/A"}):
+        return None
+    try:
+        seconds = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    if not seconds.is_finite():
+        return None
+    milliseconds = int((seconds * 1000).to_integral_value())
+    if abs(milliseconds) > 2**63 - 1:
+        raise ValueError("Media stream start time is outside the supported range")
     return milliseconds
 
 
@@ -272,6 +289,7 @@ def _load_result(database_path: str | Path, probe_id: str, *, reused: bool) -> M
             codec_type=item["codec_type"],
             codec_name=item["codec_name"],
             duration_ms=item["duration_ms"],
+            start_ms=item["start_ms"],
             width=item["width"],
             height=item["height"],
             sample_rate=item["sample_rate"],
@@ -379,12 +397,12 @@ def probe_local_media(
             for stream in streams:
                 conn.execute(
                     """INSERT INTO media_streams
-                       (probe_id,stream_index,codec_type,codec_name,duration_ms,width,height,
+                       (probe_id,stream_index,codec_type,codec_name,duration_ms,start_ms,width,height,
                         sample_rate,channels,metadata_json)
-                       VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         probe_id, stream.stream_index, stream.codec_type, stream.codec_name,
-                        stream.duration_ms, stream.width, stream.height, stream.sample_rate,
+                        stream.duration_ms, stream.start_ms, stream.width, stream.height, stream.sample_rate,
                         stream.channels,
                         json.dumps(stream.metadata, ensure_ascii=False, sort_keys=True),
                     ),
