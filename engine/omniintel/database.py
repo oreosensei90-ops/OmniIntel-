@@ -1336,6 +1336,92 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0022_recompute_claims_after_review_demotion",
+        """
+        CREATE TRIGGER document_ocr_claim_status_recompute
+        AFTER UPDATE OF status ON document_ocr_pages
+        WHEN NEW.status <> 'ACCEPTED'
+        BEGIN
+            UPDATE claims SET status=CASE
+                WHEN provenance='UNCERTAIN' THEN 'UNCERTAIN'
+                WHEN EXISTS(
+                    SELECT 1 FROM claim_evidence ce
+                    WHERE ce.claim_id=claims.id AND ce.relation='CONTRADICTS'
+                      AND ce.review_state='ACCEPTED'
+                ) OR EXISTS(
+                    SELECT 1 FROM claim_evidence_refs cer
+                    WHERE cer.claim_id=claims.id AND cer.relation='CONTRADICTS'
+                      AND cer.review_state='ACCEPTED'
+                ) THEN 'CONTESTED'
+                WHEN EXISTS(
+                    SELECT 1 FROM claim_evidence ce
+                    WHERE ce.claim_id=claims.id AND ce.relation='QUALIFIES'
+                      AND ce.review_state='ACCEPTED'
+                ) OR EXISTS(
+                    SELECT 1 FROM claim_evidence_refs cer
+                    WHERE cer.claim_id=claims.id AND cer.relation='QUALIFIES'
+                      AND cer.review_state='ACCEPTED'
+                ) THEN 'UNCERTAIN'
+                WHEN EXISTS(
+                    SELECT 1 FROM claim_evidence ce
+                    WHERE ce.claim_id=claims.id AND ce.relation='SUPPORTS'
+                      AND ce.review_state='ACCEPTED'
+                ) OR EXISTS(
+                    SELECT 1 FROM claim_evidence_refs cer
+                    WHERE cer.claim_id=claims.id AND cer.relation='SUPPORTS'
+                      AND cer.review_state='ACCEPTED'
+                ) THEN 'SUPPORTED'
+                ELSE 'DRAFT' END,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE id IN (
+                SELECT claim_id FROM claim_evidence_refs
+                WHERE evidence_ref_id IN (
+                    SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+                )
+            );
+        END;
+        CREATE TRIGGER document_element_claim_status_recompute
+        AFTER UPDATE OF review_state ON document_elements
+        WHEN NEW.review_state <> 'ACCEPTED'
+        BEGIN
+            UPDATE claims SET status=CASE
+                WHEN provenance='UNCERTAIN' THEN 'UNCERTAIN'
+                WHEN EXISTS(
+                    SELECT 1 FROM claim_evidence ce
+                    WHERE ce.claim_id=claims.id AND ce.relation='CONTRADICTS'
+                      AND ce.review_state='ACCEPTED'
+                ) OR EXISTS(
+                    SELECT 1 FROM claim_evidence_refs cer
+                    WHERE cer.claim_id=claims.id AND cer.relation='CONTRADICTS'
+                      AND cer.review_state='ACCEPTED'
+                ) THEN 'CONTESTED'
+                WHEN EXISTS(
+                    SELECT 1 FROM claim_evidence ce
+                    WHERE ce.claim_id=claims.id AND ce.relation='QUALIFIES'
+                      AND ce.review_state='ACCEPTED'
+                ) OR EXISTS(
+                    SELECT 1 FROM claim_evidence_refs cer
+                    WHERE cer.claim_id=claims.id AND cer.relation='QUALIFIES'
+                      AND cer.review_state='ACCEPTED'
+                ) THEN 'UNCERTAIN'
+                WHEN EXISTS(
+                    SELECT 1 FROM claim_evidence ce
+                    WHERE ce.claim_id=claims.id AND ce.relation='SUPPORTS'
+                      AND ce.review_state='ACCEPTED'
+                ) OR EXISTS(
+                    SELECT 1 FROM claim_evidence_refs cer
+                    WHERE cer.claim_id=claims.id AND cer.relation='SUPPORTS'
+                      AND cer.review_state='ACCEPTED'
+                ) THEN 'SUPPORTED'
+                ELSE 'DRAFT' END,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE id IN (
+                SELECT claim_id FROM claim_evidence_refs WHERE element_id=NEW.id
+            );
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
