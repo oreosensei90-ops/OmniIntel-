@@ -21,6 +21,7 @@ class KnowledgeUnitInput:
     body: str
     provenance: Provenance = "EXPLANATION"
     status: Literal["DRAFT", "VALIDATED", "NEEDS_REVIEW", "REJECTED"] = "DRAFT"
+    source_element_id: str | None = None
 
     def validate(self) -> None:
         if self.unit_type not in {
