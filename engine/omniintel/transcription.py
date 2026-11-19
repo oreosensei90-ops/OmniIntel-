@@ -12,7 +12,6 @@ import wave
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
 from typing import Protocol
 
 from .assets import AssetStore
