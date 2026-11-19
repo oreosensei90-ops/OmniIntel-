@@ -40,21 +40,24 @@ class SynchronizedReader:
         offsets: dict[str,int | None]={anchor_source_id:0}
         tolerances: dict[str,int]={anchor_source_id:0}
         queue=deque([anchor_source_id])
+        component={anchor_source_id}
+        inconsistent=False
         while queue:
             current=queue.popleft()
             for neighbor,delta,interval in graph.get(current,[]):
-                # graph edge is current -> neighbor, delta converts current time to neighbor time
-                candidate=offsets[current]
-                if candidate is None:
-                    continue
-                candidate_offset=candidate+delta
+                candidate_offset=int(offsets[current])+delta
                 tolerance=max(tolerances[current],interval)
                 if neighbor not in offsets:
                     offsets[neighbor]=candidate_offset
                     tolerances[neighbor]=tolerance
+                    component.add(neighbor)
                     queue.append(neighbor)
-                elif offsets[neighbor] is not None and abs(offsets[neighbor]-candidate_offset)>max(tolerances[neighbor],tolerance):
-                    offsets[neighbor]=None
+                elif abs(int(offsets[neighbor])-candidate_offset)>max(tolerances[neighbor],tolerance):
+                    inconsistent=True
+        # A contradictory cycle makes the whole connected clock component unsafe.
+        if inconsistent:
+            for source_id in component:
+                offsets[source_id]=None
         return offsets
 
     def open_version(
