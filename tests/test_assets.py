@@ -7,7 +7,7 @@ from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.store import OmniIntelStore
 
 
-PNG = b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-payload"
+PNG = b"\x89PNG\r\n\x1a\n" + b"test-image-payload"
 
 
 def _source(path: Path) -> str:
@@ -50,7 +50,7 @@ def test_asset_store_rejects_unknown_empty_and_oversized_content(tmp_path: Path)
     source = _source(db)
     store = AssetStore(db, tmp_path / "assets", max_bytes=32)
     with pytest.raises(ValueError, match="unrecognized"):
-        store.add_bytes(source, b"\\x00\\x01\\x02", role="ATTACHMENT")
+        store.add_bytes(source, b"\x00\x01\x02", role="ATTACHMENT")
     with pytest.raises(ValueError, match="Empty"):
         store.add_bytes(source, b"")
     with pytest.raises(ValueError, match="maximum size"):
