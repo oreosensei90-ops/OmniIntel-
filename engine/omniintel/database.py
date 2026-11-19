@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 
 MIGRATIONS: tuple[tuple[str, str], ...] = (
