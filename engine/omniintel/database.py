@@ -519,7 +519,6 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ON document_pages(extraction_id,page_number);
         """
     ),
-    ,
     (
         "0012_document_page_search",
         """
