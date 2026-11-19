@@ -126,7 +126,6 @@ def _derivative_fingerprint(
 
 
 def _load_existing(
-    database_path: str | Path,
     asset_store: AssetStore,
     row: dict,
 ) -> AudioDerivativeResult:
@@ -186,8 +185,17 @@ def extract_audio_to_wav(
         expected_duration=max(0,probe.duration_ms-offset_ms)
     if expected_duration is None or expected_duration<=0:
         raise ValueError("The selected audio stream has no reliable duration metadata")
-    if expected_duration>max_duration_ms or offset_ms+expected_duration>max_duration_ms+max_duration_ms:
+    if expected_duration>max_duration_ms:
         raise ValueError("The selected audio stream exceeds the configured duration limit")
+    with connect(database_path) as conn:
+        source_row=conn.execute(
+            "SELECT duration_ms FROM sources WHERE id=?",(source_asset.source_id,)
+        ).fetchone()
+    if (
+        source_row is not None and source_row["duration_ms"] is not None
+        and offset_ms+expected_duration>source_row["duration_ms"]+1_500
+    ):
+        raise ValueError("Selected audio stream extends beyond the registered source timeline")
 
     executable=find_executable("ffmpeg")
     if not executable:
@@ -203,7 +211,7 @@ def extract_audio_to_wav(
             (source_asset_id,fingerprint),
         ).fetchone()
     if existing is not None:
-        return _load_existing(database_path,asset_store,dict(existing))
+        return _load_existing(asset_store,dict(existing))
 
     with tempfile.TemporaryDirectory(prefix="omniintel-audio-") as directory:
         output_path=Path(directory)/"audio-16k-mono.wav"
@@ -242,6 +250,8 @@ def extract_audio_to_wav(
             source_asset.source_id,output_path,role="AUDIO",
             display_name=f"{Path(source_asset.display_name).stem}.audio-16k.wav",
         )
+        if output_asset.media_type!="audio/wav":
+            raise RuntimeError("Content-addressed audio derivative was not registered as WAV")
 
     now=utc_now()
     derivative_id=uuid7()
