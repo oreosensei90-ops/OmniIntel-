@@ -205,5 +205,4 @@ class JobQueue:
         result = dict(row)
         result["payload"] = json.loads(result.pop("payload_json"))
         result["result"] = json.loads(result.pop("result_json")) if result["result_json"] else None
-        result.pop("result_json")
         return result
