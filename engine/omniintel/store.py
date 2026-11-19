@@ -88,6 +88,7 @@ class OmniIntelStore:
         language: str | None = None,
         duration_ms: int | None = None,
         metadata: dict[str, object] | None = None,
+        source_id: str | None = None,
     ) -> str:
         """Create a source record before attaching its original assets or evidence."""
         normalized_title = title.strip()
@@ -95,7 +96,7 @@ class OmniIntelStore:
             raise ValueError("Source title must not be empty")
         if duration_ms is not None and duration_ms <= 0:
             raise ValueError("Source duration must be positive")
-        source_id = uuid7()
+        source_id = source_id or uuid7()
         with connect(self.database_path) as conn:
             conn.execute(
                 """INSERT INTO sources
