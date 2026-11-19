@@ -94,3 +94,36 @@ def test_reader_fails_closed_on_inconsistent_accepted_alignment_cycle(tmp_path: 
     assert offsets[a.source_id] is None
     assert offsets[b.source_id] is None
     assert offsets[c.source_id] is None
+
+
+def test_reader_returns_page_native_pdf_text_without_fake_timestamp(tmp_path: Path) -> None:
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.local_files import import_local_file
+
+    pdf=tmp_path/"slides.pdf"
+    output=canvas.Canvas(str(pdf))
+    output.setFont("Helvetica",12)
+    output.drawString(72,720,"Momentum is conserved in an isolated system.")
+    output.showPage()
+    output.save()
+    db=tmp_path/"reader-pdf.sqlite"
+    assets=tmp_path/"assets"
+    imported=import_local_file(db,assets,pdf,title="Lecture slides")
+    extracted=extract_pdf(db,assets,imported.asset.id)
+    course=CollectionStore(db).create("Mechanics")
+    CollectionStore(db).add_source(course,imported.source_id,role="SLIDE_DECK")
+    books=CourseTextbookStore(db)
+    version=books.create_version(books.create(course,"Mechanics book"),"v1")
+    chapter=books.add_chapter(version,"Momentum",ordinal=0,source_id=imported.source_id)
+    block=books.add_block(chapter,"PARAGRAPH",{"text":"Momentum is conserved."},
+                          provenance="SOURCE",review_status="ACCEPTED")
+    link=books.link_evidence(block,extracted.evidence_ref_ids[0])
+    books.review_evidence(link,"ACCEPTED")
+    opened=SynchronizedReader(db).open_version(version)
+    evidence=opened["chapters"][0]["blocks"][0]["evidence"][0]
+    assert evidence["document_page"]["page_number"]==1
+    assert "Momentum is conserved" in evidence["document_page"]["text_content"]
+    assert evidence["course_time_ms"] is None
+    assert evidence["seek_available"] is False
