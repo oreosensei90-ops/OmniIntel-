@@ -197,6 +197,12 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
         } else {
             val mime = context.contentResolver.getType(uri).orEmpty()
             if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                videoView?.stopPlayback()
+                videoView = null
+                audioPlayer?.release()
+                audioPlayer = null
+                audioReady = false
+                audioPlaying = false
                 mediaUri = uri
                 mediaMime = mime
                 mediaStatus = "Attached locally to the selected source. Timestamps remain source-local."
