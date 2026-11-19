@@ -348,8 +348,8 @@ def extract_document_structure(
         max_figure_pixels,max_figure_bytes,
     ) <= 0:
         raise ValueError("Document structure limits must be positive")
-    store = AssetStore(database_path, asset_dir)
-    path = store.resolve_path(asset_id, verify_hash=True)
+    store = AssetStore(database_path,asset_dir)
+    path = store.resolve_path(asset_id,verify_hash=True)
     with connect(database_path) as conn:
         migrate(conn)
         asset = conn.execute(
@@ -373,26 +373,35 @@ def extract_document_structure(
         raise ValueError(f"PDF page count exceeds structure limit ({max_pages})")
 
     output: list[DocumentElement] = []
-    total_chars = 0
     try:
         with pdfplumber.open(path) as pdf:
             if len(pdf.pages) != len(page_rows):
                 raise ValueError("PDF page count differs from stored extraction")
-            for row, page in zip(page_rows, pdf.pages, strict=True):
+
+            # Preflight every page and element before writing any structure records.
+            planned: list[tuple[Any, pdfplumber.page.Page, list[dict[str, Any]]]] = []
+            total_chars = 0
+            total_elements = 0
+            for row,page in zip(page_rows,pdf.pages,strict=True):
                 specs = _native_specs(page)
                 if not specs and not row["text_content"].strip():
-                    specs = _ocr_specs(dict(row), page.width, page.height, database_path)
+                    specs = _ocr_specs(dict(row),page.width,page.height,database_path)
                 for spec in specs:
-                    element_payload_chars = len(spec["text"]) + len(
-                        json.dumps(spec["content"],ensure_ascii=False,allow_nan=False)
-                    )
                     if len(spec["text"]) > max_chars_per_element:
                         raise ValueError("Document element exceeds configured character limit")
-                    total_chars += element_payload_chars
+                    payload_chars = len(spec["text"]) + len(
+                        json.dumps(spec["content"],ensure_ascii=False,allow_nan=False)
+                    )
+                    total_chars += payload_chars
+                    total_elements += 1
                     if total_chars > max_total_chars:
                         raise ValueError("Document structure exceeds configured total character limit")
-                    if len(output) >= max_elements:
+                    if total_elements > max_elements:
                         raise ValueError("Document structure exceeds configured element limit")
+                planned.append((row,page,specs))
+
+            for row,page,specs in planned:
+                for ordinal,spec in enumerate(specs):
                     asset_id_for_element = None
                     bbox = spec.get("bbox")
                     if spec["type"] == "FIGURE" and bbox and extract_figure_assets:
@@ -426,7 +435,7 @@ def extract_document_structure(
                                 element_type,ordinal,text_content,content_json,
                                 x0,y0,x1,y1,asset_id,confidence,provenance,
                                 review_state,created_at)
-                               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) 
+                               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                                ON CONFLICT(page_id,parser_name,parser_version,ordinal)
                                DO UPDATE SET
                                  element_type=excluded.element_type,
@@ -439,10 +448,7 @@ def extract_document_structure(
                                  review_rationale=NULL""",
                             (
                                 element_id,row["id"],row["evidence_ref_id"],PARSER_NAME,
-                                PARSER_VERSION,spec["type"],len([
-                                    item for item in output
-                                    if item.page_id == row["id"]
-                                ]),spec["text"],
+                                PARSER_VERSION,spec["type"],ordinal,spec["text"],
                                 json.dumps(spec["content"],ensure_ascii=False,allow_nan=False),
                                 *(normalized or (None,None,None,None)),asset_id_for_element,
                                 confidence,spec["provenance"],review_state,now,
@@ -451,15 +457,12 @@ def extract_document_structure(
                         stored = conn.execute(
                             """SELECT id FROM document_elements
                                WHERE page_id=? AND parser_name=? AND parser_version=? AND ordinal=?""",
-                            (row["id"],PARSER_NAME,PARSER_VERSION,len([
-                                item for item in output if item.page_id == row["id"]
-                            ])),
+                            (row["id"],PARSER_NAME,PARSER_VERSION,ordinal),
                         ).fetchone()
                     output.append(DocumentElement(
                         stored["id"],row["id"],row["evidence_ref_id"],row["page_number"],
-                        spec["type"],len([item for item in output if item.page_id == row["id"]]),
-                        spec["text"],spec["content"],normalized,asset_id_for_element,
-                        confidence,spec["provenance"],review_state,
+                        spec["type"],ordinal,spec["text"],spec["content"],normalized,
+                        asset_id_for_element,confidence,spec["provenance"],review_state,
                     ))
     except ValueError:
         raise
@@ -470,7 +473,7 @@ def extract_document_structure(
 
     counts: dict[str, int] = {}
     for element in output:
-        counts[element.element_type] = counts.get(element.element_type, 0) + 1
+        counts[element.element_type] = counts.get(element.element_type,0) + 1
     return DocumentStructureResult(
         asset["source_id"],asset_id,len(page_rows),len(output),counts,tuple(output)
     )
