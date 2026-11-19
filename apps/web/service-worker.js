@@ -9,7 +9,9 @@ self.addEventListener("activate", (event) => {
 });
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  const shellPaths = SHELL.map((path) => new URL(path, self.registration.scope).pathname);
+  if (request.method !== "GET" || url.origin !== self.location.origin || !shellPaths.includes(url.pathname)) return;
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
     if (response.ok) {
       const copy = response.clone();
