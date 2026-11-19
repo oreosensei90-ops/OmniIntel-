@@ -254,7 +254,13 @@ Create a read-only plan for local files, then review it before any work is appro
 omniintel plan-inputs ./course-folder --recursive --language en,hi
 ```
 
-The execution coordinator is an application API: it requires an explicit approval decision and injected local stage adapters; it never runs shell commands or performs network acquisition. See [docs/EXECUTION_ALIGNMENT_COURSE_TEXTBOOKS.md](docs/EXECUTION_ALIGNMENT_COURSE_TEXTBOOKS.md).
+The execution coordinator requires explicit approval, hashes and revalidates every input immediately before use, and records resumable stage checkpoints. The CLI currently exposes only the local `REGISTER_SOURCE` adapter; transcription, OCR, frame extraction and other stages are not silently run by this command. No shell commands or network acquisition are used. To execute a reviewed registration plan, save the plan JSON and a stage list such as `[{"stage":"REGISTER_SOURCE","input_indices":[0],"network":"none"}]`, then run:
+
+```bash
+omniintel execute-plan ./omniintel.db ./omniintel-assets ./plan.json ./stages.json --approve
+```
+
+Without `--approve`, the command refuses to run. See [docs/EXECUTION_ALIGNMENT_COURSE_TEXTBOOKS.md](docs/EXECUTION_ALIGNMENT_COURSE_TEXTBOOKS.md).
 
 Create a course and a source-attributed course textbook:
 
@@ -269,7 +275,7 @@ omniintel course-book-review-evidence ./omniintel.db LINK_ID ACCEPTED
 omniintel course-book-audit ./omniintel.db VERSION_ID
 ```
 
-Course textbook evidence remains source-specific. Clock alignment proposals use measured feature envelopes and remain NEEDS_REVIEW until reviewed. Existing single-source exporters are not yet connected to course textbook versions. See [docs/DEEP_RESEARCH_AUDIT_2026-11-19.md](docs/DEEP_RESEARCH_AUDIT_2026-11-19.md).
+Course textbook evidence remains source-specific. Clock alignment proposals use measured feature envelopes and remain NEEDS_REVIEW until reviewed. Course-level Markdown, self-contained HTML, PDF and DOCX exports are available through the separate course exporter and publication audit gate. Native math rendering and full-fidelity embedded visual assets remain incomplete. See [docs/DEEP_RESEARCH_AUDIT_2026-11-19.md](docs/DEEP_RESEARCH_AUDIT_2026-11-19.md).
 
 For a measured source-clock proposal, prepare two numeric feature envelopes sampled at the same interval (for example, audio-energy envelopes). The CLI records a candidate only; it does not infer alignment from filenames or accept it automatically:
 
