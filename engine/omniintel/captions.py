@@ -49,7 +49,10 @@ def parse_caption_text(
     index = 1 if is_vtt else 0
     while index < len(lines):
         line = lines[index].strip()
-        if not line or line.startswith(("NOTE", "STYLE", "REGION")):
+        if not line:
+            index += 1
+            continue
+        if line.startswith(("NOTE", "STYLE", "REGION")):
             index += 1
             while index < len(lines) and lines[index].strip():
                 index += 1
