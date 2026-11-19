@@ -10,6 +10,7 @@ from omniintel.local_files import import_local_file
 from omniintel.models import TranscriptSegmentInput
 from omniintel.transcription import (
     ChunkTranscription,
+    FasterWhisperAdapter,
     run_wav_transcription,
 )
 
@@ -238,4 +239,16 @@ def test_faster_whisper_requires_local_model_or_explicit_download_consent(tmp_pa
     with pytest.raises(RuntimeError,match="explicit allow_model_download"):
         adapter.transcribe_chunk(audio,language="en")
     assert adapter.configuration["allow_model_download"] is False
+
+def test_faster_whisper_defaults_preserve_quiet_lecture_speech() -> None:
+    adapter = FasterWhisperAdapter()
+    assert adapter.configuration["vad_filter"] is False
+    assert adapter.configuration["beam_size"] == 5
+    explicit = FasterWhisperAdapter(vad_filter=True,beam_size=3)
+    assert explicit.configuration["vad_filter"] is True
+    assert explicit.configuration["beam_size"] == 3
+    with pytest.raises(ValueError,match="beam_size"):
+        FasterWhisperAdapter(beam_size=0)
+    with pytest.raises(RuntimeError,match="local CTranslate2 directory"):
+        adapter.transcribe_chunk(Path("unused.wav"),language="en")
 
