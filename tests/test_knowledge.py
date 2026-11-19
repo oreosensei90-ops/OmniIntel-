@@ -293,7 +293,7 @@ def test_document_topic_rejects_evidence_from_another_source(tmp_path: Path):
     topic_id = TopicStore(database).create_document_topic(
         DocumentTopicInput(second.source_id, "Other source", 0)
     )
-    with pytest.raises(sqlite3.IntegrityError, match="same source"):
+    with pytest.raises(sqlite3.IntegrityError, match="topic source"):
         TopicStore(database).link_document_evidence(
             DocumentTopicEvidenceInput(topic_id, extraction.evidence_ref_ids[0], "DEVELOPS")
         )
