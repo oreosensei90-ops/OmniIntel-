@@ -58,8 +58,11 @@ class PlanExecutor:
             path = Path(item["path"]).resolve(strict=True)
             if not path.is_file():
                 raise PlanExecutionError(f"Input is not a regular file: {path.name}")
-            size = path.stat().st_size
-            if size <= 0 or size != item["byte_size"]:
+            stat = path.stat()
+            size = stat.st_size
+            if (size <= 0 or size != item["byte_size"]
+                    or (item.get("modified_ns") and stat.st_mtime_ns != item["modified_ns"])
+                    or (item.get("file_id") and stat.st_ino != item["file_id"])):
                 raise PlanExecutionError(f"Input changed after planning: {path.name}")
             snapshot_inputs.append({
                 "path": str(path), "byte_size": size, "sha256": _sha256_file(path),
