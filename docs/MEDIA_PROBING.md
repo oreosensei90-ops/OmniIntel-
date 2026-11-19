@@ -13,10 +13,10 @@ OmniIntel can inspect a user-selected local audio/video asset with the external 
 
 Example:
 
-\`\`\`bash
+```bash
 omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4
 omniintel probe-media ./omniintel.db ./omniintel-assets ASSET_ID
-\`\`\`
+```
 
 The command accepts optional limits:
 
