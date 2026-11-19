@@ -229,3 +229,72 @@ def test_document_page_reference_can_support_and_contest_claim(tmp_path: Path):
     assert store.review_evidence_reference_link(contradiction, "ACCEPTED") == "CONTESTED"
     assert store.publishable_claims() == []
 
+def test_document_topics_use_page_references_without_fake_timestamps(tmp_path: Path):
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.local_files import import_local_file
+    from omniintel.topics import (
+        DocumentTopicEvidenceInput,
+        DocumentTopicInput,
+    )
+
+    pdf = tmp_path / "chapters.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.drawString(72, 720, "Newton laws of motion")
+    output.showPage()
+    output.drawString(72, 720, "Conservation of momentum")
+    output.showPage()
+    output.save()
+    database = tmp_path / "topics.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database, assets, pdf)
+    extraction = extract_pdf(database, assets, imported.asset.id)
+
+    topics = TopicStore(database)
+    root = topics.create_document_topic(
+        DocumentTopicInput(imported.source_id, "Classical mechanics", 0)
+    )
+    child = topics.create_document_topic(
+        DocumentTopicInput(
+            imported.source_id, "Newton's laws", 1, parent_topic_id=root,
+            provenance="DERIVED",
+        )
+    )
+    link = topics.link_document_evidence(
+        DocumentTopicEvidenceInput(child, extraction.evidence_ref_ids[0], "INTRODUCES", 0.98)
+    )
+    assert topics.get_document_outline(imported.source_id)[1]["status"] == "DRAFT"
+    assert topics.review_document_evidence_link(link, "ACCEPTED") == "ACCEPTED"
+    outline = topics.get_document_outline(imported.source_id)
+    citation = outline[1]["evidence_references"][0]
+    assert citation["locator_kind"] == "DOCUMENT_PAGE"
+    assert citation["page_number"] == 1
+    assert citation["start_ms"] is None and citation["end_ms"] is None
+
+
+def test_document_topic_rejects_evidence_from_another_source(tmp_path: Path):
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.local_files import import_local_file
+    from omniintel.topics import DocumentTopicEvidenceInput, DocumentTopicInput
+
+    pdf = tmp_path / "one.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.drawString(72, 720, "Source one page")
+    output.showPage()
+    output.save()
+    database = tmp_path / "topics.db"
+    assets = tmp_path / "assets"
+    first = import_local_file(database, assets, pdf, title="First")
+    second = import_local_file(database, assets, pdf, title="Second")
+    extraction = extract_pdf(database, assets, first.asset.id)
+    topic_id = TopicStore(database).create_document_topic(
+        DocumentTopicInput(second.source_id, "Other source", 0)
+    )
+    with pytest.raises(sqlite3.IntegrityError, match="same source"):
+        TopicStore(database).link_document_evidence(
+            DocumentTopicEvidenceInput(topic_id, extraction.evidence_ref_ids[0], "DEVELOPS")
+        )
+
