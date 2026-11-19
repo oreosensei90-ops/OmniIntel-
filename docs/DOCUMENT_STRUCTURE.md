@@ -26,7 +26,9 @@ omniintel review-document-element ./omniintel.db ELEMENT_ID ACCEPTED
 \`\`\`
 
 Each element stores its page citation ID, ordinal, normalized bounding box, parser/version,
-content JSON, confidence, provenance, review state and optional source-owned figure asset.
+content JSON, confidence, provenance, review state and optional source-owned figure asset. The
+preflight defaults cap extraction at 20,000 elements, 100,000 characters per element and
+5,000,000 total element characters. Figure crops are capped at 20 million pixels and 25 MiB.
 Database triggers enforce that the page citation and any figure asset belong to the same source.
 Elements begin in \`NEEDS_REVIEW\`. If an accepted element is later downgraded, dependent accepted
 claim, topic, knowledge-unit and textbook links are automatically demoted.
