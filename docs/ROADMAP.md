@@ -14,7 +14,9 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial cross-platform JSON Schema contracts and validation tests.
 
 ## Source and evidence intelligence
-- [x] Initial local-file signature classification and source metadata registration (deep metadata inspection and extraction pending).
+- [x] Initial local-file signature classification and source metadata registration (deep content extraction pending).
+- [x] Bounded local ffprobe inspection for registered audio/video assets with immutable stream metadata and idempotent tool-version fingerprints.
+- [ ] Bounded local audio extraction and media-derived asset registration.
 - [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search.
 - [x] Optional local OCR adapter for image-only pages with pixel/time limits, word boxes, source-owned render assets and mandatory review before evidence acceptance.
 - [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
