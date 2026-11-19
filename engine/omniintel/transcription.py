@@ -87,12 +87,12 @@ class FasterWhisperAdapter:
                 "faster-whisper is not installed; install OmniIntel with the 'asr' extra"
             ) from error
         if self._model is None:
-            self._model = WhisperModel(
+            object.__setattr__(self,"_model",WhisperModel(
                 self.model_id,
                 device=self.device,
                 compute_type=self.compute_type,
                 cpu_threads=self.cpu_threads,
-            )
+            ))
         segments, info = self._model.transcribe(
             str(wav_path),
             language=language,
