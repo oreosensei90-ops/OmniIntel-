@@ -83,8 +83,12 @@ class AlignmentStore:
         runner = float(estimate["runner_up_correlation"])
         if interval <= 0 or not -1 <= corr <= 1 or not -1 <= runner <= 1:
             raise AlignmentError("Invalid correlation estimate")
+        if len(signal_a) < 8 or len(signal_b) < 8 or not all(
+            math.isfinite(float(value)) for value in list(signal_a) + list(signal_b)
+        ):
+            raise AlignmentError("Alignment signals must contain at least eight finite samples each")
         payload = {"a": list(signal_a), "b": list(signal_b), "estimate": estimate}
-        digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, allow_nan=False).encode()).hexdigest()
         alignment_id = uuid7()
         with connect(self.database_path) as conn:
             migrate(conn)
