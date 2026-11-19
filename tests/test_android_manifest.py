@@ -55,3 +55,12 @@ def test_android_reader_surfaces_media_readiness_and_playback_errors() -> None:
     assert "view.setOnErrorListener" in code
     assert "view.setOnCompletionListener" in code
     assert "The selected video could not be played" in code
+
+
+def test_android_video_timestamp_seek_waits_for_prepared_media() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert "var videoReady by remember { mutableStateOf(false) }" in code
+    assert "videoReady = true" in code
+    assert "mediaMime?.startsWith(\"video/\") == true && videoReady || audioReady" in code
+    assert 'picker.launch(arrayOf("application/json"))' in code
