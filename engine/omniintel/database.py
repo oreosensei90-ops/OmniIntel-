@@ -238,8 +238,109 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """,
     ),
+    (
+        "0006_textbook_composition",
+        """
+        CREATE TABLE textbooks (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE textbook_versions (
+            id TEXT PRIMARY KEY,
+            textbook_id TEXT NOT NULL REFERENCES textbooks(id) ON DELETE RESTRICT,
+            version_number INTEGER NOT NULL CHECK(version_number > 0),
+            title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+            status TEXT NOT NULL CHECK(status IN ('DRAFT','IN_REVIEW','READY','PUBLISHED','ARCHIVED')),
+            composition_mode TEXT NOT NULL CHECK(composition_mode IN ('SOURCE_ORDER','CONCEPTUAL','HYBRID')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(textbook_id,version_number)
+        );
+        CREATE INDEX idx_textbook_versions_status ON textbook_versions(textbook_id,status);
+        CREATE TABLE textbook_chapters (
+            id TEXT PRIMARY KEY,
+            version_id TEXT NOT NULL REFERENCES textbook_versions(id) ON DELETE RESTRICT,
+            parent_chapter_id TEXT REFERENCES textbook_chapters(id) ON DELETE RESTRICT,
+            title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+            summary TEXT NOT NULL DEFAULT '',
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            source_start_ms INTEGER CHECK(source_start_ms IS NULL OR source_start_ms >= 0),
+            source_end_ms INTEGER CHECK(source_end_ms IS NULL OR source_end_ms > 0),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(version_id,ordinal),
+            CHECK(source_start_ms IS NULL OR source_end_ms IS NULL OR source_end_ms > source_start_ms),
+            CHECK(parent_chapter_id IS NULL OR parent_chapter_id <> id)
+        );
+        CREATE INDEX idx_textbook_chapters_order ON textbook_chapters(version_id,ordinal);
+        CREATE TABLE chapter_blocks (
+            id TEXT PRIMARY KEY,
+            chapter_id TEXT NOT NULL REFERENCES textbook_chapters(id) ON DELETE RESTRICT,
+            parent_block_id TEXT REFERENCES chapter_blocks(id) ON DELETE RESTRICT,
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            block_type TEXT NOT NULL CHECK(block_type IN (
+                'HEADING','PARAGRAPH','DEFINITION','EQUATION','TABLE','DIAGRAM','IMAGE',
+                'CODE','EXAMPLE','WORKED_SOLUTION','WARNING','MISCONCEPTION','SUMMARY',
+                'EXERCISE','SOURCE_REFERENCE','FOOTNOTE'
+            )),
+            content_json TEXT NOT NULL CHECK(json_valid(content_json) AND json_type(content_json)='object'),
+            provenance TEXT NOT NULL CHECK(provenance IN ('SOURCE','EXPLANATION','DERIVED','EXTERNAL','UNCERTAIN')),
+            review_status TEXT NOT NULL CHECK(review_status IN ('DRAFT','NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            knowledge_unit_id TEXT REFERENCES knowledge_units(id) ON DELETE RESTRICT,
+            claim_id TEXT REFERENCES claims(id) ON DELETE RESTRICT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(chapter_id,parent_block_id,ordinal),
+            CHECK(parent_block_id IS NULL OR parent_block_id <> id)
+        );
+        CREATE INDEX idx_chapter_blocks_order ON chapter_blocks(chapter_id,parent_block_id,ordinal);
+        CREATE TABLE block_evidence (
+            id TEXT PRIMARY KEY,
+            block_id TEXT NOT NULL REFERENCES chapter_blocks(id) ON DELETE RESTRICT,
+            evidence_id TEXT NOT NULL REFERENCES evidence_items(id) ON DELETE RESTRICT,
+            relation TEXT NOT NULL CHECK(relation IN ('SUPPORTS','ILLUSTRATES','CONTEXTUALIZES','CONTRADICTS')),
+            review_state TEXT NOT NULL CHECK(review_state IN ('PENDING','ACCEPTED','REJECTED','NEEDS_REVIEW')),
+            rationale TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(block_id,evidence_id,relation)
+        );
+        CREATE INDEX idx_block_evidence_block ON block_evidence(block_id,review_state);
+        CREATE TRIGGER chapter_parent_same_version_insert
+        BEFORE INSERT ON textbook_chapters
+        WHEN NEW.parent_chapter_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM textbook_chapters p
+                WHERE p.id=NEW.parent_chapter_id AND p.version_id=NEW.version_id
+            ) THEN RAISE(ABORT,'parent chapter must belong to the same version') END;
+        END;
+        CREATE TRIGGER block_parent_same_chapter_insert
+        BEFORE INSERT ON chapter_blocks
+        WHEN NEW.parent_block_id IS NOT NULL
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks p
+                WHERE p.id=NEW.parent_block_id AND p.chapter_id=NEW.chapter_id
+            ) THEN RAISE(ABORT,'parent block must belong to the same chapter') END;
+        END;
+        CREATE TRIGGER block_evidence_same_source_insert
+        BEFORE INSERT ON block_evidence
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM chapter_blocks b
+                JOIN textbook_chapters c ON c.id=b.chapter_id
+                JOIN textbook_versions v ON v.id=c.version_id
+                JOIN textbooks t ON t.id=v.textbook_id
+                JOIN evidence_items e ON e.id=NEW.evidence_id
+                WHERE b.id=NEW.block_id AND t.source_id=e.source_id
+            ) THEN RAISE(ABORT,'block evidence must belong to the textbook source') END;
+        END;
+        """
+    ),
 )
-
  
 class MigrationError(RuntimeError):
     pass
