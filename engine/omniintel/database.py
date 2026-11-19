@@ -528,6 +528,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             content_rowid='rowid',
             tokenize='unicode61 remove_diacritics 2'
         );
+        INSERT INTO document_pages_fts(document_pages_fts) VALUES('rebuild');
         CREATE TRIGGER document_pages_fts_insert
         AFTER INSERT ON document_pages
         BEGIN
