@@ -95,3 +95,23 @@ def test_shared_reader_export_contract_is_versioned_and_source_clock_explicit() 
     assert "local_start_ms" in evidence
     assert "course_time_ms" in evidence
     assert evidence["seek_available"]["type"] == "boolean"
+
+
+def test_web_reader_uses_source_local_timestamp_fields_for_citations() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "item.local_start_ms ?? item.start_ms" in app
+    assert "item.local_end_ms ?? item.end_ms ?? start" in app
+
+
+def test_web_reader_requires_explicit_source_selection_before_media_attachment() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "Select the exact course source…" in app
+    assert 'state.mediaSourceId = null;' in app
+    assert '$("#media-file").disabled = !state.mediaSourceId;' in app
+    assert "attach only the matching local media file" in app
+
+
+def test_web_reader_rejects_malformed_utf8_imports() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'new TextDecoder("utf-8", { fatal: true })' in app
+    assert "file.arrayBuffer()" in app
