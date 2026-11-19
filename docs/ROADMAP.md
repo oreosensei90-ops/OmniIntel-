@@ -61,10 +61,11 @@ This roadmap is a plan, not a claim that every item exists.
 
 ## Applications
 - [x] First dependency-free offline Web Reader prototype: local reader JSON import, cross-chapter evidence-aware search, source-specific local audio/video attachment and seeking, PDF page structure review, local IndexedDB notes/bookmarks, local progress and cached static shell (full Web platform and large-library indexing pending).
-- [ ] Native Android app and Room persistence.
+- [x] Initial native Kotlin + Jetpack Compose Android reader with Storage Access Framework import and evidence rendering (Room persistence, media playback and full native study features pending).
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
-- [ ] Interactive Web/Android reader UI, annotations, bookmarks and search.
+- [x] First interactive Web and Android reader UIs with chapter navigation and search; Web also has local source playback, notes and bookmarks.
+- [ ] Native Android media playback, persistent annotations/bookmarks, shared offline library and cross-device search.
 - [ ] Flashcards, practice and study planning.
 
 ## Intelligence and operations
@@ -76,4 +77,4 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Optional approved provider registry and privacy controls.
 - [ ] Model benchmark and routing system.
 - [ ] Backup/restore and optional synchronization.
-- [ ] CI, security checks, SBOM and release certification.
+- [x] Python CI with tests/lint/JS syntax checks and independent Android debug APK CI with packaged network-permission verification (SBOM, security certification and release validation pending).
