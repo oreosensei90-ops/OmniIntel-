@@ -18,7 +18,7 @@ Open `http://localhost:8080` and choose `course-reader.json`. The service worker
 ## Included
 
 - Local JSON import with a 50 MiB limit and minimal shape validation.
-- Chapter navigation, text search, provenance labels and expandable evidence citations.
+- Chapter navigation, current-chapter text search, provenance labels and expandable evidence citations.
 - Transcript excerpts and PDF page text when present in the reader payload.
 - Responsive desktop/mobile layout and reduced-motion support.
 - Offline shell caching; no external fonts, scripts, analytics, APIs or network calls.
