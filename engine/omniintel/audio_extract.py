@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
+from shutil import which as find_executable
 import subprocess
 import tempfile
 import wave
@@ -242,7 +242,7 @@ def extract_audio(
         raise ValueError("Negative audio stream start times require explicit timeline review")
     time_offset_ms = source_stream_start_ms or 0
 
-    executable = shutil.which("ffmpeg")
+    executable = find_executable("ffmpeg")
     if not executable:
         raise RuntimeError("ffmpeg was not found; install FFmpeg tools to extract local audio")
     tool_version = _run_version(executable, timeout_seconds=timeout_seconds)
