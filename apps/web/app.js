@@ -12,7 +12,9 @@ const element = (tag, className, text) => {
 function evidenceLabel(item) {
   const source = item.source?.title || item.source_title || item.source_id || "Source";
   if (item.locator_kind === "DOCUMENT_PAGE") return source + " · page " + (item.page_number ?? item.document_page?.page_number ?? "?");
-  if (item.start_ms !== null && item.start_ms !== undefined) return source + " · " + (item.start_ms / 1000).toFixed(2) + "–" + (Number(item.end_ms ?? item.start_ms) / 1000).toFixed(2) + "s";
+  const start = item.local_start_ms ?? item.start_ms;
+  const end = item.local_end_ms ?? item.end_ms ?? start;
+  if (start !== null && start !== undefined) return source + " · " + (start / 1000).toFixed(2) + "–" + (Number(end) / 1000).toFixed(2) + "s";
   return source + " · source reference";
 }
 function renderEvidence(items) {
@@ -256,15 +258,19 @@ function renderChapter() {
 function configureMediaSources() {
   const select = $("#media-source");
   select.replaceChildren();
+  const placeholder = element("option", "", "Select the exact course source…");
+  placeholder.value = "";
+  placeholder.selected = true;
+  select.append(placeholder);
   for (const source of state.book?.sources || []) {
     const option = element("option", "", source.title || source.source_id);
     option.value = source.source_id;
     select.append(option);
   }
   select.disabled = !(state.book?.sources || []).length;
-  $("#media-file").disabled = select.disabled;
-  state.mediaSourceId = select.value || null;
-  $("#media-status").textContent = select.disabled ? "This reader export has no course sources." : "Choose a course source, then attach its matching local media file.";
+  $("#media-file").disabled = true;
+  state.mediaSourceId = null;
+  $("#media-status").textContent = select.disabled ? "This reader export has no course sources." : "Select the exact source before attaching its matching local media file.";
 }
 function resetLocalMedia() {
   const video = $("#local-media");
@@ -314,7 +320,9 @@ fileInput.addEventListener("change", async () => {
   if (!file) return;
   try {
     if (file.size > 50 * 1024 * 1024) throw new Error("Reader export exceeds the 50 MB safety limit.");
-    const parsed = JSON.parse(await file.text());
+    const bytes = await file.arrayBuffer();
+    const raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const parsed = JSON.parse(raw);
     renderBook(parsed, file.name);
   } catch (error) {
     alert("Could not open reader export: " + error.message);
@@ -322,13 +330,18 @@ fileInput.addEventListener("change", async () => {
 });
 $("#clear-button").addEventListener("click", () => {
   resetLocalMedia();
-  state.book = null; state.chapters = []; state.index = 0;
+  state.book = null; state.chapters = []; state.index = 0; state.mediaSourceId = null;
+  $("#media-source").replaceChildren();
+  $("#media-file").disabled = true;
   $("#reader").hidden = true; $("#welcome").hidden = false; $("#clear-button").disabled = true;
 });
 $("#media-source").addEventListener("change", (event) => {
   resetLocalMedia();
   state.mediaSourceId = event.target.value || null;
-  $("#media-status").textContent = "Selected source changed. Attach the matching media file.";
+  $("#media-file").disabled = !state.mediaSourceId;
+  $("#media-status").textContent = state.mediaSourceId
+    ? "Source selected. Attach only the matching local media file."
+    : "Select the exact course source before attaching media.";
   renderChapter();
 });
 $("#media-file").addEventListener("change", (event) => {
