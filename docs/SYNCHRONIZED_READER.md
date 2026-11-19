@@ -33,3 +33,8 @@ The first Android reader prototype can attach one user-selected local audio or v
 
 
 The Web Reader displays an accepted course-clock time and alignment status separately from the source-local citation time. Media seeking always uses the source-local locator and requires the exact source to be attached; the mapped course clock is informational and is never substituted for a media player's local timeline.
+
+
+## Android reading progress
+
+The native Android prototype stores the last-opened chapter index in Preferences DataStore, keyed by the immutable textbook version ID. Reopening that version restores the saved chapter, clamped to the current chapter range. This is local device state only; it does not yet store a paragraph-level scroll offset, selected text, annotations, bookmarks or cross-device sync. A Room-backed source/library and richer reader-session model remain planned.
