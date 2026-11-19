@@ -1273,6 +1273,69 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0021_document_visual_source_guards",
+        """
+        CREATE TRIGGER document_ocr_asset_source_insert
+        BEFORE INSERT ON document_ocr_pages
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN document_extractions de ON de.id=dp.extraction_id
+                JOIN source_assets original ON original.id=de.source_asset_id
+                JOIN source_assets rendered ON rendered.id=NEW.rendered_asset_id
+                WHERE dp.id=NEW.page_id AND original.source_id=rendered.source_id
+            ) THEN RAISE(ABORT,'OCR render asset must belong to the PDF source') END;
+        END;
+        CREATE TRIGGER document_ocr_asset_source_update
+        BEFORE UPDATE OF page_id,rendered_asset_id ON document_ocr_pages
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN document_extractions de ON de.id=dp.extraction_id
+                JOIN source_assets original ON original.id=de.source_asset_id
+                JOIN source_assets rendered ON rendered.id=NEW.rendered_asset_id
+                WHERE dp.id=NEW.page_id AND original.source_id=rendered.source_id
+            ) THEN RAISE(ABORT,'OCR render asset must belong to the PDF source') END;
+        END;
+        CREATE TRIGGER document_element_source_validate_insert
+        BEFORE INSERT ON document_elements
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE dp.id=NEW.page_id AND er.document_page_id=dp.id
+                  AND er.locator_kind='DOCUMENT_PAGE'
+            ) THEN RAISE(ABORT,'document element must use its own page citation') END;
+            SELECT CASE WHEN NEW.asset_id IS NOT NULL AND NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN document_extractions de ON de.id=dp.extraction_id
+                JOIN source_assets original ON original.id=de.source_asset_id
+                JOIN source_assets visual ON visual.id=NEW.asset_id
+                WHERE dp.id=NEW.page_id AND original.source_id=visual.source_id
+                  AND visual.role IN ('DIAGRAM','SLIDE','FRAME')
+            ) THEN RAISE(ABORT,'document visual asset must belong to the same source') END;
+        END;
+        CREATE TRIGGER document_element_source_validate_update
+        BEFORE UPDATE OF page_id,evidence_ref_id,asset_id ON document_elements
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN evidence_refs er ON er.id=NEW.evidence_ref_id
+                WHERE dp.id=NEW.page_id AND er.document_page_id=dp.id
+                  AND er.locator_kind='DOCUMENT_PAGE'
+            ) THEN RAISE(ABORT,'document element must use its own page citation') END;
+            SELECT CASE WHEN NEW.asset_id IS NOT NULL AND NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN document_extractions de ON de.id=dp.extraction_id
+                JOIN source_assets original ON original.id=de.source_asset_id
+                JOIN source_assets visual ON visual.id=NEW.asset_id
+                WHERE dp.id=NEW.page_id AND original.source_id=visual.source_id
+                  AND visual.role IN ('DIAGRAM','SLIDE','FRAME')
+            ) THEN RAISE(ABORT,'document visual asset must belong to the same source') END;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
