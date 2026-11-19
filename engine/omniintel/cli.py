@@ -19,6 +19,20 @@ from .local_files import import_local_file
 def main() -> None:
     parser = argparse.ArgumentParser(prog="omniintel")
     sub = parser.add_subparsers(dest="command", required=True)
+    collection_create = sub.add_parser("collection-create", help="Create a course or multi-source collection")
+    collection_create.add_argument("database", type=Path)
+    collection_create.add_argument("title")
+    collection_create.add_argument("--type", default="COURSE", choices=["COURSE","PLAYLIST","PROJECT","RESEARCH_SET"])
+    collection_create.add_argument("--description", default="")
+    collection_add = sub.add_parser("collection-add-source", help="Add an existing source to a course/collection")
+    collection_add.add_argument("database", type=Path)
+    collection_add.add_argument("collection_id")
+    collection_add.add_argument("source_id")
+    collection_add.add_argument("--role", default="LEARNING_SOURCE", choices=["LEARNING_SOURCE","SLIDE_DECK","CAPTIONS","REFERENCE","NOTES"])
+    collection_add.add_argument("--ordinal", type=int, default=None)
+    collection_show = sub.add_parser("collection-show", help="Show a collection and its ordered source members")
+    collection_show.add_argument("database", type=Path)
+    collection_show.add_argument("collection_id")
     plan_inputs = sub.add_parser("plan-inputs", help="Create a read-only plan for selected local learning sources")
     plan_inputs.add_argument("paths", nargs="+", type=Path, help="Files or directories selected by the user")
     plan_inputs.add_argument("--recursive", action="store_true", help="Include files in selected directories recursively")
@@ -226,6 +240,27 @@ def main() -> None:
     export_markdown.add_argument("output", type=Path)
     export_markdown.add_argument("--asset-dir", type=Path, default=None)
     args = parser.parse_args()
+    if args.command == "collection-create":
+        from .collections import CollectionStore
+
+        collection_id = CollectionStore(args.database).create(
+            args.title,collection_type=args.type,description=args.description,
+        )
+        print(json.dumps({"collection_id":collection_id},indent=2))
+    elif args.command == "collection-add-source":
+        from .collections import CollectionStore
+
+        ordinal = CollectionStore(args.database).add_source(
+            args.collection_id,args.source_id,role=args.role,ordinal=args.ordinal,
+        )
+        print(json.dumps({"collection_id":args.collection_id,"source_id":args.source_id,"ordinal":ordinal},indent=2))
+    elif args.command == "collection-show":
+        from .collections import CollectionStore
+
+        result = CollectionStore(args.database).get(args.collection_id)
+        if result is None:
+            raise SystemExit("Collection not found")
+        print(json.dumps(result,ensure_ascii=False,indent=2))
     if args.command == "plan-inputs":
         from .input_plan import plan_local_inputs
 
