@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage is implemented, and IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Android, web, media extraction adapters and AI inference are not yet implemented.
+This repository is at the beginning of its implementation. The foundation branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified; it does not yet extract document or media content. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Android, web, media extraction adapters and AI inference are not yet implemented.
 
 ## Engineering principles
 
@@ -76,3 +76,14 @@ Only process media and documents the user is authorized to access and use. Publi
 ## License
 
 The repository's existing MIT license is retained. Third-party code, model weights, fonts, datasets and native dependencies require separate license review before distribution.
+
+
+Register an explicitly selected local file while preserving its original bytes:
+
+\`\`\`bash
+omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.pdf --title "Lecture 01"
+\`\`\`
+
+This records the source, detected media type, content hash and an asset reference. It does not
+extract PDF text, OCR, transcribe or decode media. The source rights status remains UNVERIFIED.
+See `docs/LOCAL_FILE_INGESTION.md` for supported types and limitations.
