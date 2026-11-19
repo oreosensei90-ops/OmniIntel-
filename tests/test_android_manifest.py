@@ -81,7 +81,8 @@ def test_android_reader_searches_all_chapters_and_labels_cross_chapter_results()
     assert 'label = { Text("Search all chapters") }' in code
     assert "current.chapters.flatMap" in code
     assert ".map { Triple(index, chapter.title, it) }" in code
-    assert "if (query.isNotBlank()) Text(chapterTitle" in code
+    assert "if (query.isNotBlank()) {" in code
+    assert 'Text(chapterTitle, color = Gold' in code
 
 
 def test_android_reader_pauses_local_media_when_backgrounded() -> None:
