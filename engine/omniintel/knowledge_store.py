@@ -104,7 +104,7 @@ class KnowledgeStore:
             links = conn.execute(
                 """SELECT l.id AS link_id,l.relation,l.review_state,l.rationale,
                           er.id AS evidence_ref_id,er.locator_kind,er.page_number,
-                          er.start_ms,er.end_ms,
+                          er.start_ms,er.end_ms,l.element_id,
                           COALESCE(NULLIF(dp.text_content,''),ocr.text_content,e.content) AS source_text,
                           de.element_type,de.text_content AS element_text,de.review_state AS element_review_state
                    FROM knowledge_unit_evidence_refs l
