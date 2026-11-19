@@ -27,14 +27,96 @@ class KnowledgeStore:
         unit_id = uuid7()
         now = utc_now()
         with connect(self.database_path) as conn:
+            if data.source_element_id:
+                existing = conn.execute(
+                    "SELECT id FROM knowledge_units WHERE source_element_id=?",
+                    (data.source_element_id,),
+                ).fetchone()
+                if existing:
+                    return existing["id"]
             conn.execute(
                 """INSERT INTO knowledge_units
-                   (id,unit_type,title,body,provenance,status,created_at,updated_at)
-                   VALUES(?,?,?,?,?,?,?,?)""",
+                   (id,unit_type,title,body,provenance,status,created_at,updated_at,
+                    source_element_id)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
                 (unit_id, data.unit_type, data.title.strip(), data.body.strip(),
-                 data.provenance, data.status, now, now),
+                 data.provenance, data.status, now, now, data.source_element_id),
             )
         return unit_id
+
+    def link_unit_evidence_reference(
+        self,
+        knowledge_unit_id: str,
+        evidence_ref_id: str,
+        *,
+        element_id: str | None = None,
+        relation: str = "SOURCE_EXCERPT",
+        review_state: str = "PENDING",
+        rationale: str | None = None,
+    ) -> str:
+        if relation not in {"SOURCE_EXCERPT","ILLUSTRATES","CONTEXTUALIZES"}:
+            raise ValueError("Unsupported knowledge-unit evidence relation")
+        if review_state not in {"PENDING","ACCEPTED","REJECTED","NEEDS_REVIEW"}:
+            raise ValueError("Unsupported knowledge-unit evidence review state")
+        with connect(self.database_path) as conn:
+            existing = conn.execute(
+                """SELECT id FROM knowledge_unit_evidence_refs
+                   WHERE knowledge_unit_id=? AND evidence_ref_id=?
+                     AND element_id IS ? AND relation=?""",
+                (knowledge_unit_id,evidence_ref_id,element_id,relation),
+            ).fetchone()
+            if existing:
+                return existing["id"]
+            link_id = uuid7()
+            conn.execute(
+                """INSERT INTO knowledge_unit_evidence_refs
+                   (id,knowledge_unit_id,evidence_ref_id,element_id,relation,
+                    review_state,rationale,created_at)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (link_id,knowledge_unit_id,evidence_ref_id,element_id,relation,
+                 review_state,rationale,utc_now()),
+            )
+        return link_id
+
+    def review_unit_evidence_reference(
+        self, link_id: str, review_state: str, *, rationale: str | None = None
+    ) -> str:
+        if review_state not in {"ACCEPTED","REJECTED","NEEDS_REVIEW"}:
+            raise ValueError("Invalid knowledge-unit evidence review state")
+        with connect(self.database_path) as conn:
+            cursor = conn.execute(
+                """UPDATE knowledge_unit_evidence_refs
+                   SET review_state=?,rationale=COALESCE(?,rationale),reviewed_at=?
+                   WHERE id=?""",
+                (review_state,rationale,utc_now(),link_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Knowledge-unit evidence link does not exist")
+        return review_state
+
+    def get_unit_bundle(self, knowledge_unit_id: str) -> dict[str, Any] | None:
+        with connect(self.database_path) as conn:
+            unit = conn.execute(
+                "SELECT * FROM knowledge_units WHERE id=?",(knowledge_unit_id,)
+            ).fetchone()
+            if unit is None:
+                return None
+            links = conn.execute(
+                """SELECT l.id AS link_id,l.relation,l.review_state,l.rationale,
+                          er.id AS evidence_ref_id,er.locator_kind,er.page_number,
+                          er.start_ms,er.end_ms,
+                          COALESCE(NULLIF(dp.text_content,''),ocr.text_content,e.content) AS source_text,
+                          de.element_type,de.text_content AS element_text,de.review_state AS element_review_state
+                   FROM knowledge_unit_evidence_refs l
+                   JOIN evidence_refs er ON er.id=l.evidence_ref_id
+                   LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                   LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
+                   LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
+                   LEFT JOIN document_elements de ON de.id=l.element_id
+                   WHERE l.knowledge_unit_id=? ORDER BY l.created_at,l.id""",
+                (knowledge_unit_id,),
+            ).fetchall()
+        return {"unit":dict(unit),"evidence_references":[dict(row) for row in links]}
 
     def create_claim(self, data: ClaimInput) -> str:
         data.validate()
