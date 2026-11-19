@@ -198,8 +198,10 @@ def test_ocr_adapter_geometry_and_text_budgets_are_enforced(tmp_path: Path) -> N
     assert get_ocr_page(database,extract_pdf(database,assets,imported.asset.id).pages[0].id) is None
 
 def test_tesseract_adapter_uses_bounded_tsv_file_and_normalizes_word_boxes(tmp_path: Path) -> None:
+    import io
     import sys
 
+    from PIL import Image
     from omniintel.document_ocr import TesseractOCR
 
     executable = tmp_path / "tesseract-stub"
@@ -219,7 +221,9 @@ def test_tesseract_adapter_uses_bounded_tsv_file_and_normalizes_word_boxes(tmp_p
     )
     executable.chmod(0o755)
     adapter = TesseractOCR(str(executable))
-    result = adapter.recognize_png(b"\\x89PNG\\r\\n\\x1a\\n",timeout_seconds=5)
+    png = io.BytesIO()
+    Image.new("RGB",(16,16),"white").save(png,format="PNG")
+    result = adapter.recognize_png(png.getvalue(),timeout_seconds=5)
     assert result.text == "Hello"
     assert result.words[0].x0 == pytest.approx(0.1)
     assert result.words[0].y0 == pytest.approx(0.1)
