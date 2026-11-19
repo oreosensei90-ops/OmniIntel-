@@ -343,7 +343,7 @@ def extract_document_structure(
                                 element_type,ordinal,text_content,content_json,
                                 x0,y0,x1,y1,asset_id,confidence,provenance,
                                 review_state,created_at)
-                               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) 
+                               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) 
                                ON CONFLICT(page_id,parser_name,parser_version,ordinal)
                                DO UPDATE SET
                                  element_type=excluded.element_type,
