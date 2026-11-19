@@ -59,3 +59,81 @@ def test_search_and_resolve_evidence_cli(tmp_path: Path, monkeypatch, capsys) ->
     assert '"start_ms": 100' in resolved
     assert '"end_ms": 900' in resolved
 
+def test_document_structure_and_knowledge_cli(tmp_path: Path, monkeypatch, capsys) -> None:
+    import json
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.local_files import import_local_file
+
+    pdf = tmp_path / "cli-document.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.setFont("Helvetica",10)
+    output.drawString(72,720,"A conserved quantity remains constant in an isolated system.")
+    output.showPage()
+    output.save()
+    database = tmp_path / "document-cli.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database,assets,pdf,title="CLI document")
+    extract_pdf(database,assets,imported.asset.id)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["omniintel","structure-pdf",str(database),str(assets),imported.asset.id],
+    )
+    main()
+    structure = json.loads(capsys.readouterr().out)
+    assert structure["elements"] >= 1
+    element_id = structure["element_ids"][0]
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["omniintel","review-document-element",str(database),element_id,"ACCEPTED"],
+    )
+    main()
+    assert '"review_state": "ACCEPTED"' in capsys.readouterr().out
+
+    monkeypatch.setattr(
+        "sys.argv",["omniintel","build-document-knowledge",str(database),imported.source_id]
+    )
+    main()
+    candidates = json.loads(capsys.readouterr().out)
+    assert candidates["created_or_reused"] == 1
+    assert candidates["candidate_units"]
+
+
+def test_review_ocr_page_cli(tmp_path: Path, monkeypatch, capsys) -> None:
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_ocr import OCRResult, OCRWord, ocr_pdf
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.local_files import import_local_file
+
+    class FakeOCR:
+        name = "cli-fake"
+        version = "1"
+
+        def recognize_png(self, png_bytes: bytes, *, timeout_seconds: int) -> OCRResult:
+            return OCRResult(
+                "A scanned source statement.",
+                (OCRWord("A",0.1,0.1,0.2,0.2,95.0),),
+                95.0,
+            )
+
+    pdf = tmp_path / "cli-scan.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.showPage()
+    output.save()
+    database = tmp_path / "ocr-cli.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database,assets,pdf)
+    extract_pdf(database,assets,imported.asset.id)
+    result = ocr_pdf(database,assets,imported.asset.id,adapter=FakeOCR())
+    page_id = result.pages[0].page_id
+
+    monkeypatch.setattr(
+        "sys.argv",["omniintel","review-ocr-page",str(database),page_id,"ACCEPTED"]
+    )
+    main()
+    assert '"status": "ACCEPTED"' in capsys.readouterr().out
+
