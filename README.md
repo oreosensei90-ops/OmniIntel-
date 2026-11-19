@@ -87,3 +87,15 @@ omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.pdf --title "L
 This records the source, detected media type, content hash and an asset reference. It does not
 extract PDF text, OCR, transcribe or decode media. The source rights status remains UNVERIFIED.
 See `docs/LOCAL_FILE_INGESTION.md` for supported types and limitations.
+
+
+Extract bounded text from an already-ingested local PDF, preserving page numbers and page hashes:
+
+\`\`\`bash
+omniintel extract-pdf ./omniintel.db ./omniintel-assets ASSET_ID
+\`\`\`
+
+Install the optional PDF parser with \`pip install -e ".[documents]"\`. Extraction is local-only,
+rejects encrypted PDFs, enforces page and character limits, and stores per-page text separately
+from video transcript segments. Scanned pages may be empty until an OCR adapter is implemented.
+See \`docs/PDF_PAGE_EXTRACTION.md\`.
