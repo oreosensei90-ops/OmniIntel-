@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Registered local audio/video assets can also be inspected with bounded, hash-verified ffprobe metadata probing. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Registered compressed audio/video can be decoded locally to a normalized PCM WAV derivative with its original stream offset preserved. Native Android ASR, web apps, video frame extraction, automated knowledge generation and general AI orchestration remain pending.
+The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Registered local audio/video assets can also be inspected with bounded, hash-verified ffprobe metadata probing. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. PDF, DOCX, HTML and Markdown exporters now render linked visual assets with source ownership checks and page-aware citations. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Registered compressed audio/video can be decoded locally to a normalized PCM WAV derivative with its original stream offset preserved. Native Android ASR, web apps, automated knowledge generation and full general AI orchestration remain pending.
 
 ## Engineering principles
 
@@ -78,7 +78,7 @@ omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4
 omniintel probe-media ./omniintel.db ./omniintel-assets ASSET_ID
 ~~~
 
-Install FFmpeg tools so ffprobe and ffmpeg are available on PATH. The probe verifies the content-addressed asset and records container/stream metadata. extract-audio creates a content-addressed mono 16 kHz PCM WAV derivative and preserves the source stream start offset. Neither stage downloads media or uses network protocols. Video frame extraction remains pending. See docs/MEDIA_PROBING.md and docs/AUDIO_EXTRACTION.md.
+Install FFmpeg tools so ffprobe and ffmpeg are available on PATH. The probe verifies the content-addressed asset and records container/stream metadata. extract-audio creates a content-addressed mono 16 kHz PCM WAV derivative and preserves the source stream start offset. Neither stage downloads media or uses network protocols. Video frame extraction is implemented with timestamped content-addressed JPEGs. See docs/MEDIA_PROBING.md, docs/AUDIO_EXTRACTION.md and docs/VIDEO_FRAME_EXTRACTION.md.
 
 ## Local audio transcription
 
@@ -91,6 +91,54 @@ omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID OUTPUT_ASSE
 ~~~
 
 extract-audio selects the first audio stream by default; use --stream-index when another stream is needed. Its output asset stays linked to the same source, and the stored stream start offset is automatically applied to transcript timestamps. See docs/AUDIO_EXTRACTION.md. Install the optional adapter with python -m pip install -e '.[asr]'. Model downloads are disabled by default; explicitly add --allow-model-download if you authorize faster-whisper to fetch a model by name. Completed chunks are checkpointed by audio content and configuration, so an interrupted run can resume without retranscribing completed chunks. Existing source transcripts are never silently overwritten. The transcription adapter accepts normalized PCM WAV; local FFmpeg extraction now supplies that format for compressed media. VAD filtering is disabled by default to avoid dropping quiet lecture speech; enable it explicitly only when appropriate. Mobile-native ASR, word timestamps and diarization remain future work. See docs/AUDIO_EXTRACTION.md and docs/AUDIO_TRANSCRIPTION.md.
+
+## Video visual intelligence
+
+Extract frames and build the source-bound visual timeline:
+
+~~~bash
+omniintel extract-frames ./omniintel.db ./omniintel-assets VIDEO_ASSET_ID
+omniintel build-visual-timeline ./omniintel.db FRAME_EXTRACTION_ID
+omniintel visual-timeline ./omniintel.db SOURCE_ID
+~~~
+
+Review each visual event with \`review-visual-event\`, then review its temporal link with
+\`review-visual-record\` and the table \`visual_transcript_alignments\`. Scene-change detection and
+frame OCR are optional local stages:
+
+~~~bash
+omniintel detect-scenes ./omniintel.db ./omniintel-assets SOURCE_ID
+omniintel ocr-video-frames ./omniintel.db ./omniintel-assets SOURCE_ID
+~~~
+
+Install the optional vision dependency with \`pip install -e '.[vision]'\`; install Tesseract
+separately for OCR. OCR output always starts in NEEDS_REVIEW.
+
+Visual descriptions, semantic matching and cross-modal claim checks use an explicitly selected
+local Ollama vision model. Start Ollama locally and install a compatible vision model first:
+
+~~~bash
+omniintel describe-video-frames ./omniintel.db ./omniintel-assets SOURCE_ID --model MODEL
+omniintel align-video-semantics ./omniintel.db ./omniintel-assets SOURCE_ID --model MODEL
+omniintel verify-visual-claim ./omniintel.db SOURCE_ID CLAIM_ID VISUAL_EVENT_ID DESCRIPTION_ID --model MODEL
+~~~
+
+The adapter connects only to \`127.0.0.1:11434\`, refuses redirects, and does not use hosted model
+endpoints. All model outputs remain NEEDS_REVIEW. Cross-modal contradictions accepted by a reviewer
+block textbook publication. See \`docs/VIDEO_VISUAL_INTELLIGENCE.md\`.
+
+When exporting a textbook containing linked images, provide the asset store:
+
+~~~bash
+omniintel export-pdf ./omniintel.db VERSION_ID ./exports/book.pdf --asset-dir ./omniintel-assets
+omniintel export-docx ./omniintel.db VERSION_ID ./exports/book.docx --asset-dir ./omniintel-assets
+omniintel export-html ./omniintel.db VERSION_ID ./exports/book.html --asset-dir ./omniintel-assets
+omniintel export-markdown ./omniintel.db VERSION_ID ./exports/book.md --asset-dir ./omniintel-assets
+~~~
+
+PDF/DOCX embed supported image files; HTML embeds them as bounded data URIs; Markdown copies them
+to a sibling \`.assets\` folder. Exported page citations display page numbers rather than fabricated
+video timestamps.
 
 ## Rights and source access
 
