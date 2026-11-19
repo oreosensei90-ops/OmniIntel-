@@ -55,6 +55,46 @@ class TopicEvidenceInput:
             raise ValueError("Topic evidence relevance must be between zero and one")
 
 
+@dataclass(frozen=True, slots=True)
+class DocumentTopicInput:
+    source_id: str
+    title: str
+    ordinal: int
+    parent_topic_id: str | None = None
+    description: str = ""
+    provenance: TopicProvenance = "EXPLANATION"
+    confidence: float | None = None
+
+    def validate(self) -> None:
+        if not self.source_id or not self.title.strip():
+            raise ValueError("Document topic source and title are required")
+        if self.ordinal < 0:
+            raise ValueError("Document topic ordinal must be non-negative")
+        if self.provenance not in {"EXPLANATION", "DERIVED", "UNCERTAIN"}:
+            raise ValueError("Topic provenance cannot be SOURCE")
+        if self.confidence is not None and not 0 <= self.confidence <= 1:
+            raise ValueError("Topic confidence must be between zero and one")
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentTopicEvidenceInput:
+    topic_id: str
+    evidence_ref_id: str
+    relation: TopicRelation
+    relevance_score: float | None = None
+    rationale: str | None = None
+
+    def validate(self) -> None:
+        if not self.topic_id or not self.evidence_ref_id:
+            raise ValueError("Document topic and evidence reference IDs are required")
+        if self.relation not in {
+            "INTRODUCES", "DEVELOPS", "RECAPITULATES", "DEMONSTRATES", "CONTRASTS",
+        }:
+            raise ValueError("Unsupported document topic/evidence relation")
+        if self.relevance_score is not None and not 0 <= self.relevance_score <= 1:
+            raise ValueError("Topic evidence relevance must be between zero and one")
+
+
 class TopicStore:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -122,6 +162,109 @@ class TopicStore:
                 (status, now, link["topic_id"]),
             )
         return status
+
+
+    def create_document_topic(self, data: DocumentTopicInput) -> str:
+        """Create a page-agnostic topic node for document sources."""
+        data.validate()
+        topic_id, now = uuid7(), utc_now()
+        with connect(self.database_path) as conn:
+            conn.execute(
+                """INSERT INTO document_topics
+                   (id,source_id,parent_topic_id,title,description,ordinal,provenance,
+                    status,confidence,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,'DRAFT',?,?,?)""",
+                (topic_id,data.source_id,data.parent_topic_id,data.title.strip(),
+                 data.description.strip(),data.ordinal,data.provenance,data.confidence,now,now),
+            )
+        return topic_id
+
+    def link_document_evidence(self, data: DocumentTopicEvidenceInput) -> str:
+        data.validate()
+        link_id = uuid7()
+        with connect(self.database_path) as conn:
+            conn.execute(
+                """INSERT INTO document_topic_evidence_refs
+                   (id,topic_id,evidence_ref_id,relation,review_state,
+                    relevance_score,rationale,created_at)
+                   VALUES(?,?,?,?,'PENDING',?,?,?)""",
+                (link_id,data.topic_id,data.evidence_ref_id,data.relation,
+                 data.relevance_score,data.rationale,utc_now()),
+            )
+        return link_id
+
+    def review_document_evidence_link(
+        self, link_id: str, review_state: str, *, rationale: str | None = None
+    ) -> str:
+        if review_state not in {"ACCEPTED", "REJECTED", "NEEDS_REVIEW"}:
+            raise ValueError("Invalid document topic evidence review state")
+        now = utc_now()
+        with connect(self.database_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            link = conn.execute(
+                "SELECT topic_id FROM document_topic_evidence_refs WHERE id=?",
+                (link_id,),
+            ).fetchone()
+            if link is None:
+                raise ValueError("Document topic/evidence link does not exist")
+            conn.execute(
+                """UPDATE document_topic_evidence_refs
+                   SET review_state=?,rationale=COALESCE(?,rationale),reviewed_at=?
+                   WHERE id=?""",
+                (review_state,rationale,now,link_id),
+            )
+            topic = conn.execute(
+                "SELECT provenance FROM document_topics WHERE id=?",
+                (link["topic_id"],),
+            ).fetchone()
+            accepted = conn.execute(
+                """SELECT count(*) FROM document_topic_evidence_refs
+                   WHERE topic_id=? AND review_state='ACCEPTED'""",
+                (link["topic_id"],),
+            ).fetchone()[0]
+            status = "NEEDS_REVIEW" if topic["provenance"] == "UNCERTAIN" else (
+                "ACCEPTED" if accepted else "DRAFT"
+            )
+            conn.execute(
+                "UPDATE document_topics SET status=?,updated_at=? WHERE id=?",
+                (status,now,link["topic_id"]),
+            )
+        return status
+
+    def get_document_outline(self, source_id: str) -> list[dict[str, object]]:
+        """Return ordered document topics with page citations, not fake time intervals."""
+        with connect(self.database_path) as conn:
+            rows = conn.execute(
+                """SELECT t.id,t.parent_topic_id,t.title,t.description,t.ordinal,
+                          t.provenance,t.status,t.confidence,
+                          count(CASE WHEN te.review_state='ACCEPTED' THEN 1 END)
+                              AS accepted_evidence
+                   FROM document_topics t
+                   LEFT JOIN document_topic_evidence_refs te ON te.topic_id=t.id
+                   WHERE t.source_id=?
+                   GROUP BY t.id ORDER BY t.ordinal,t.id""",
+                (source_id,),
+            ).fetchall()
+            refs = conn.execute(
+                """SELECT t.id AS topic_id,er.id AS evidence_ref_id,
+                          er.locator_kind,er.page_number,er.source_asset_id,
+                          er.start_ms,er.end_ms,te.relation,te.review_state
+                   FROM document_topics t
+                   JOIN document_topic_evidence_refs te ON te.topic_id=t.id
+                   JOIN evidence_refs er ON er.id=te.evidence_ref_id
+                   WHERE t.source_id=?
+                   ORDER BY t.ordinal,er.page_number,er.start_ms""",
+                (source_id,),
+            ).fetchall()
+        refs_by_topic: dict[str, list[dict[str, object]]] = {}
+        for row in refs:
+            refs_by_topic.setdefault(row["topic_id"], []).append(dict(row))
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["evidence_references"] = refs_by_topic.get(row["id"], [])
+            result.append(item)
+        return result
 
     def get_outline(self, source_id: str) -> list[dict[str, object]]:
         with connect(self.database_path) as conn:
