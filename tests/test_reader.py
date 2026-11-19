@@ -42,6 +42,11 @@ def test_reader_uses_only_accepted_clock_alignment_and_persists_position(tmp_pat
     assert ev["course_time_ms"] is None
     AlignmentStore(db).review(alignment,"ACCEPTED")
     after=reader.open_version(version,anchor_source_id=a.source_id)
+    import json
+    from jsonschema import validate
+
+    schema_path=Path(__file__).parents[1]/"schemas"/"reader-export.schema.json"
+    validate(after,json.loads(schema_path.read_text(encoding="utf-8")))
     ev=after["chapters"][0]["blocks"][0]["evidence"][0]
     assert ev["course_time_ms"]==-300
     assert ev["course_end_time_ms"]==4700
