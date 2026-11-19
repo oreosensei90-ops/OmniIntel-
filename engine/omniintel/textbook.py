@@ -182,6 +182,26 @@ class TextbookStore:
             )
         return link_id
 
+
+    def link_evidence_reference(
+        self, block_id: str, evidence_ref_id: str, *, relation: str = "SUPPORTS",
+        review_state: str = "PENDING", rationale: str | None = None,
+    ) -> str:
+        """Attach a textbook block to a transcript interval or document page citation."""
+        if relation not in {"SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES", "CONTRADICTS"}:
+            raise ValueError("Unsupported block/evidence reference relation")
+        if review_state not in {"PENDING", "ACCEPTED", "REJECTED", "NEEDS_REVIEW"}:
+            raise ValueError("Unsupported evidence review state")
+        link_id = uuid7()
+        with connect(self.database_path) as conn:
+            conn.execute(
+                """INSERT INTO block_evidence_refs
+                   (id,block_id,evidence_ref_id,relation,review_state,rationale,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (link_id,block_id,evidence_ref_id,relation,review_state,rationale,utc_now()),
+            )
+        return link_id
+
     def get_version_tree(self, version_id: str) -> dict[str, Any] | None:
         with connect(self.database_path) as conn:
             version = conn.execute(
@@ -206,9 +226,23 @@ class TextbookStore:
                     evidence = conn.execute(
                         """SELECT be.id,be.relation,be.review_state,be.rationale,
                                   e.id AS evidence_id,e.content,e.start_ms,e.end_ms,
-                                  e.source_id,e.provenance
+                                  e.source_id,e.provenance,er.id AS evidence_ref_id,
+                                  er.locator_kind,er.page_number
                            FROM block_evidence be JOIN evidence_items e ON e.id=be.evidence_id
+                           LEFT JOIN evidence_refs er ON er.evidence_item_id=e.id
                            WHERE be.block_id=? ORDER BY be.created_at,be.id""", (block["id"],),
+                    ).fetchall()
+                    evidence_references = conn.execute(
+                        """SELECT ber.id,ber.relation,ber.review_state,ber.rationale,
+                                  er.id AS evidence_ref_id,er.locator_kind,er.start_ms,
+                                  er.end_ms,er.page_number,er.source_id,er.source_asset_id,
+                                  COALESCE(e.content,dp.text_content) AS content
+                           FROM block_evidence_refs ber
+                           JOIN evidence_refs er ON er.id=ber.evidence_ref_id
+                           LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
+                           LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                           WHERE ber.block_id=? ORDER BY ber.created_at,ber.id""",
+                        (block["id"],),
                     ).fetchall()
                     item = dict(block)
                     assets = conn.execute(
@@ -223,6 +257,7 @@ class TextbookStore:
                     ).fetchall()
                     item["content"] = json.loads(item.pop("content_json"))
                     item["evidence"] = [dict(row) for row in evidence]
+                    item["evidence_references"] = [dict(row) for row in evidence_references]
                     item["assets"] = [dict(row) for row in assets]
                     block_items.append(item)
                 chapter_items.append({"chapter": dict(chapter), "blocks": block_items})
