@@ -284,7 +284,7 @@ def extract_video_frames(
     min_interval_ms: int = 5_000,
     max_frames: int = 500,
     max_frame_bytes: int = 8 * 1024 * 1024,
-    max_total_bytes: int = 100 * 1024 * 1024,
+    max_total_bytes: int = 256 * 1024 * 1024,
     max_frame_pixels: int = 20_000_000,
     max_total_pixels: int = 100_000_000,
     max_width: int = 1280,
@@ -331,7 +331,19 @@ def extract_video_frames(
         raise ValueError("Negative video stream start times require explicit timeline review")
     if probe.duration_ms is None:
         raise ValueError("Video duration is required for bounded frame sampling")
-    sample_interval_ms = max(min_interval_ms, math.ceil(probe.duration_ms / max_frames))
+    source_pixels = (
+        selected.width * selected.height
+        if selected.width is not None and selected.height is not None
+        else max_width * max_height
+    )
+    pixels_per_frame_bound = min(source_pixels,max_width * max_height)
+    frames_by_pixel_budget = max_total_pixels // pixels_per_frame_bound
+    effective_max_frames = min(max_frames,frames_by_pixel_budget)
+    if effective_max_frames < 1:
+        raise ValueError("Total pixel budget cannot hold one sampled frame")
+    sample_interval_ms = max(
+        min_interval_ms,math.ceil(probe.duration_ms / effective_max_frames)
+    )
     sample_interval_seconds = sample_interval_ms / 1000
     executable = shutil.which("ffmpeg")
     if not executable:
@@ -366,7 +378,7 @@ def extract_video_frames(
             "-map",f"0:{selected.stream_index}",
             "-an","-sn","-dn","-map_metadata","-1","-map_chapters","-1",
             "-vf",filter_graph,
-            "-frames:v",str(max_frames),"-fps_mode","passthrough",
+            "-frames:v",str(effective_max_frames),"-fps_mode","passthrough",
             "-q:v","4","-threads","1","-filter_threads","1",
             "-f","image2","-fs",str(max_total_bytes),frame_pattern,
         ]
@@ -374,7 +386,7 @@ def extract_video_frames(
             executable,arguments,timeout_seconds=timeout_seconds,max_log_bytes=4_000_000,
         )
         frame_paths = sorted(staging.glob("frame_*.jpg"))
-        timestamps = _parse_showinfo(log,max_frames=max_frames)
+        timestamps = _parse_showinfo(log,max_frames=effective_max_frames)
         if len(frame_paths) != len(timestamps):
             raise ValueError("Extracted frame files do not match ffmpeg timestamp records")
         if not frame_paths:
@@ -430,6 +442,7 @@ def extract_video_frames(
             "filter":filter_graph,
             "max_width":max_width,
             "max_height":max_height,
+            "effective_max_frames":effective_max_frames,
             "jpeg_quality":4,
             "selected_stream_start_ms":selected.start_ms,
         }
