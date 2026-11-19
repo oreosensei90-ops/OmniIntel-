@@ -92,6 +92,7 @@ def test_shared_reader_export_contract_is_versioned_and_source_clock_explicit() 
     schema_path = Path(__file__).parents[1] / "schemas" / "reader-export.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     assert schema["$schema"].endswith("/2020-12/schema")
+    assert schema["properties"]["version"]["properties"]["id"]["maxLength"] == 128
     assert {"version", "sources", "chapters", "alignment_policy"} <= set(schema["required"])
     evidence = schema["properties"]["chapters"]["items"]["properties"]["blocks"]["items"]["properties"]["evidence"]["items"]["properties"]
     assert "local_start_ms" in evidence
