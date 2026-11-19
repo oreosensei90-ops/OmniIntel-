@@ -36,6 +36,83 @@ function renderEvidence(items) {
   }
   return details;
 }
+let localDBPromise;
+function openLocalDB() {
+  if (localDBPromise) return localDBPromise;
+  localDBPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open("omniintel-reader-local", 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("annotations")) db.createObjectStore("annotations", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("bookmarks")) db.createObjectStore("bookmarks", { keyPath: "key" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return localDBPromise;
+}
+function requestResult(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+function blockStorageKey(block) {
+  const versionId = state.book?.version?.id || state.book?.version?.version_id || "local";
+  return versionId + ":" + (block.id || block.block_id || "ordinal-" + String(block.ordinal ?? "unknown"));
+}
+function addPersonalTools(block, host) {
+  const panel = element("div", "personal-tools");
+  const heading = element("p", "tag", "PERSONAL STUDY NOTES · THIS BROWSER ONLY");
+  const note = document.createElement("textarea");
+  note.rows = 3;
+  note.maxLength = 12000;
+  note.placeholder = "Add your own explanation, question or reminder…";
+  note.setAttribute("aria-label", "Personal note for this textbook block");
+  const actions = element("div", "personal-actions");
+  const save = element("button", "quiet", "Save note");
+  save.type = "button";
+  const bookmark = element("button", "quiet", "☆ Bookmark");
+  bookmark.type = "button";
+  const status = element("span", "muted", "Stored only in this browser's local database.");
+  actions.append(save, bookmark, status);
+  panel.append(heading, note, actions);
+  host.append(panel);
+  const key = blockStorageKey(block);
+  openLocalDB().then(async (db) => {
+    const tx = db.transaction(["annotations", "bookmarks"], "readonly");
+    const [savedNote, savedBookmark] = await Promise.all([
+      requestResult(tx.objectStore("annotations").get(key)),
+      requestResult(tx.objectStore("bookmarks").get(key))
+    ]);
+    if (savedNote) note.value = savedNote.text;
+    if (savedBookmark) bookmark.textContent = "★ Bookmarked";
+  }).catch(() => { status.textContent = "Local notes unavailable in this browser."; });
+  save.addEventListener("click", async () => {
+    try {
+      const db = await openLocalDB();
+      const tx = db.transaction("annotations", "readwrite");
+      tx.objectStore("annotations").put({ key, text: note.value, updatedAt: new Date().toISOString() });
+      await requestResult(tx.objectStore("annotations").get(key));
+      status.textContent = "Saved on this device.";
+    } catch { status.textContent = "Could not save note."; }
+  });
+  bookmark.addEventListener("click", async () => {
+    try {
+      const db = await openLocalDB();
+      const tx = db.transaction("bookmarks", "readwrite");
+      const store = tx.objectStore("bookmarks");
+      const existing = await requestResult(store.get(key));
+      if (existing) {
+        store.delete(key);
+        bookmark.textContent = "☆ Bookmark";
+      } else {
+        store.put({ key, createdAt: new Date().toISOString() });
+        bookmark.textContent = "★ Bookmarked";
+      }
+    } catch { status.textContent = "Could not update bookmark."; }
+  });
+}
 function renderBlock(block) {
   const wrap = element("section", "content-block");
   const content = block.content || {};
@@ -73,6 +150,7 @@ function renderBlock(block) {
   wrap.append(provenance);
   const evidence = renderEvidence(block.evidence);
   if (evidence) wrap.append(evidence);
+  addPersonalTools(block, wrap);
   return wrap;
 }
 function currentKey() {
