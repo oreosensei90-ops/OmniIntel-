@@ -7,6 +7,7 @@ from pathlib import Path
 from .database import connect, migrate
 from .ids import uuid7
 from .models import ImportResult, TranscriptImport, utc_now
+from .evidence_refs import register_transcript_references
 
 
 class OmniIntelStore:
@@ -55,7 +56,8 @@ class OmniIntelStore:
                         segment.start_ms, segment.end_ms, "SOURCE", created_at,
                     ),
                 )
-        return ImportResult(source_id, tuple(segment_ids), tuple(evidence_ids))
+        reference_ids = register_transcript_references(self.database_path, evidence_ids)
+        return ImportResult(source_id, tuple(segment_ids), tuple(evidence_ids), reference_ids)
 
     def get_transcript(self, source_id: str) -> list[dict[str, object]]:
         with connect(self.database_path) as conn:
