@@ -61,3 +61,21 @@ def test_applied_migration_cannot_be_changed(tmp_path: Path) -> None:
         migrate(conn, (("0001", "CREATE TABLE sample(id INTEGER);"),))
         with pytest.raises(MigrationError):
             migrate(conn, (("0001", "CREATE TABLE sample(id TEXT);"),))
+
+
+
+def test_failed_migration_rolls_back_ddl_and_ledger(tmp_path: Path):
+    path = tmp_path / "rollback.db"
+    conn = connect(path)
+    with pytest.raises(Exception):
+        migrate(
+            conn,
+            (("broken_migration", "CREATE TABLE should_rollback(id TEXT); INSERT INTO missing_table VALUES('x');"),),
+        )
+    assert conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='should_rollback'"
+    ).fetchone() is None
+    assert conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name='broken_migration'"
+    ).fetchone() is None
+    conn.close()
