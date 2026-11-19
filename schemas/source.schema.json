@@ -84,5 +84,5 @@
     "duration_ms",
     "metadata"
   ],
-  "additionalProperties": false
+  "unevaluatedProperties": false
 }
