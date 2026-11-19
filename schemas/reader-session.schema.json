@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/reader-session.schema.json",
+  "title": "OmniIntel Local Reader Session",
+  "type": "object",
+  "properties": {
+    "id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "schema_version": {"const": 1},
+    "version_id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "anchor_source_id": {"oneOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]},
+    "current_source_id": {"oneOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]},
+    "position_ms": {"type": "integer", "minimum": 0},
+    "chapter_id": {"oneOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]},
+    "block_id": {"oneOf": [{"$ref": "common.schema.json#/$defs/uuid7"}, {"type": "null"}]},
+    "updated_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+  },
+  "required": ["id", "schema_version", "version_id", "anchor_source_id", "current_source_id",
+    "position_ms", "chapter_id", "block_id", "updated_at"],
+  "additionalProperties": false
+}
