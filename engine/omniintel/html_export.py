@@ -1,10 +1,12 @@
 """Self-contained semantic HTML renderer for audited textbook versions."""
 from __future__ import annotations
 
+import base64
 import html
 from pathlib import Path
 from typing import Any
 
+from .export_visuals import evidence_locator_label, resolve_block_assets
 from .textbook import TextbookStore
 from .textbook_audit import TextbookPublicationAuditor
 
@@ -15,7 +17,7 @@ class TextbookHTMLExporter:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
 
-    def export(self, version_id: str, output_path: str | Path) -> Path:
+    def export(self, version_id: str, output_path: str | Path, *, asset_dir: str | Path | None = None) -> Path:
         report = TextbookPublicationAuditor(self.database_path).audit(version_id)
         if not report.ready:
             codes = ", ".join(sorted({
@@ -99,9 +101,20 @@ class TextbookHTMLExporter:
                     raise ValueError(
                         f"{kind} block {block['id']} requires an accessible description"
                     )
+                rendered_images=[]
+                for image_path,caption,media_type,digest in resolve_block_assets(
+                    self.database_path,asset_dir,version["source_id"],block
+                ):
+                    if image_path.stat().st_size > 10*1024*1024:
+                        raise ValueError("Self-contained HTML image exceeds the 10 MiB per-image limit")
+                    encoded=base64.b64encode(image_path.read_bytes()).decode("ascii")
+                    rendered_images.append(
+                        f'<img src="data:{esc(media_type)};base64,{encoded}" '
+                        f'alt="{esc(caption or description)}" loading="lazy">'
+                    )
                 body = (
-                    f'<figure class="visual-placeholder"><figcaption>{esc(kind.title())}'
-                    f" description: {text_block(description)}</figcaption></figure>"
+                    f'<figure class="visual-placeholder">{"".join(rendered_images)}'
+                    f'<figcaption>{text_block(description)}</figcaption></figure>'
                 )
             else:
                 raise ValueError(f"Unsupported HTML block type: {kind}")
@@ -112,10 +125,11 @@ class TextbookHTMLExporter:
                     "SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"
                 }:
                     continue
+                locator=evidence_locator_label(evidence)
+                provenance=evidence.get("provenance") or evidence.get("evidence_provenance") or "SOURCE"
                 citations.append(
                     '<li>Source evidence · '
-                    f"{evidence['start_ms'] / 1000:.1f}s · "
-                    f"{esc(evidence['provenance'])}</li>"
+                    f"{esc(locator)} · {esc(provenance)}</li>"
                 )
             if citations:
                 body += '<ul class="citations">' + "".join(citations) + "</ul>"
