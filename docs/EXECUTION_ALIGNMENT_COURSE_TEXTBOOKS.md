@@ -23,3 +23,7 @@ A constant offset does not model clock drift, variable playback speed, edits, pa
 Course textbooks have their own identity and version tree, rather than pretending that one lecture is the parent source of every chapter. Each chapter can be attributed to a source in the course. Evidence links must resolve to a source in the collection and, when a chapter names a source, to that same source. Each evidence link retains its original evidence-reference identity.
 
 The publication audit blocks unaccepted blocks, uncertain provenance, unreviewed evidence, accepted contradictions, unsupported source/derived/external content and unsupported claims. It does not prove semantic correctness or pedagogical quality. Existing single-source PDF/DOCX/HTML/Markdown exporters are not yet wired to this new course-textbook tree; do not imply course-level export is available until a serializer/exporter is implemented and tested.
+
+## CLI clock alignment
+
+The CLI accepts precomputed feature envelopes as JSON with signal_a and signal_b arrays. Both arrays must represent the same feature and sample interval. It recomputes the correlation before storing the proposal. The resulting candidate is still NEEDS_REVIEW; the review command is a separate explicit action. Do not use raw transcript timestamps or filename matching as a substitute for a shared measured feature.
