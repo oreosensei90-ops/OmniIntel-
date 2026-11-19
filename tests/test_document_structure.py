@@ -189,3 +189,23 @@ def test_document_structure_requires_existing_page_extraction(tmp_path: Path) ->
     import pytest
     with pytest.raises(ValueError,match="extract-pdf"):
         extract_document_structure(database,assets,imported.asset.id)
+
+def test_document_structure_preflights_limits_before_persisting_elements(tmp_path: Path) -> None:
+    import pytest
+
+    pdf = tmp_path / "preflight.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.drawString(72,720,"A long paragraph that exceeds the configured limit.")
+    output.showPage()
+    output.save()
+    database = tmp_path / "preflight.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(database,assets,pdf)
+    extract_pdf(database,assets,imported.asset.id)
+
+    with pytest.raises(ValueError,match="total character limit"):
+        extract_document_structure(
+            database,assets,imported.asset.id,max_total_chars=10,
+        )
+    assert list_document_elements(database) == ()
+
