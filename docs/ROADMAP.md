@@ -26,7 +26,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Authorized source adapters and platform-specific media acquisition.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [x] Initial local PCM WAV transcription adapter with sequential, content-addressed chunk checkpoints and source-linked timestamp evidence (native Android ASR and transcript versioning pending).
-- [ ] Scene-change detection, slide OCR/classification and visual semantic descriptions.
+- [ ] Slide classification, visual topic discovery and semantic scene segmentation.
 - [x] Document structure elements carry page/element citations, review state and same-source guards.
 - [x] Deterministic claim/evidence audit and uncertainty counters (initial slice).
 - [ ] Source-level topic coverage, semantic entailment and uncertainty analysis.
@@ -45,11 +45,11 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Deterministic document topic-to-chapter composition using shared accepted page/element citations, including reviewed paragraphs, equations, tables and figure assets with retained provenance.
 - [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
 - [ ] Semantic block validation, source coverage and pedagogical quality scoring.
-- [x] Initial audited PDF exporter (math typesetting and actual diagram/image rendering remain pending).
-- [x] Initial editable DOCX exporter (native equation objects and embedded diagram/image rendering remain pending).
-- [x] Initial self-contained, escaped HTML exporter.
-- [x] Initial portable Markdown exporter.
-- [ ] Render linked visual assets in PDF/DOCX/HTML/Markdown with safe decoding, size limits and accessibility checks.
+- [x] Audited PDF exporter with source-owned image embedding and page-aware citations (native math typesetting pending).
+- [x] Editable DOCX exporter with source-owned image embedding and page-aware citations (native equation objects pending).
+- [x] Self-contained HTML exporter with bounded embedded image data and page-aware citations.
+- [x] Portable Markdown exporter with adjacent content-addressed image assets and page-aware citations.
+- [x] Render linked visual assets in PDF/DOCX/HTML/Markdown with source checks, bounded sizes and accessibility descriptions.
 - [ ] Native math rendering across formats.
 
 ## Applications
