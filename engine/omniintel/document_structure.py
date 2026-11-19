@@ -103,30 +103,24 @@ def _native_specs(page: pdfplumber.page.Page) -> list[dict[str, Any]]:
     specs: list[dict[str, Any]] = []
     table_boxes: list[tuple[float, float, float, float]] = []
 
-    try:
-        tables = page.find_tables()
-    except Exception:
-        tables = []
+    tables = page.find_tables()
     for table in tables:
-        try:
-            rows = table.extract()
-            normalized_rows = [
-                [_clean_text(cell or "") for cell in row] for row in rows if row
-            ]
-            if len(normalized_rows) < 2 or max(map(len, normalized_rows), default=0) < 2:
-                continue
-            bbox = tuple(float(value) for value in table.bbox)
-            table_boxes.append(bbox)
-            specs.append({
-                "type": "TABLE",
-                "text": "\n".join(" | ".join(row) for row in normalized_rows),
-                "content": {"rows": normalized_rows, "layout_method": "pdfplumber-table"},
-                "bbox": bbox,
-                "confidence": 0.8,
-                "provenance": "SOURCE",
-            })
-        except Exception:
+        rows = table.extract()
+        normalized_rows = [
+            [_clean_text(cell or "") for cell in row] for row in rows if row
+        ]
+        if len(normalized_rows) < 2 or max(map(len, normalized_rows), default=0) < 2:
             continue
+        bbox = tuple(float(value) for value in table.bbox)
+        table_boxes.append(bbox)
+        specs.append({
+            "type": "TABLE",
+            "text": "\n".join(" | ".join(row) for row in normalized_rows),
+            "content": {"rows": normalized_rows, "layout_method": "pdfplumber-table"},
+            "bbox": bbox,
+            "confidence": 0.8,
+            "provenance": "SOURCE",
+        })
 
     remaining = [
         word for word in words
@@ -329,7 +323,7 @@ def extract_document_structure(
                                 display_name=f"figure-p{row['page_number']:04d}.png",
                             )
                             asset_id_for_element = visual.id
-                        except Exception:
+                        except (ValueError, OSError, RuntimeError, TypeError):
                             asset_id_for_element = None
                     normalized = _norm_bbox(bbox,page.width,page.height) if bbox else None
                     element_id = uuid7()
