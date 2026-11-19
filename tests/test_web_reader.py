@@ -74,3 +74,11 @@ def test_local_media_seeking_is_source_scoped_and_never_applies_unreviewed_offse
     assert 'URL.revokeObjectURL(state.mediaUrl)' in app
     assert 'file.type.startsWith("audio/")' in app
     assert 'file.type.startsWith("video/")' in app
+
+
+def test_reader_exposes_positioned_pdf_elements_with_review_state() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "item.document_elements" in app
+    assert "part.review_state" in app
+    assert "part.confidence" in app
+    assert "item.document_elements.slice(0, 20)" in app
