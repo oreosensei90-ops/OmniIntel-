@@ -60,12 +60,18 @@ class PlanExecutor:
                 raise PlanExecutionError(f"Input is not a regular file: {path.name}")
             stat = path.stat()
             size = stat.st_size
+            planned_mtime = item.get("modified_ns")
+            planned_inode = item.get("file_id")
             if (size <= 0 or size != item["byte_size"]
                     or (item.get("modified_ns") and stat.st_mtime_ns != item["modified_ns"])
                     or (item.get("file_id") and stat.st_ino != item["file_id"])):
                 raise PlanExecutionError(f"Input changed after planning: {path.name}")
+            digest = _sha256_file(path)
+            after = path.stat()
+            if after.st_size != stat.st_size or after.st_mtime_ns != stat.st_mtime_ns or after.st_ino != stat.st_ino:
+                raise PlanExecutionError(f"Input changed while hashing: {path.name}")
             snapshot_inputs.append({
-                "path": str(path), "byte_size": size, "sha256": _sha256_file(path),
+                "path": str(path), "byte_size": size, "sha256": digest,
                 "modality": item["modality"], "media_type": item["media_type"],
             })
         return {"schema_version": 1, "inputs": snapshot_inputs}
@@ -152,7 +158,10 @@ class PlanExecutor:
                 if current != snapshot:
                     raise PlanExecutionError("Input changed during execution; refusing stale stage")
                 paths = [Path(item["path"]) for item in selected]
-                result = handlers[stage["stage"]](paths, {"plan_id": plan_id, "stage": stage["stage"]})
+                result = handlers[stage["stage"]](paths, {
+                    "plan_id": plan_id, "stage": stage["stage"],
+                    "expected_sha256": [item["sha256"] for item in selected],
+                })
                 if not isinstance(result, dict):
                     raise PlanExecutionError("Stage adapters must return a JSON object")
                 json.dumps(result, allow_nan=False)
