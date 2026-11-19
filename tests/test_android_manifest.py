@@ -29,6 +29,7 @@ def test_android_reader_bounds_untrusted_json_structure_and_deduplicates_block_i
     code = source.read_text(encoding="utf-8")
     assert "MAX_IMPORT_BYTES = 50L * 1024L * 1024L" in code
     assert "size <= MAX_IMPORT_BYTES" in code
+    assert "versionId.length <= 128" in code
     assert "sources.length() in 1..500" in code
     assert "rawChapters.length() in 1..500" in code
     assert "totalBlocks <= 25000" in code
