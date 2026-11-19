@@ -12,6 +12,8 @@ from omniintel.assets import AssetStore
 from omniintel.audio_extract import extract_audio
 from omniintel.cli import main
 from omniintel.local_files import import_local_file
+from omniintel.models import TranscriptSegmentInput
+from omniintel.transcription import ChunkTranscription, run_wav_transcription
 
 
 def _video(path: Path) -> Path:
@@ -209,3 +211,35 @@ def test_extract_audio_cli_emits_source_timeline_offset(
     result = json.loads(capsys.readouterr().out)
     assert result["output_asset_id"]
     assert result["time_offset_ms"] == 250
+
+def test_extracted_audio_flows_into_source_aligned_resumable_transcription(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database, assets, imported, _, _ = _setup(tmp_path, monkeypatch)
+    extracted = extract_audio(
+        database,assets,imported.asset.id,max_output_bytes=1_000_000,
+    )
+
+    class Adapter:
+        name = "audio-extract-integration"
+        version = "1"
+        model_id = "fixture"
+
+        def transcribe_chunk(self, wav_path: Path, *, language: str | None) -> ChunkTranscription:
+            return ChunkTranscription(
+                language="en",
+                segments=(TranscriptSegmentInput(
+                    "The lecture begins.",100,800,language="en",
+                ),),
+            )
+
+    result = run_wav_transcription(
+        database,assets,imported.source_id,extracted.output_asset_id,Adapter(),
+        language="en",chunk_seconds=120,time_offset_ms=extracted.time_offset_ms,
+    )
+    assert result.time_offset_ms == 250
+    from omniintel.store import OmniIntelStore
+    segments = OmniIntelStore(database).get_transcript(imported.source_id)
+    assert segments[0]["start_ms"] == 350
+    assert segments[0]["end_ms"] == 1050
+
