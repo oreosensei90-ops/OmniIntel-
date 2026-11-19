@@ -65,8 +65,13 @@ class CourseTextbookStore:
         provenance: str = "EXPLANATION", review_status: str = "DRAFT",
         claim_id: str | None = None, ordinal: int = 0,
     ) -> str:
-        if not block_type or not isinstance(content,dict) or ordinal < 0:
-            raise ValueError("Invalid course textbook block")
+        allowed_types={
+            "HEADING","PARAGRAPH","DEFINITION","EQUATION","TABLE","DIAGRAM","IMAGE",
+            "CODE","EXAMPLE","WORKED_SOLUTION","WARNING","MISCONCEPTION","SUMMARY",
+            "EXERCISE","SOURCE_REFERENCE","FOOTNOTE",
+        }
+        if block_type not in allowed_types or not isinstance(content,dict) or ordinal < 0:
+            raise ValueError("Invalid course textbook block type, content or ordinal")
         if provenance not in {"SOURCE","EXPLANATION","DERIVED","EXTERNAL","UNCERTAIN"}:
             raise ValueError("Invalid block provenance")
         if review_status not in {"DRAFT","NEEDS_REVIEW","ACCEPTED","REJECTED"}:
