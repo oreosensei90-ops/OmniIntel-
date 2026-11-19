@@ -25,5 +25,11 @@ JSON Schema Draft 2020-12 is the initial canonical wire-contract format for Pyth
 - `claim.schema.json`: atomic claims with provenance and review status.
 - `claim-evidence.schema.json`: reviewed claim/evidence relationship records.
 - `textbook-block.schema.json`: canonical structured textbook block with provenance and review state.
+- `source-clock-alignment.schema.json`: measured, explicitly reviewed cross-source clock offset with a fixed sign convention.
+- `reader-session.schema.json`: durable local course-reader position and source anchors.
+- `execution-plan.schema.json`: read-only local input inventory and network-disabled plan metadata.
+- `quality-benchmark-report.schema.json`: versioned deterministic quality metrics and per-case results.
 
 These schemas describe data contracts; they do not imply that all corresponding application features have been implemented.
+
+The local execution plan contains device-local paths and is not a portable sync payload. Reader sessions reference course-version/source IDs and require membership validation by the receiving application. Clock-alignment schemas preserve review state; schema validity never authorizes an alignment. Benchmark schemas validate report structure only, not metric quality or dataset representativeness.
