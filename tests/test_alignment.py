@@ -39,10 +39,9 @@ def test_alignment_requires_review_and_collection_membership(tmp_path: Path) -> 
         store.propose(course,a,other,estimate,rationale="Not a member",
                       signal_a=signal,signal_b=signal)
     from omniintel.database import connect
-    with pytest.raises(sqlite3.IntegrityError,match="both aligned sources"):
-        with connect(db) as conn:
-            conn.execute(
-                "UPDATE source_clock_alignments SET source_b_id=? WHERE id=?",
+    with pytest.raises(sqlite3.IntegrityError,match="both aligned sources"), connect(db) as conn:
+        conn.execute(
+            "UPDATE source_clock_alignments SET source_b_id=? WHERE id=?",
                 (other,record),
             )
 
