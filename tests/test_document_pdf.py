@@ -123,9 +123,8 @@ def test_document_page_search_index_tracks_page_deletion(tmp_path: Path) -> None
     from omniintel.document_pdf import search_document_pages
 
     assert search_document_pages(database, "Unique searchable")
-    with connect(database) as conn:
-        with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
-            conn.execute("DELETE FROM document_pages WHERE id=?", (extraction.pages[0].id,))
+    with connect(database) as conn, pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        conn.execute("DELETE FROM document_pages WHERE id=?", (extraction.pages[0].id,))
     assert search_document_pages(database, "Unique searchable")
 
 
@@ -145,11 +144,10 @@ def test_evidence_reference_rejects_cross_source_page_locator(tmp_path: Path) ->
     other = import_local_file(
         database, assets, tmp_path / "source.pdf", title="Second source"
     )
-    with connect(database) as conn:
-        with pytest.raises(sqlite3.IntegrityError, match="document page reference"):
-            conn.execute(
+    with connect(database) as conn, pytest.raises(sqlite3.IntegrityError, match="document page reference"):
+        conn.execute(
                 """INSERT INTO evidence_refs
                    (id,source_id,locator_kind,document_page_id,source_asset_id,page_number,created_at)
                    VALUES('bad-reference',?,'DOCUMENT_PAGE',?,?,1,'2026-01-01T00:00:00Z')""",
-                (other.source_id,result.pages[0].id,asset_id),
-            )
+            (other.source_id,result.pages[0].id,asset_id),
+        )
