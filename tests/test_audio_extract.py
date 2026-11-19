@@ -19,7 +19,7 @@ def _video(path: Path) -> Path:
     return path
 
 
-def _ffprobe(path: Path, *, start_time: str = "0.250", audio: bool = True) -> Path:
+def _ffprobe(path: Path, *, start_time: str = "0.250", audio: bool = True, version: str = "7.1") -> Path:
     streams = [
         {
             "index": 0,
@@ -48,9 +48,9 @@ def _ffprobe(path: Path, *, start_time: str = "0.250", audio: bool = True) -> Pa
         f"#!{sys.executable}\n"
         "import json,sys\n"
         "if '-version' in sys.argv:\n"
-        " print('ffprobe version 7.1')\n"
+        f" print('ffprobe version {version}')\n"
         "else:\n"
-        f" print(json.dumps({json.dumps(payload)!r}))\n"
+        f" print({json.dumps(payload)!r})\n"
     )
     path.write_text(script, encoding="utf-8")
     path.chmod(0o755)
@@ -84,7 +84,7 @@ def _ffmpeg(
         " else:\n"
         "  with wave.open(str(output),'wb') as wav:\n"
         "   wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(16000)\n"
-        "   wav.writeframes(b'\\x00\\x00' * 16000 * seconds)\n"
+        "   wav.writeframes(b'\x00\x00' * 16000 * seconds)\n"
     )
     path.write_text(script, encoding="utf-8")
     path.chmod(0o755)
@@ -190,7 +190,7 @@ def test_extract_audio_enforces_timeout_and_negative_stream_offset(
             timeout_seconds=1.0,max_output_bytes=1_000_000,
         )
 
-    negative_probe = _ffprobe(tmp_path / "ffprobe-negative", start_time="-0.250")
+    negative_probe = _ffprobe(tmp_path / "ffprobe-negative", start_time="-0.250", version="7.2")
     monkeypatch.setattr("omniintel.media_probe.shutil.which", lambda _: str(negative_probe))
     with pytest.raises(ValueError, match="Negative audio stream start"):
         extract_audio(database, assets, imported.asset.id, max_output_bytes=1_000_000)
