@@ -190,6 +190,7 @@ def _native_specs(page: pdfplumber.page.Page) -> list[dict[str, Any]]:
             "provenance": "SOURCE",
         })
 
+    image_boxes: list[tuple[float,float,float,float]] = []
     for image in page.images:
         try:
             bbox = (
@@ -198,6 +199,7 @@ def _native_specs(page: pdfplumber.page.Page) -> list[dict[str, Any]]:
             )
             if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
                 continue
+            image_boxes.append(bbox)
             specs.append({
                 "type": "FIGURE", "text": "",
                 "content": {"description": "Embedded image region detected on source page",
@@ -206,6 +208,73 @@ def _native_specs(page: pdfplumber.page.Page) -> list[dict[str, Any]]:
             })
         except (KeyError, TypeError, ValueError):
             continue
+    # Group nearby vector drawing primitives into candidate diagram regions. These
+    # remain reviewable candidates: rules, borders and decorative shapes can be false positives.
+    graphics: list[tuple[float,float,float,float]] = []
+    for collection in (page.lines,page.rects,page.curves):
+        for item in collection:
+            try:
+                box = (
+                    float(item["x0"]),float(item["top"]),
+                    float(item["x1"]),float(item["bottom"]),
+                )
+            except (KeyError,TypeError,ValueError):
+                continue
+            if box[2] <= box[0] or box[3] <= box[1]:
+                continue
+            center = ((box[0]+box[2])/2,(box[1]+box[3])/2)
+            if any(
+                table[0] <= center[0] <= table[2]
+                and table[1] <= center[1] <= table[3]
+                for table in table_boxes
+            ):
+                continue
+            graphics.append(box)
+    clusters: list[list[tuple[float,float,float,float]]] = []
+    for graphic in graphics:
+        gx = (graphic[0]+graphic[2])/2
+        gy = (graphic[1]+graphic[3])/2
+        cluster = next(
+            (
+                group for group in clusters
+                if min(item[0] for item in group)-80 <= gx <= max(item[2] for item in group)+80
+                and min(item[1] for item in group)-80 <= gy <= max(item[3] for item in group)+80
+            ),
+            None,
+        )
+        if cluster is None:
+            clusters.append([graphic])
+        else:
+            cluster.append(graphic)
+    for cluster in clusters:
+        if len(cluster) < 6:
+            continue
+        bbox = (
+            min(item[0] for item in cluster),min(item[1] for item in cluster),
+            max(item[2] for item in cluster),max(item[3] for item in cluster),
+        )
+        area = (bbox[2]-bbox[0])*(bbox[3]-bbox[1])
+        if area < page.width*page.height*0.015:
+            continue
+        overlaps_raster = any(
+            min(bbox[2],image[2])-max(bbox[0],image[0]) > 0
+            and min(bbox[3],image[3])-max(bbox[1],image[1]) > 0
+            for image in image_boxes
+        ) if "image_boxes" in locals() else False
+        if overlaps_raster:
+            continue
+        specs.append({
+            "type": "FIGURE",
+            "text": "",
+            "content": {
+                "description": "Vector drawing region detected; inspect the source crop",
+                "layout_method": "nearby-vector-graphics-cluster",
+                "primitive_count": len(cluster),
+            },
+            "bbox": bbox,
+            "confidence": 0.65,
+            "provenance": "SOURCE",
+        })
     specs.sort(key=lambda item: (
         item["bbox"][1] if item.get("bbox") else 0,
         item["bbox"][0] if item.get("bbox") else 0,
