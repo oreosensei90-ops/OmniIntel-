@@ -552,6 +552,70 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         """
     )
 
+    (
+        "0013_unified_evidence_references",
+        """
+        CREATE TABLE evidence_refs (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            locator_kind TEXT NOT NULL CHECK(locator_kind IN ('TRANSCRIPT_INTERVAL','DOCUMENT_PAGE')),
+            evidence_item_id TEXT UNIQUE REFERENCES evidence_items(id) ON DELETE RESTRICT,
+            document_page_id TEXT UNIQUE REFERENCES document_pages(id) ON DELETE RESTRICT,
+            source_asset_id TEXT REFERENCES source_assets(id) ON DELETE RESTRICT,
+            start_ms INTEGER CHECK(start_ms IS NULL OR start_ms >= 0),
+            end_ms INTEGER CHECK(end_ms IS NULL OR end_ms > 0),
+            page_number INTEGER CHECK(page_number IS NULL OR page_number > 0),
+            created_at TEXT NOT NULL,
+            CHECK(
+                (locator_kind='TRANSCRIPT_INTERVAL'
+                 AND evidence_item_id IS NOT NULL AND document_page_id IS NULL
+                 AND source_asset_id IS NULL AND start_ms IS NOT NULL
+                 AND end_ms IS NOT NULL AND end_ms > start_ms AND page_number IS NULL)
+                OR
+                (locator_kind='DOCUMENT_PAGE'
+                 AND evidence_item_id IS NULL AND document_page_id IS NOT NULL
+                 AND source_asset_id IS NOT NULL AND start_ms IS NULL
+                 AND end_ms IS NULL AND page_number IS NOT NULL)
+            )
+        );
+        CREATE INDEX idx_evidence_refs_source ON evidence_refs(source_id,locator_kind,created_at);
+        CREATE INDEX idx_evidence_refs_time ON evidence_refs(source_id,start_ms,end_ms);
+        CREATE INDEX idx_evidence_refs_page ON evidence_refs(source_asset_id,page_number);
+        CREATE TRIGGER evidence_refs_validate_insert
+        BEFORE INSERT ON evidence_refs
+        BEGIN
+            SELECT CASE WHEN NEW.locator_kind='TRANSCRIPT_INTERVAL' AND NOT EXISTS(
+                SELECT 1 FROM evidence_items e
+                WHERE e.id=NEW.evidence_item_id AND e.source_id=NEW.source_id
+                  AND e.start_ms=NEW.start_ms AND e.end_ms=NEW.end_ms
+            ) THEN RAISE(ABORT,'transcript evidence reference does not match source interval') END;
+            SELECT CASE WHEN NEW.locator_kind='DOCUMENT_PAGE' AND NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN document_extractions de ON de.id=dp.extraction_id
+                JOIN source_assets sa ON sa.id=de.source_asset_id
+                WHERE dp.id=NEW.document_page_id AND dp.page_number=NEW.page_number
+                  AND sa.id=NEW.source_asset_id AND sa.source_id=NEW.source_id
+            ) THEN RAISE(ABORT,'document page reference does not match source asset and page') END;
+        END;
+        CREATE TRIGGER evidence_refs_validate_update
+        BEFORE UPDATE OF source_id,locator_kind,evidence_item_id,document_page_id,
+                         source_asset_id,start_ms,end_ms,page_number ON evidence_refs
+        BEGIN
+            SELECT CASE WHEN NEW.locator_kind='TRANSCRIPT_INTERVAL' AND NOT EXISTS(
+                SELECT 1 FROM evidence_items e
+                WHERE e.id=NEW.evidence_item_id AND e.source_id=NEW.source_id
+                  AND e.start_ms=NEW.start_ms AND e.end_ms=NEW.end_ms
+            ) THEN RAISE(ABORT,'transcript evidence reference does not match source interval') END;
+            SELECT CASE WHEN NEW.locator_kind='DOCUMENT_PAGE' AND NOT EXISTS(
+                SELECT 1 FROM document_pages dp
+                JOIN document_extractions de ON de.id=dp.extraction_id
+                JOIN source_assets sa ON sa.id=de.source_asset_id
+                WHERE dp.id=NEW.document_page_id AND dp.page_number=NEW.page_number
+                  AND sa.id=NEW.source_asset_id AND sa.source_id=NEW.source_id
+            ) THEN RAISE(ABORT,'document page reference does not match source asset and page') END;
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
