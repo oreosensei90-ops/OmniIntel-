@@ -28,6 +28,8 @@ class PlannedInput:
     resource_class: str
     network: str = "none"
     requires_user_review: bool = False
+    modified_ns: int = 0
+    file_id: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +121,8 @@ def plan_local_inputs(
             modality=modality,
             media_type=media_type,
             byte_size=size,
+            modified_ns=resolved.stat().st_mtime_ns,
+            file_id=resolved.stat().st_ino,
             action=action,
             resource_class=resource,
             requires_user_review=modality in {"IMAGE", "CAPTIONS"},
