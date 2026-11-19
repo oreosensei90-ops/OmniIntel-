@@ -9,7 +9,7 @@ import hashlib
 import json
 import tempfile
 import wave
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -58,6 +58,18 @@ class FasterWhisperAdapter:
     cpu_threads: int = 4
     name: str = "faster-whisper"
     version: str = "1"
+    _model: object | None = field(default=None,init=False,repr=False,compare=False)
+
+    @property
+    def configuration(self) -> dict[str, object]:
+        return {
+            "device":self.device,
+            "compute_type":self.compute_type,
+            "cpu_threads":self.cpu_threads,
+            "beam_size":5,
+            "vad_filter":True,
+            "word_timestamps":False,
+        }
 
     def __post_init__(self) -> None:
         if not self.model_id.strip() or not self.device.strip() or not self.compute_type.strip():
@@ -74,13 +86,14 @@ class FasterWhisperAdapter:
             raise RuntimeError(
                 "faster-whisper is not installed; install OmniIntel with the 'asr' extra"
             ) from error
-        model = WhisperModel(
-            self.model_id,
-            device=self.device,
-            compute_type=self.compute_type,
-            cpu_threads=self.cpu_threads,
-        )
-        segments, info = model.transcribe(
+        if self._model is None:
+            self._model = WhisperModel(
+                self.model_id,
+                device=self.device,
+                compute_type=self.compute_type,
+                cpu_threads=self.cpu_threads,
+            )
+        segments, info = self._model.transcribe(
             str(wav_path),
             language=language,
             beam_size=5,
@@ -126,6 +139,7 @@ def _config_hash(
         "adapter": adapter.name,
         "adapter_version": adapter.version,
         "model_id": adapter.model_id,
+        "adapter_configuration": getattr(adapter,"configuration",{}),
         "language": language,
         "chunk_seconds": chunk_seconds,
         "max_chunk_bytes": max_chunk_bytes,
@@ -158,6 +172,20 @@ def _read_wav_info(path: Path, *, max_duration_ms: int) -> tuple[int, int, int, 
     return channels, sample_width, sample_rate, frames, duration_ms
 
 
+def _frames_per_chunk(
+    *,
+    sample_rate: int,
+    channels: int,
+    sample_width: int,
+    chunk_seconds: int,
+    max_chunk_bytes: int,
+) -> int:
+    frame_bytes=channels*sample_width
+    if frame_bytes <= 0 or max_chunk_bytes < frame_bytes:
+        raise ValueError("max_chunk_bytes is too small for one audio frame")
+    return min(sample_rate*chunk_seconds,max_chunk_bytes//frame_bytes)
+
+
 def _iter_wav_chunks(
     path: Path,
     work_dir: Path,
@@ -169,13 +197,10 @@ def _iter_wav_chunks(
     chunk_seconds: int,
     max_chunk_bytes: int,
 ):
-    frame_bytes = channels * sample_width
-    if frame_bytes <= 0 or max_chunk_bytes < frame_bytes:
-        raise ValueError("max_chunk_bytes is too small for one audio frame")
-    max_frames_by_bytes = max_chunk_bytes // frame_bytes
-    frames_per_chunk = min(sample_rate * chunk_seconds, max_frames_by_bytes)
-    if frames_per_chunk < 1:
-        raise ValueError("Unable to create a bounded audio chunk")
+    frames_per_chunk = _frames_per_chunk(
+        sample_rate=sample_rate,channels=channels,sample_width=sample_width,
+        chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
+    )
     with wave.open(str(path), "rb") as source:
         index = 0
         start_frame = 0
@@ -471,9 +496,19 @@ def run_wav_transcription(
             run["id"],source_id,duration_ms,segment_ids,evidence_ids,reference_ids,0,0
         )
 
+    with connect(database_path) as conn:
+        conn.execute(
+            "UPDATE transcription_runs SET status='RUNNING',last_error=NULL,updated_at=? WHERE id=?",
+            (utc_now(),run["id"]),
+        )
     processed=0
     reused=0
     combined: list[tuple[int,int,ChunkTranscription]]=[]
+    frames_per_chunk=_frames_per_chunk(
+        sample_rate=sample_rate,channels=channels,sample_width=sample_width,
+        chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
+    )
+    total_chunks=(total_frames+frames_per_chunk-1)//frames_per_chunk
     try:
         with tempfile.TemporaryDirectory(prefix="omniintel-asr-") as directory:
             work_dir=Path(directory)
@@ -500,7 +535,7 @@ def run_wav_transcription(
                     processed+=1
                 combined.append((start_ms,end_ms,result))
                 if progress:
-                    progress(index+1, max(1,(total_frames + sample_rate*chunk_seconds-1)//(sample_rate*chunk_seconds)))
+                    progress(index+1,max(1,total_chunks))
         segment_ids,evidence_ids=_complete_run(database_path,run,combined)
         reference_ids=register_transcript_references(database_path,evidence_ids)
         with connect(database_path) as conn:
