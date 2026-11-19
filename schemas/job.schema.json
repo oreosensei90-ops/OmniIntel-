@@ -97,5 +97,5 @@
     "progress",
     "last_error"
   ],
-  "additionalProperties": false
+  "unevaluatedProperties": false
 }
