@@ -222,16 +222,22 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
         if (uri != null && mediaMime?.startsWith("audio/") == true) {
             runCatching {
                 MediaPlayer().also { player ->
+                    audioPlayer = player
                     player.setDataSource(context, uri)
                     player.setOnPreparedListener {
                         audioReady = true
                         mediaStatus = "Audio ready · selected source only."
                     }
+                    player.setOnCompletionListener {
+                        audioPlaying = false
+                        mediaStatus = "Audio playback complete."
+                    }
                     player.setOnErrorListener { _, _, _ ->
+                        audioReady = false
+                        audioPlaying = false
                         mediaStatus = "The selected audio file could not be played."
                         true
                     }
-                    audioPlayer = player
                     player.prepareAsync()
                 }
             }.onFailure {
