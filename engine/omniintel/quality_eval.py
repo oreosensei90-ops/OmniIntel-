@@ -29,7 +29,7 @@ def _edit_distance(a: Sequence[str], b: Sequence[str]) -> int:
 
 
 def error_rate(reference: str, hypothesis: str, *, character: bool = False) -> float:
-    """Compute WER or CER; empty references are explicitly undefined (None)."""
+    """Compute WER or CER with an explicit convention for empty references."""
     ref=list(unicodedata.normalize("NFKC",reference).casefold()) if character else _normalize(reference)
     hyp=list(unicodedata.normalize("NFKC",hypothesis).casefold()) if character else _normalize(hypothesis)
     if not ref:
