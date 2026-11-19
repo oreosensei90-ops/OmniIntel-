@@ -238,6 +238,7 @@ class TextbookStore:
                                   er.id AS evidence_ref_id,er.locator_kind,er.start_ms,
                                   er.end_ms,er.page_number,er.source_id,er.source_asset_id,
                                   COALESCE(e.content,NULLIF(dp.text_content,''),ocr.text_content) AS content,
+                                  COALESCE(e.provenance,'SOURCE') AS provenance,
                                   ber.element_id,de.element_type,de.text_content AS element_text,
                                   de.review_state AS element_review_state
                            FROM block_evidence_refs ber
