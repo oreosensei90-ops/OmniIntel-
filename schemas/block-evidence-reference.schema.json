@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/block-evidence-reference.schema.json",
+  "title": "OmniIntel Textbook Block Evidence Reference Link",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "block_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "evidence_ref_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "relation": { "enum": ["SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES", "CONTRADICTS"] },
+    "review_state": { "enum": ["PENDING", "ACCEPTED", "REJECTED", "NEEDS_REVIEW"] },
+    "rationale": { "type": ["string", "null"] },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "required": ["id", "block_id", "evidence_ref_id", "relation", "review_state", "rationale", "created_at"],
+  "unevaluatedProperties": false
+}
