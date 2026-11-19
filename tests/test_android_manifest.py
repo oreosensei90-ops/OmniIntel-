@@ -137,7 +137,7 @@ def test_android_reader_persists_block_notes_and_bookmarks_locally() -> None:
     assert "Your private note" in code
     assert "it.length <= 5000" in code
     assert "prefs.remove(key)" in code
-    assert "notesByBlock = preferences.asMap()" in code
-    assert "bookmarkedBlocks = preferences.asMap()" in code
+    assert "notesByBlock = preferences.asMap().mapNotNull" in code
+    assert "bookmarkedBlocks = preferences.asMap().mapNotNull" in code
     assert "sourceId.length <= 128" in code
     assert "requestedId.length <= 128" in code
