@@ -30,7 +30,9 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Deterministic topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
 - [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
 - [ ] Semantic block validation, source coverage and pedagogical quality scoring.
-- [ ] PDF, DOCX, HTML and Markdown exporters.
+- [x] Initial audited PDF exporter (math typesetting and actual diagram/image rendering remain pending).
+- [x] Initial editable DOCX exporter (native equation objects and embedded diagram/image rendering remain pending).
+- [ ] HTML and Markdown exporters.
 
 ## Applications
 - [ ] Web PWA and offline library.
