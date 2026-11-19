@@ -280,3 +280,32 @@ omniintel review-source-alignment ./omniintel.db ALIGNMENT_ID ACCEPTED
 ```
 
 The JSON file contains `signal_a` and `signal_b` arrays. Feature extraction and resampling to a common interval are upstream responsibilities; use an appropriately reviewed signal pair. See the alignment caveats in the design document.
+
+
+## Synchronized reader, course exports and quality benchmarks
+
+Open a course textbook with source-local seek targets and only human-accepted clock alignments:
+
+```bash
+omniintel reader-open ./omniintel.db VERSION_ID --anchor-source-id SOURCE_ID
+omniintel reader-save-position ./omniintel.db SESSION_ID VERSION_ID 125000 --anchor-source-id SOURCE_A --current-source-id SOURCE_B
+omniintel reader-resume ./omniintel.db SESSION_ID
+```
+
+Export a publication-ready course textbook (the audit gate must pass):
+
+```bash
+omniintel course-export ./omniintel.db VERSION_ID markdown ./course.md
+omniintel course-export ./omniintel.db VERSION_ID html ./course.html
+omniintel course-export ./omniintel.db VERSION_ID pdf ./course.pdf --font ./fonts/Devanagari.ttf
+omniintel course-export ./omniintel.db VERSION_ID docx ./course.docx
+```
+
+Evaluate locally curated benchmark fixtures and retain versioned reports:
+
+```bash
+omniintel quality-evaluate ./omniintel.db lecture-golden golden-v1 ./fixtures/lecture-cases.json
+omniintel quality-list ./omniintel.db --suite lecture-golden
+```
+
+See [SYNCHRONIZED_READER.md](docs/SYNCHRONIZED_READER.md) and [QUALITY_BENCHMARKS.md](docs/QUALITY_BENCHMARKS.md). The metric suite is deterministic and offline; it does not replace expert review of semantic evidence support, subject correctness or pedagogical quality.
