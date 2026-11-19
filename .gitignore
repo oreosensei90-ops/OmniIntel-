@@ -18,3 +18,7 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local Gradle caches and Android build output
+.gradle/
+**/.gradle/
