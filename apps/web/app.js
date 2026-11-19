@@ -108,6 +108,7 @@ function renderChapter() {
 }
 function renderBook(data, filename) {
   if (!data || !Array.isArray(data.chapters) || !data.version) throw new Error("This is not a valid OmniIntel reader export (expected version and chapters).");
+  if (!data.chapters.length) throw new Error("This course textbook has no chapters to read yet.");
   state.book = data;
   state.chapters = data.chapters;
   state.index = 0;
