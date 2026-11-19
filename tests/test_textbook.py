@@ -21,8 +21,6 @@ def sample() -> TranscriptImport:
     )
 
 
-from omniintel.textbook import BlockInput, TextbookStore
-
 
 def test_textbook_composition_persists_versioned_blocks_and_evidence(tmp_path: Path) -> None:
     source = OmniIntelStore(tmp_path / "book.db").import_transcript(sample())
