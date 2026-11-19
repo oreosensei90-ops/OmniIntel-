@@ -9,6 +9,7 @@ from pathlib import Path
 from .store import OmniIntelStore
 from .textbook_audit import TextbookPublicationAuditor
 from .pdf_export import TextbookPDFExporter
+from .docx_export import TextbookDOCXExporter
 
 
 def main() -> None:
@@ -26,6 +27,10 @@ def main() -> None:
     export_pdf.add_argument("version_id")
     export_pdf.add_argument("output", type=Path)
     export_pdf.add_argument("--font", type=Path, default=None, help="Unicode TTF font, required for scripts not covered by built-in fonts")
+    export_docx = sub.add_parser("export-docx", help="Export a publication-ready textbook version to editable DOCX")
+    export_docx.add_argument("database", type=Path)
+    export_docx.add_argument("version_id")
+    export_docx.add_argument("output", type=Path)
     args = parser.parse_args()
     if args.command == "init":
         OmniIntelStore(args.database)
@@ -48,3 +53,6 @@ def main() -> None:
             args.version_id, args.output, font_path=args.font
         )
         print(f"Exported PDF: {output}")
+    elif args.command == "export-docx":
+        output = TextbookDOCXExporter(args.database).export(args.version_id, args.output)
+        print(f"Exported DOCX: {output}")
