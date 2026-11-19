@@ -100,3 +100,11 @@ def test_android_cross_chapter_search_results_can_open_their_chapter() -> None:
     assert "flatMapIndexed" in code
     assert "TextButton(onClick = {" in code
     assert "chapterIndex = resultChapterIndex" in code
+
+
+def test_android_reader_keeps_existing_book_visible_when_replacement_import_fails() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    header = code.split('Text(current.title', 1)[1].split('Spacer(Modifier.height(8.dp))', 1)[0]
+    assert "error?.let" in header
+    assert "Color(0xFFFF8C82)" in header
