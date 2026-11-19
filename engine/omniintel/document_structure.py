@@ -419,20 +419,20 @@ def extract_document_structure(
                     bbox = spec.get("bbox")
                     if spec["type"] == "FIGURE" and bbox and spec.get("render_asset"):
                         try:
-                                image = page.crop(bbox).to_image(
-                                    resolution=120,antialias=False
-                                ).original
-                                buffer = io.BytesIO()
-                                image.save(buffer,format="PNG",optimize=True)
-                                image_bytes = buffer.getvalue()
-                                if len(image_bytes) <= max_figure_bytes:
-                                    visual = store.add_bytes(
-                                        asset["source_id"],image_bytes,role="DIAGRAM",
-                                        display_name=f"figure-p{row['page_number']:04d}.png",
-                                    )
-                                    asset_id_for_element = visual.id
-                            except (ValueError,OSError,RuntimeError,TypeError):
-                                asset_id_for_element = None
+                            image = page.crop(bbox).to_image(
+                                resolution=120,antialias=False
+                            ).original
+                            buffer = io.BytesIO()
+                            image.save(buffer,format="PNG",optimize=True)
+                            image_bytes = buffer.getvalue()
+                            if len(image_bytes) <= max_figure_bytes:
+                                visual = store.add_bytes(
+                                    asset["source_id"],image_bytes,role="DIAGRAM",
+                                    display_name=f"figure-p{row['page_number']:04d}.png",
+                                )
+                                asset_id_for_element = visual.id
+                        except (ValueError,OSError,RuntimeError,TypeError):
+                            asset_id_for_element = None
                     normalized = _norm_bbox(bbox,page.width,page.height) if bbox else None
                     element_id = uuid7()
                     confidence = spec.get("confidence")
