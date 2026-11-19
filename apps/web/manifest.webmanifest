@@ -1,0 +1,11 @@
+{
+  "name": "OmniIntel Reader",
+  "short_name": "OmniIntel",
+  "description": "Private offline reader for OmniIntel course textbooks.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111318",
+  "theme_color": "#111318",
+  "orientation": "any"
+}
