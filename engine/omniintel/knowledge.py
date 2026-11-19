@@ -87,3 +87,22 @@ def derive_claim_status(relations: list[dict[str, object]], provenance: str) -> 
 def is_publishable_claim(status: str) -> bool:
     """Only supported claims without accepted contradictions are publishable."""
     return status == "SUPPORTED"
+
+@dataclass(frozen=True, slots=True)
+class ClaimEvidenceReferenceInput:
+    claim_id: str
+    evidence_ref_id: str
+    relation: ClaimRelation
+    relevance_score: float | None = None
+    rationale: str | None = None
+
+    def validate(self) -> None:
+        if not self.claim_id or not self.evidence_ref_id:
+            raise ValueError("Claim and evidence reference IDs are required")
+        if self.relation not in {
+            "SUPPORTS", "CONTRADICTS", "QUALIFIES", "CONTEXTUALIZES", "ILLUSTRATES",
+        }:
+            raise ValueError("Unsupported claim/evidence reference relation")
+        if self.relevance_score is not None and not 0 <= self.relevance_score <= 1:
+            raise ValueError("Evidence relevance must be between zero and one")
+
