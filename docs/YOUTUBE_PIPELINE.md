@@ -66,3 +66,5 @@ for original explanatory prose, semantic concept extraction and generated study 
 The CLI output is normalized to the portable Android/Web reader export contract, including
 the required source catalog and reader-safe timestamp/page evidence objects. Import it
 with **Import reader JSON** in the native app.
+
+The caption CLI prints the persistent `source_id`; pass that ID to `omniintel-study-guide` to generate a local AI-assisted draft from the same ingested source.

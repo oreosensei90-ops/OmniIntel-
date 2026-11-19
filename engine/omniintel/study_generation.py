@@ -370,6 +370,7 @@ def main() -> None:
     args.output.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({
         "status": tree["pipeline"]["status"], "title": tree["version"]["title"],
+        "source_id": tree["source"]["id"],
         "chapters": len(tree["chapters"]), "output": str(args.output),
         "generated_blocks": tree["pipeline"]["generated_blocks"],
     }, ensure_ascii=False))

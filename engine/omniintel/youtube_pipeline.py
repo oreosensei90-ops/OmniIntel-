@@ -369,6 +369,7 @@ def compose_source_main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"status": tree["pipeline"]["status"], "title": tree["version"]["title"],
+                      "source_id": tree["source"]["id"],
                       "chapters": len(tree["chapters"]), "output": str(args.output)}, ensure_ascii=False))
 
 

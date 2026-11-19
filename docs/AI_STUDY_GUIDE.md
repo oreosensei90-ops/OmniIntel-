@@ -62,3 +62,14 @@ or study reliance.
 The output is normalized to the portable reader contract: it includes a source catalog,
 anchor source and alignment policy, plus Android/Web-safe transcript excerpts and
 page/element locators. Source timestamps remain local; no course clock is invented.
+
+For a YouTube video, run the caption intake first, then reuse its printed source ID:
+
+```bash
+omniintel-youtube ./omniintel.db 'https://www.youtube.com/watch?v=VIDEO_ID' \
+  --approve-network --language en --output ./exports/video-reader.json
+SOURCE_ID="$(python -c "import json; print(json.load(open('./exports/video-reader.json', encoding='utf-8'))['source']['id'])")"
+omniintel-study-guide ./omniintel.db "$SOURCE_ID" \
+  --model qwen2.5:7b --approve-local-model \
+  --output ./exports/ai-study-guide.json
+```
