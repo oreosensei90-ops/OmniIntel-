@@ -66,6 +66,7 @@ def main() -> None:
     transcribe_wav.add_argument("--vad", action="store_true", help="Enable VAD filtering; may omit quiet lecture speech")
     transcribe_wav.add_argument("--language", default=None)
     transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
+    transcribe_wav.add_argument("--time-offset-ms", type=int, default=0)
     extract_audio = sub.add_parser("extract-audio", help="Extract a selected local audio stream to resumable-transcription WAV")
     extract_audio.add_argument("database", type=Path)
     extract_audio.add_argument("asset_dir", type=Path)
@@ -212,6 +213,7 @@ def main() -> None:
         result = run_wav_transcription(
             args.database,args.asset_dir,args.source_id,args.asset_id,adapter,
             language=args.language,chunk_seconds=args.chunk_seconds,
+            time_offset_ms=args.time_offset_ms,
         )
         print(json.dumps({
             "run_id":result.run_id,"source_id":result.source_id,
@@ -220,6 +222,7 @@ def main() -> None:
             "evidence_references":len(result.evidence_ref_ids),
             "reused_chunks":result.reused_chunks,
             "processed_chunks":result.processed_chunks,
+            "time_offset_ms":result.time_offset_ms,
         },ensure_ascii=False,indent=2))
     elif args.command == "extract-audio":
         from .audio_extract import audio_extraction_dict, extract_audio
