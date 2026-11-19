@@ -102,13 +102,16 @@ def get_evidence_reference(
             """SELECT er.id,er.source_id,s.title,er.locator_kind,
                       er.evidence_item_id,er.document_page_id,er.source_asset_id,
                       er.start_ms,er.end_ms,er.page_number,
-                      COALESCE(e.content,dp.text_content) AS content,
-                      COALESCE(e.provenance,'SOURCE') AS provenance,
-                      dp.content_sha256
+                      COALESCE(e.content,NULLIF(dp.text_content,''),ocr.text_content) AS content,
+                      CASE WHEN er.locator_kind='DOCUMENT_PAGE' AND length(trim(dp.text_content))=0
+                           AND ocr.page_id IS NOT NULL THEN 'UNCERTAIN'
+                           ELSE COALESCE(e.provenance,'SOURCE') END AS provenance,
+                      dp.content_sha256,ocr.status AS ocr_status,ocr.mean_confidence
                FROM evidence_refs er
                JOIN sources s ON s.id=er.source_id
                LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
                LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+               LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
                WHERE er.id=?""",
             (reference_id,),
         ).fetchone()
