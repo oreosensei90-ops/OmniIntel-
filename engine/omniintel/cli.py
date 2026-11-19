@@ -59,6 +59,36 @@ def main() -> None:
     extract_pdf_cmd.add_argument("--max-pages", type=int, default=500)
     extract_pdf_cmd.add_argument("--max-chars-per-page", type=int, default=100_000)
     extract_pdf_cmd.add_argument("--max-total-chars", type=int, default=5_000_000)
+    ocr_pdf_cmd = sub.add_parser("ocr-pdf", help="OCR image-only pages in a registered local PDF")
+    ocr_pdf_cmd.add_argument("database", type=Path)
+    ocr_pdf_cmd.add_argument("asset_dir", type=Path)
+    ocr_pdf_cmd.add_argument("asset_id")
+    ocr_pdf_cmd.add_argument("--dpi", type=int, default=144)
+    ocr_pdf_cmd.add_argument("--max-pages", type=int, default=200)
+    ocr_pdf_cmd.add_argument("--force", action="store_true")
+    review_ocr = sub.add_parser("review-ocr-page", help="Review one OCR page before its text can support claims")
+    review_ocr.add_argument("database", type=Path)
+    review_ocr.add_argument("page_id")
+    review_ocr.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
+    structure_pdf = sub.add_parser("structure-pdf", help="Extract positioned text, tables, equations and figure regions")
+    structure_pdf.add_argument("database", type=Path)
+    structure_pdf.add_argument("asset_dir", type=Path)
+    structure_pdf.add_argument("asset_id")
+    structure_pdf.add_argument("--max-pages", type=int, default=500)
+    structure_pdf.add_argument("--max-elements", type=int, default=20000)
+    structure_pdf.add_argument("--no-figure-assets", action="store_true")
+    review_element = sub.add_parser("review-document-element", help="Review one extracted document element")
+    review_element.add_argument("database", type=Path)
+    review_element.add_argument("element_id")
+    review_element.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
+    review_element.add_argument("--rationale", default=None)
+    list_elements = sub.add_parser("list-document-elements", help="List extracted page-level document elements")
+    list_elements.add_argument("database", type=Path)
+    list_elements.add_argument("--page-id", default=None)
+    search_elements = sub.add_parser("search-document-elements", help="Search extracted document structure")
+    search_elements.add_argument("database", type=Path)
+    search_elements.add_argument("query")
+    search_elements.add_argument("--limit", type=int, default=50)
     search_evidence = sub.add_parser("search-evidence", help="Search unified transcript and document-page evidence")
     search_evidence.add_argument("database", type=Path)
     search_evidence.add_argument("query")
@@ -152,6 +182,67 @@ def main() -> None:
                 for page in result.pages
             ],
         }, ensure_ascii=False, indent=2))
+    elif args.command == "ocr-pdf":
+        from .document_ocr import ocr_pdf
+
+        result = ocr_pdf(
+            args.database,args.asset_dir,args.asset_id,dpi=args.dpi,
+            max_pages=args.max_pages,force=args.force,
+        )
+        print(json.dumps({
+            "source_id": result.source_id,"asset_id": result.asset_id,
+            "processed_pages": len(result.pages),"skipped_pages": list(result.skipped_pages),
+            "pages": [{
+                "page_id": page.page_id,"page_number": page.page_number,
+                "rendered_asset_id": page.rendered_asset_id,
+                "characters": len(page.text),"mean_confidence": page.mean_confidence,
+                "status": page.status,
+            } for page in result.pages],
+        },ensure_ascii=False,indent=2))
+    elif args.command == "review-ocr-page":
+        from .document_ocr import review_ocr_page
+
+        print(json.dumps({
+            "page_id": args.page_id,
+            "status": review_ocr_page(args.database,args.page_id,args.state),
+        },indent=2))
+    elif args.command == "structure-pdf":
+        from .document_structure import extract_document_structure
+
+        result = extract_document_structure(
+            args.database,args.asset_dir,args.asset_id,
+            max_pages=args.max_pages,max_elements=args.max_elements,
+            extract_figure_assets=not args.no_figure_assets,
+        )
+        print(json.dumps({
+            "source_id": result.source_id,"asset_id": result.asset_id,
+            "pages": result.page_count,"elements": result.element_count,
+            "counts_by_type": result.counts_by_type,
+            "element_ids": [element.id for element in result.elements],
+        },ensure_ascii=False,indent=2))
+    elif args.command == "review-document-element":
+        from .document_structure import review_document_element
+
+        print(json.dumps({
+            "element_id": args.element_id,
+            "review_state": review_document_element(
+                args.database,args.element_id,args.state,rationale=args.rationale,
+            ),
+        },ensure_ascii=False,indent=2))
+    elif args.command == "list-document-elements":
+        from .document_structure import list_document_elements
+
+        print(json.dumps(
+            list_document_elements(args.database,args.page_id),
+            ensure_ascii=False,indent=2,
+        ))
+    elif args.command == "search-document-elements":
+        from .document_structure import search_document_elements
+
+        print(json.dumps(
+            search_document_elements(args.database,args.query,limit=args.limit),
+            ensure_ascii=False,indent=2,
+        ))
     elif args.command == "search-evidence":
         from .evidence_refs import search_evidence_references
 
