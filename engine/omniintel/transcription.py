@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from .assets import AssetStore
-from .database import connect, migrate
+from .database import connect
 from .evidence_refs import register_transcript_references
 from .ids import uuid7
 from .models import TranscriptSegmentInput, utc_now
