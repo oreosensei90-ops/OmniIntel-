@@ -68,13 +68,24 @@ class TextbookPublicationAuditor:
                 (version_id,),
             ).fetchall()
             evidence_rows = conn.execute(
-                """SELECT be.block_id,be.relation,be.review_state,e.id AS evidence_id,
+                """SELECT be.block_id,be.relation,be.review_state,e.id AS evidence_id,er.id AS evidence_ref_id,
                           e.source_id,e.provenance
                    FROM block_evidence be
                    JOIN chapter_blocks b ON b.id=be.block_id
                    JOIN textbook_chapters c ON c.id=b.chapter_id
                    JOIN evidence_items e ON e.id=be.evidence_id
+                   LEFT JOIN evidence_refs er ON er.evidence_item_id=e.id
                    WHERE c.version_id=? ORDER BY be.block_id,be.id""",
+                (version_id,),
+            ).fetchall()
+            block_reference_rows = conn.execute(
+                """SELECT ber.block_id,ber.relation,ber.review_state,
+                          ber.evidence_ref_id,er.source_id
+                   FROM block_evidence_refs ber
+                   JOIN evidence_refs er ON er.id=ber.evidence_ref_id
+                   JOIN chapter_blocks b ON b.id=ber.block_id
+                   JOIN textbook_chapters c ON c.id=b.chapter_id
+                   WHERE c.version_id=? ORDER BY ber.block_id,ber.id""",
                 (version_id,),
             ).fetchall()
             asset_rows = conn.execute(
@@ -88,15 +99,31 @@ class TextbookPublicationAuditor:
                 (version_id,),
             ).fetchall()
             claim_rows = conn.execute(
-                """SELECT c.id,c.status,c.provenance,ce.evidence_id,ce.relation,ce.review_state
+                """SELECT c.id,c.status,c.provenance,
+                          COALESCE(er.id,ce.evidence_id) AS evidence_ref_id,
+                          ce.relation,ce.review_state
                    FROM claims c
                    LEFT JOIN claim_evidence ce ON ce.claim_id=c.id
+                   LEFT JOIN evidence_refs er ON er.evidence_item_id=ce.evidence_id
                    WHERE c.id IN (
                        SELECT claim_id FROM chapter_blocks b
                        JOIN textbook_chapters ch ON ch.id=b.chapter_id
                        WHERE ch.version_id=? AND claim_id IS NOT NULL
                    )
                    ORDER BY c.id,ce.id""",
+                (version_id,),
+            ).fetchall()
+            claim_reference_rows = conn.execute(
+                """SELECT c.id,c.status,c.provenance,cer.evidence_ref_id,
+                          cer.relation,cer.review_state
+                   FROM claims c
+                   JOIN claim_evidence_refs cer ON cer.claim_id=c.id
+                   WHERE c.id IN (
+                       SELECT claim_id FROM chapter_blocks b
+                       JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                       WHERE ch.version_id=? AND claim_id IS NOT NULL
+                   )
+                   ORDER BY c.id,cer.id""",
                 (version_id,),
             ).fetchall()
 
@@ -107,14 +134,21 @@ class TextbookPublicationAuditor:
         by_block: dict[str, list[dict[str, Any]]] = {}
         for row in evidence_rows:
             by_block.setdefault(row["block_id"], []).append(dict(row))
+        for row in block_reference_rows:
+            by_block.setdefault(row["block_id"], []).append(dict(row))
         by_claim: dict[str, list[dict[str, Any]]] = {}
         claim_status: dict[str, dict[str, str]] = {}
         for row in claim_rows:
             claim_status[row["id"]] = {
                 "status": row["status"], "provenance": row["provenance"]
             }
-            if row["evidence_id"] is not None:
+            if row["evidence_ref_id"] is not None:
                 by_claim.setdefault(row["id"], []).append(dict(row))
+        for row in claim_reference_rows:
+            claim_status[row["id"]] = {
+                "status": row["status"], "provenance": row["provenance"]
+            }
+            by_claim.setdefault(row["id"], []).append(dict(row))
 
         blocked_ids: set[str] = set()
         if not blocks:
@@ -159,7 +193,7 @@ class TextbookPublicationAuditor:
                 status = claim_status.get(claim_id)
                 claim_links = by_claim.get(claim_id, [])
                 accepted_support_ids = {
-                    item["evidence_id"] for item in claim_links
+                    item["evidence_ref_id"] for item in claim_links
                     if item["relation"] == "SUPPORTS" and item["review_state"] == "ACCEPTED"
                 }
                 accepted_contradiction = any(
@@ -167,7 +201,7 @@ class TextbookPublicationAuditor:
                     for item in claim_links
                 )
                 block_support_ids = {
-                    item["evidence_id"] for item in links
+                    item["evidence_ref_id"] for item in links
                     if item["relation"] == "SUPPORTS" and item["review_state"] == "ACCEPTED"
                 }
                 if status is None or status["status"] != "SUPPORTED":
