@@ -292,7 +292,8 @@ def describe_visual_events(
                FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
                JOIN source_assets sa ON sa.id=vf.frame_asset_id
                JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
-               WHERE ve.source_id=? ORDER BY ve.timestamp_ms LIMIT ?""",
+               WHERE ve.source_id=? AND ve.review_state='ACCEPTED'
+               ORDER BY ve.timestamp_ms LIMIT ?""",
             (source_id,max_frames),
         ).fetchall()
     output=[]
@@ -409,8 +410,13 @@ def verify_visual_claim(
                 "SELECT text FROM transcript_segments WHERE id=? AND source_id=?",
                 (transcript_segment_id,source_id),
             ).fetchone()
-            if segment is None:
-                raise ValueError("Transcript segment does not belong to the selected source")
+            temporal=conn.execute(
+                """SELECT review_state FROM visual_transcript_alignments
+                   WHERE visual_event_id=? AND transcript_segment_id=?""",
+                (visual_event_id,transcript_segment_id),
+            ).fetchone()
+            if segment is None or temporal is None or temporal["review_state"] != "ACCEPTED":
+                raise ValueError("Transcript segment must have an accepted temporal link to this frame")
             transcript=segment["text"]
     verdict=adapter.verify(claim["statement"],description["description"],transcript)
     if not isinstance(verdict,ClaimVerdict) or verdict.verdict not in {
