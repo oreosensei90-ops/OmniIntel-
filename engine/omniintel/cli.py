@@ -484,10 +484,15 @@ def main() -> None:
         stages=json.loads(args.stages_json.read_text(encoding="utf-8"))
 
         def register_sources(paths, context):
+            import hashlib
+
             registered=[]
             for path,expected_hash in zip(paths,context["expected_sha256"],strict=True):
+                effect_hash=hashlib.sha256(
+                    (expected_hash+"\\0"+str(path.resolve())).encode("utf-8")
+                ).hexdigest()
                 reserved_id=executor.reserve_source_id(
-                    context["plan_id"],context["stage_key"],expected_hash,
+                    context["plan_id"],context["stage_key"],effect_hash,
                 )
                 result=import_local_file(
                     args.database,args.asset_dir,path,
