@@ -6,7 +6,7 @@ import pytest
 from omniintel.database import MIGRATIONS, MigrationError, connect, migrate
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.store import OmniIntelStore
-from omniintel.evidence_refs import get_evidence_reference
+from omniintel.evidence_refs import get_evidence_reference, search_evidence_references
 
 
 def sample() -> TranscriptImport:
@@ -36,6 +36,10 @@ def test_transcript_import_persists_source_segments_and_evidence(tmp_path: Path)
     assert reference["locator_kind"] == "TRANSCRIPT_INTERVAL"
     assert reference["start_ms"] == 0 and reference["end_ms"] == 3_000
     assert reference["content"] == "Motion describes change in position."
+    hits = search_evidence_references(store.database_path, "Motion position")
+    assert hits[0]["id"] == result.evidence_ref_ids[0]
+    assert hits[0]["locator_kind"] == "TRANSCRIPT_INTERVAL"
+    assert "Motion" in hits[0]["excerpt"]
 
 
 def test_invalid_timestamp_rejected_before_write(tmp_path: Path) -> None:
