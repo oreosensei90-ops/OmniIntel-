@@ -36,8 +36,6 @@ def test_claim_requires_same_accepted_support_as_course_block(tmp_path: Path) ->
     other=OmniIntelStore(db).import_transcript(TranscriptImport(
         title="Other",segments=(TranscriptSegmentInput("Unrelated sentence",0,1000),)
     ))
-    with connect(db) as conn:
-        conn.execute("INSERT INTO sources(id,title,created_at) VALUES('unused','Unused','now')") if False else None
     # The block link itself remains source-bound by the chapter; support identity is audited.
     with connect(db) as conn:
         conn.execute("UPDATE claim_evidence_refs SET evidence_ref_id=? WHERE id='claim-link'",
