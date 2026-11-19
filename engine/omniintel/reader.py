@@ -35,8 +35,8 @@ class SynchronizedReader:
         for row in rows:
             a,b,offset,interval=row["source_a_id"],row["source_b_id"],row["offset_ms"],row["sample_interval_ms"]
             # Convention: t_A = t_B + offset.
-            graph.setdefault(b,[]).append((a,offset,interval))
-            graph.setdefault(a,[]).append((b,-offset,interval))
+            graph.setdefault(a,[]).append((b,offset,interval))
+            graph.setdefault(b,[]).append((a,-offset,interval))
         offsets: dict[str,int | None]={anchor_source_id:0}
         tolerances: dict[str,int]={anchor_source_id:0}
         queue=deque([anchor_source_id])
