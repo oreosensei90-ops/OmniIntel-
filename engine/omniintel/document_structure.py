@@ -337,10 +337,16 @@ def extract_document_structure(
     max_pages: int = 500,
     max_elements: int = 20_000,
     max_chars_per_element: int = 100_000,
+    max_total_chars: int = 5_000_000,
+    max_figure_pixels: int = 20_000_000,
+    max_figure_bytes: int = 25 * 1024 * 1024,
     extract_figure_assets: bool = True,
 ) -> DocumentStructureResult:
     """Extract positioned text, tables, equations and figure regions from a local PDF."""
-    if min(max_pages, max_elements, max_chars_per_element) <= 0:
+    if min(
+        max_pages,max_elements,max_chars_per_element,max_total_chars,
+        max_figure_pixels,max_figure_bytes,
+    ) <= 0:
         raise ValueError("Document structure limits must be positive")
     store = AssetStore(database_path, asset_dir)
     path = store.resolve_path(asset_id, verify_hash=True)
@@ -367,6 +373,7 @@ def extract_document_structure(
         raise ValueError(f"PDF page count exceeds structure limit ({max_pages})")
 
     output: list[DocumentElement] = []
+    total_chars = 0
     try:
         with pdfplumber.open(path) as pdf:
             if len(pdf.pages) != len(page_rows):
@@ -376,24 +383,37 @@ def extract_document_structure(
                 if not specs and not row["text_content"].strip():
                     specs = _ocr_specs(dict(row), page.width, page.height, database_path)
                 for spec in specs:
+                    element_payload_chars = len(spec["text"]) + len(
+                        json.dumps(spec["content"],ensure_ascii=False,allow_nan=False)
+                    )
                     if len(spec["text"]) > max_chars_per_element:
                         raise ValueError("Document element exceeds configured character limit")
+                    total_chars += element_payload_chars
+                    if total_chars > max_total_chars:
+                        raise ValueError("Document structure exceeds configured total character limit")
                     if len(output) >= max_elements:
                         raise ValueError("Document structure exceeds configured element limit")
                     asset_id_for_element = None
                     bbox = spec.get("bbox")
                     if spec["type"] == "FIGURE" and bbox and extract_figure_assets:
-                        try:
-                            image = page.crop(bbox).to_image(resolution=120, antialias=False).original
-                            buffer = io.BytesIO()
-                            image.save(buffer, format="PNG", optimize=True)
-                            visual = store.add_bytes(
-                                asset["source_id"],buffer.getvalue(),role="DIAGRAM",
-                                display_name=f"figure-p{row['page_number']:04d}.png",
-                            )
-                            asset_id_for_element = visual.id
-                        except (ValueError, OSError, RuntimeError, TypeError):
-                            asset_id_for_element = None
+                        width_px = max(1,int((bbox[2]-bbox[0])*120/72))
+                        height_px = max(1,int((bbox[3]-bbox[1])*120/72))
+                        if width_px * height_px <= max_figure_pixels:
+                            try:
+                                image = page.crop(bbox).to_image(
+                                    resolution=120,antialias=False
+                                ).original
+                                buffer = io.BytesIO()
+                                image.save(buffer,format="PNG",optimize=True)
+                                image_bytes = buffer.getvalue()
+                                if len(image_bytes) <= max_figure_bytes:
+                                    visual = store.add_bytes(
+                                        asset["source_id"],image_bytes,role="DIAGRAM",
+                                        display_name=f"figure-p{row['page_number']:04d}.png",
+                                    )
+                                    asset_id_for_element = visual.id
+                            except (ValueError,OSError,RuntimeError,TypeError):
+                                asset_id_for_element = None
                     normalized = _norm_bbox(bbox,page.width,page.height) if bbox else None
                     element_id = uuid7()
                     confidence = spec.get("confidence")
