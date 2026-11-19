@@ -7,6 +7,9 @@ from omniintel.database import connect
 from omniintel.store import OmniIntelStore
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.textbook import BlockInput, TextbookStore
+from omniintel.knowledge import ClaimEvidenceInput, ClaimInput
+from omniintel.knowledge_store import KnowledgeStore
+from omniintel.topics import TopicEvidenceInput, TopicInput, TopicStore
 
 
 def sample() -> TranscriptImport:
@@ -97,3 +100,49 @@ def test_textbook_block_hierarchy_rejects_cycles(tmp_path: Path) -> None:
     with connect(path) as conn:
         with pytest.raises(sqlite3.IntegrityError, match="cannot contain a cycle"):
             conn.execute("UPDATE chapter_blocks SET parent_block_id=? WHERE id=?", (child, parent))
+
+
+
+def test_deterministic_composer_places_only_supported_claims(tmp_path: Path) -> None:
+    path = tmp_path / "compose.db"
+    imported = OmniIntelStore(path).import_transcript(sample())
+    topics = TopicStore(path)
+    topic_id = topics.create_topic(
+        TopicInput(imported.source_id, "Motion", 0, 6_000, 0, description="Motion and velocity.")
+    )
+    topic_link = topics.link_evidence(
+        TopicEvidenceInput(topic_id, imported.evidence_ids[1], "DEVELOPS")
+    )
+    assert topics.review_link(topic_link, "ACCEPTED") == "ACCEPTED"
+
+    knowledge = KnowledgeStore(path)
+    supported = knowledge.create_claim(
+        ClaimInput("Velocity includes direction.", provenance="EXPLANATION")
+    )
+    support_link = knowledge.link_evidence(
+        ClaimEvidenceInput(supported, imported.evidence_ids[1], "SUPPORTS")
+    )
+    assert knowledge.review_evidence_link(support_link, "ACCEPTED") == "SUPPORTED"
+
+    contested = knowledge.create_claim(
+        ClaimInput("A deliberately contested claim.", provenance="DERIVED")
+    )
+    contested_support = knowledge.link_evidence(
+        ClaimEvidenceInput(contested, imported.evidence_ids[1], "SUPPORTS")
+    )
+    knowledge.review_evidence_link(contested_support, "ACCEPTED")
+    contradiction = knowledge.link_evidence(
+        ClaimEvidenceInput(contested, imported.evidence_ids[1], "CONTRADICTS")
+    )
+    assert knowledge.review_evidence_link(contradiction, "ACCEPTED") == "CONTESTED"
+
+    store = TextbookStore(path)
+    version_id = store.compose_from_accepted_topics(imported.source_id, "Physics textbook")
+    tree = store.get_version_tree(version_id)
+    assert tree is not None
+    assert len(tree["chapters"]) == 1
+    blocks = tree["chapters"][0]["blocks"]
+    assert len(blocks) == 1
+    assert blocks[0]["claim_id"] == supported
+    assert blocks[0]["review_status"] == "ACCEPTED"
+    assert blocks[0]["evidence"][0]["review_state"] == "ACCEPTED"
