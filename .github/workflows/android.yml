@@ -50,5 +50,16 @@ jobs:
             echo "Offline reader must not request network permissions"
             exit 1
           fi
+      - name: Create APK checksum
+        run: sha256sum apps/android/app/build/outputs/apk/debug/app-debug.apk > apps/android/app/build/outputs/apk/debug/app-debug.apk.sha256
+      - name: Upload verified debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniIntel-Android-debug-${{ github.sha }}
+          path: |
+            apps/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/android/app/build/outputs/apk/debug/app-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
       - name: Report verified APK
         run: ls -lh apps/android/app/build/outputs/apk/debug/app-debug.apk
