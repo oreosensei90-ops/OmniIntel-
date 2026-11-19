@@ -520,3 +520,139 @@ async function markStudy(status) {
 }
 $("#study-known").addEventListener("click", () => markStudy("KNOWN"));
 $("#study-review").addEventListener("click", () => markStudy("REVIEW"));
+
+
+const restoreFileInput = $("#restore-local-file");
+function parseWebBackup(raw) {
+  if (raw.length > 10 * 1024 * 1024) throw new Error("Backup exceeds the 10 MiB limit.");
+  const data = JSON.parse(raw);
+  if (!data || data.schema_version !== 1 || data.backup_type !== "OMNIINTEL_WEB_LOCAL_BACKUP") {
+    throw new Error("Unsupported OmniIntel Web backup format.");
+  }
+  const arrays = ["annotations", "bookmarks", "study_progress", "reading_progress"];
+  for (const name of arrays) {
+    if (!Array.isArray(data[name]) || data[name].length > 100000) throw new Error("Invalid or oversized " + name + " collection.");
+  }
+  const seen = new Set();
+  for (const row of data.annotations) {
+    if (!row || typeof row.key !== "string" || row.key.length > 512 ||
+        typeof row.text !== "string" || row.text.length > 12000 ||
+        !Number.isFinite(Date.parse(row.updatedAt))) throw new Error("Invalid annotation record.");
+    if (seen.has("a:" + row.key)) throw new Error("Duplicate annotation key.");
+    seen.add("a:" + row.key);
+  }
+  for (const row of data.bookmarks) {
+    if (!row || typeof row.key !== "string" || row.key.length > 512 ||
+        !Number.isFinite(Date.parse(row.createdAt))) throw new Error("Invalid bookmark record.");
+    if (seen.has("b:" + row.key)) throw new Error("Duplicate bookmark key.");
+    seen.add("b:" + row.key);
+  }
+  for (const row of data.study_progress) {
+    if (!row || typeof row.key !== "string" || row.key.length > 512 ||
+        !["KNOWN", "REVIEW"].includes(row.status) ||
+        !Number.isFinite(Date.parse(row.updatedAt))) throw new Error("Invalid study-progress record.");
+    if (seen.has("s:" + row.key)) throw new Error("Duplicate study-progress key.");
+    seen.add("s:" + row.key);
+  }
+  for (const row of data.reading_progress) {
+    if (!row || typeof row.key !== "string" || !row.key.startsWith("omniintel-reader:") ||
+        row.key.length > 512 || typeof row.value !== "string" || row.value.length > 2048) {
+      throw new Error("Invalid reading-progress record.");
+    }
+    const progress = JSON.parse(row.value);
+    if (!Number.isInteger(progress.chapter) || progress.chapter < 0 ||
+        !Number.isFinite(Date.parse(progress.savedAt))) throw new Error("Invalid reading-progress value.");
+  }
+  return data;
+}
+async function exportWebBackup() {
+  const db = await openLocalDB();
+  const read = db.transaction(["annotations", "bookmarks", "studyProgress"], "readonly");
+  const [annotations, bookmarks, studyProgress] = await Promise.all([
+    requestResult(read.objectStore("annotations").getAll()),
+    requestResult(read.objectStore("bookmarks").getAll()),
+    requestResult(read.objectStore("studyProgress").getAll())
+  ]);
+  const readingProgress = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith("omniintel-reader:")) {
+      readingProgress.push({ key, value: localStorage.getItem(key) || "" });
+    }
+  }
+  const payload = {
+    schema_version: 1,
+    backup_type: "OMNIINTEL_WEB_LOCAL_BACKUP",
+    exported_at: new Date().toISOString(),
+    annotations, bookmarks, study_progress: studyProgress,
+    reading_progress: readingProgress
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  if (blob.size > 10 * 1024 * 1024) throw new Error("Combined local backup exceeds 10 MiB.");
+  const url = URL.createObjectURL(blob);
+  const anchor = element("a", "", "");
+  anchor.href = url;
+  anchor.download = "omniintel-web-backup.json";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+async function restoreWebBackup(data) {
+  const db = await openLocalDB();
+  const read = db.transaction(["annotations", "bookmarks", "studyProgress"], "readonly");
+  const [oldAnnotations, oldBookmarks, oldStudy] = await Promise.all([
+    requestResult(read.objectStore("annotations").getAll()),
+    requestResult(read.objectStore("bookmarks").getAll()),
+    requestResult(read.objectStore("studyProgress").getAll())
+  ]);
+  const merge = (oldRows, incoming, timestamp) => {
+    const map = new Map(oldRows.map(row => [row.key, row]));
+    for (const row of incoming) {
+      const previous = map.get(row.key);
+      if (!previous || Date.parse(row[timestamp]) >= Date.parse(previous[timestamp] || 0)) map.set(row.key, row);
+    }
+    return [...map.values()];
+  };
+  const mergedAnnotations = merge(oldAnnotations, data.annotations, "updatedAt");
+  const mergedBookmarks = merge(oldBookmarks, data.bookmarks, "createdAt");
+  const mergedStudy = merge(oldStudy, data.study_progress, "updatedAt");
+  const write = db.transaction(["annotations", "bookmarks", "studyProgress"], "readwrite");
+  for (const row of mergedAnnotations) write.objectStore("annotations").put(row);
+  for (const row of mergedBookmarks) write.objectStore("bookmarks").put(row);
+  for (const row of mergedStudy) write.objectStore("studyProgress").put(row);
+  await transactionDone(write);
+  for (const row of data.reading_progress) {
+    let previous = null;
+    try { previous = JSON.parse(localStorage.getItem(row.key) || "null"); } catch {}
+    const incoming = JSON.parse(row.value);
+    if (!previous || Date.parse(incoming.savedAt) >= Date.parse(previous.savedAt || 0)) {
+      localStorage.setItem(row.key, row.value);
+    }
+  }
+  return {
+    annotations: data.annotations.length,
+    bookmarks: data.bookmarks.length,
+    study: data.study_progress.length,
+    progress: data.reading_progress.length
+  };
+}
+$("#backup-local").addEventListener("click", () => {
+  exportWebBackup().catch(error => alert("Could not back up local data: " + error.message));
+});
+restoreFileInput.addEventListener("change", async () => {
+  const file = restoreFileInput.files?.[0];
+  if (!file) return;
+  try {
+    const raw = await file.text();
+    const data = parseWebBackup(raw);
+    const counts = await restoreWebBackup(data);
+    alert("Backup merged on this device. Notes: " + counts.annotations +
+      ", bookmarks: " + counts.bookmarks + ", study records: " + counts.study +
+      ", reading positions: " + counts.progress + ". Newer local records were preserved.");
+  } catch (error) {
+    alert("Could not restore backup: " + error.message);
+  } finally {
+    restoreFileInput.value = "";
+  }
+});
