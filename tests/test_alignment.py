@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -34,9 +35,9 @@ def test_alignment_requires_review_and_collection_membership(tmp_path: Path) -> 
     assert store.list(course)[0]["review_state"]=="NEEDS_REVIEW"
     assert store.review(record,"ACCEPTED")=="ACCEPTED"
     other=source(db,"Not in course")
-    with pytest.raises(Exception,match="both aligned sources"):
+    with pytest.raises(sqlite3.IntegrityError,match="both aligned sources"):
         store.propose(course,a,other,estimate,rationale="Not a member",
-                      signal_a=[0,1,0,2,0,1,0,2],signal_b=[0,1,0,2,0,1,0,2])
+                      signal_a=signal,signal_b=signal)
 
 
 def test_alignment_rejects_short_or_invalid_signals() -> None:
