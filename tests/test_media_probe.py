@@ -92,6 +92,8 @@ def test_probe_persists_container_and_stream_metadata_and_reuses_result(
     assert [stream.codec_type for stream in first.streams] == ["video", "audio"]
     assert first.streams[0].width == 1920
     assert first.streams[0].height == 1080
+    assert first.streams[0].start_ms == 500
+    assert first.streams[1].start_ms == 1250
     assert first.streams[1].sample_rate == 48000
     assert first.streams[1].channels == 2
     assert first.streams[1].start_ms == 250
