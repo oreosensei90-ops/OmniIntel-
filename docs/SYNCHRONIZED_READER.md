@@ -15,3 +15,8 @@ omniintel reader-open ./omniintel.db VERSION_ID --anchor-source-id SOURCE_ID
 omniintel reader-save-position ./omniintel.db SESSION_ID VERSION_ID 125000 --anchor-source-id SOURCE_A --current-source-id SOURCE_B
 omniintel reader-resume ./omniintel.db SESSION_ID
 ```
+
+
+## Page-native document reading
+
+When a course block cites a PDF page, the reader returns the extracted page text and up to 100 positioned document elements (including element type, normalized bounding box, confidence, provenance and review state). These remain page-native locators. They are not converted to media milliseconds, and pending OCR/structure elements remain visibly reviewable rather than being treated as accepted facts. The current reader API returns these records; a graphical page canvas and tap-to-highlight UI remain application-layer work.
