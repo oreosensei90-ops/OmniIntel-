@@ -76,3 +76,21 @@ def test_execution_rejects_stage_for_wrong_modality(tmp_path: Path) -> None:
             plan,[{"stage":"SAMPLE_VIDEO_FRAMES","input_indices":[0]}],
             user_approved=True,handlers={"SAMPLE_VIDEO_FRAMES":lambda *_:{}},
         )
+
+
+def test_execution_retries_failed_checkpoint_without_losing_stage_identity(tmp_path: Path) -> None:
+    plan=make_plan(tmp_path/"retry.wav")
+    executor=PlanExecutor(tmp_path/"db.sqlite")
+    calls=[]
+    def flaky(paths,context):
+        calls.append(context["stage"])
+        if len(calls)==1:
+            raise RuntimeError("simulated adapter interruption")
+        return {"recovered":True}
+    stages=[{"stage":"REGISTER_SOURCE","input_indices":[0]}]
+    handlers={"REGISTER_SOURCE":flaky}
+    with pytest.raises(RuntimeError,match="interruption"):
+        executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
+    resumed=executor.approve_and_run(plan,stages,user_approved=True,handlers=handlers)
+    assert resumed["status"]=="COMPLETED"
+    assert calls==["REGISTER_SOURCE","REGISTER_SOURCE"]
