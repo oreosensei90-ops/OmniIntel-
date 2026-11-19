@@ -91,3 +91,12 @@ def test_android_reader_pauses_local_media_when_backgrounded() -> None:
     assert "Lifecycle.Event.ON_STOP" in code
     assert "if (player.isPlaying) player.pause()" in code
     assert "if (view.isPlaying) view.pause()" in code
+
+
+def test_android_cross_chapter_search_results_can_open_their_chapter() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert "List<Triple<Int, String, Block>>" in code
+    assert "flatMapIndexed" in code
+    assert "TextButton(onClick = {" in code
+    assert "chapterIndex = resultChapterIndex" in code
