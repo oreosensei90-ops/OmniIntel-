@@ -141,3 +141,13 @@ def test_android_reader_persists_block_notes_and_bookmarks_locally() -> None:
     assert "bookmarkedBlocks = preferences.asMap().mapNotNull" in code
     assert "sourceId.length <= 128" in code
     assert "requestedId.length <= 128" in code
+
+
+def test_android_reader_can_filter_and_search_saved_bookmarks_and_notes() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert 'Search all chapters and notes' in code
+    assert 'notesByBlock[block.id]?.contains(query, true) == true' in code
+    assert 'matchesQuery && (!showBookmarksOnly || block.id in bookmarkedBlocks)' in code
+    assert 'showBookmarksOnly = !showBookmarksOnly' in code
+    assert 'current.chapters.flatMapIndexed' in code
