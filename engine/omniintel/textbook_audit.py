@@ -80,9 +80,13 @@ class TextbookPublicationAuditor:
             ).fetchall()
             block_reference_rows = conn.execute(
                 """SELECT ber.block_id,ber.relation,ber.review_state,
-                          ber.evidence_ref_id,er.source_id
+                          ber.evidence_ref_id,er.source_id,ber.element_id,de.review_state AS element_review_state,
+                          dp.text_content AS native_page_text,ocr.status AS ocr_status
                    FROM block_evidence_refs ber
                    JOIN evidence_refs er ON er.id=ber.evidence_ref_id
+                   LEFT JOIN document_elements de ON de.id=ber.element_id
+                   LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                   LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
                    JOIN chapter_blocks b ON b.id=ber.block_id
                    JOIN textbook_chapters c ON c.id=b.chapter_id
                    WHERE c.version_id=? ORDER BY ber.block_id,ber.id""",
@@ -115,9 +119,15 @@ class TextbookPublicationAuditor:
             ).fetchall()
             claim_reference_rows = conn.execute(
                 """SELECT c.id,c.status,c.provenance,cer.evidence_ref_id,
-                          cer.relation,cer.review_state
+                          cer.relation,cer.review_state,cer.element_id,
+                          de.review_state AS element_review_state,
+                          dp.text_content AS native_page_text,ocr.status AS ocr_status
                    FROM claims c
                    JOIN claim_evidence_refs cer ON cer.claim_id=c.id
+                   LEFT JOIN document_elements de ON de.id=cer.element_id
+                   LEFT JOIN evidence_refs er ON er.id=cer.evidence_ref_id
+                   LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                   LEFT JOIN document_ocr_pages ocr ON ocr.page_id=dp.id
                    WHERE c.id IN (
                        SELECT claim_id FROM chapter_blocks b
                        JOIN textbook_chapters ch ON ch.id=b.chapter_id
@@ -184,6 +194,15 @@ class TextbookPublicationAuditor:
                    for item in links):
                 reasons.append(("BLOCK_HAS_ACCEPTED_CONTRADICTION",
                                 "Block has an accepted contradictory evidence link."))
+            if any(item.get("element_id") and item.get("element_review_state") != "ACCEPTED"
+                   for item in links):
+                reasons.append(("EVIDENCE_ELEMENT_NOT_ACCEPTED",
+                                "A linked document element has not passed review."))
+            if any(item.get("native_page_text") is not None
+                   and not str(item.get("native_page_text") or "").strip()
+                   and item.get("ocr_status") != "ACCEPTED" for item in links):
+                reasons.append(("OCR_NOT_ACCEPTED",
+                                "OCR-derived page text must be accepted before publication."))
             if any(item["review_state"] != "ACCEPTED" for item in links):
                 reasons.append(("BLOCK_HAS_UNREVIEWED_EVIDENCE",
                                 "Every attached evidence link must be reviewed before publication."))
@@ -200,6 +219,16 @@ class TextbookPublicationAuditor:
                     item["relation"] == "CONTRADICTS" and item["review_state"] == "ACCEPTED"
                     for item in claim_links
                 )
+                if any(item.get("element_id") and item.get("element_review_state") != "ACCEPTED"
+                       for item in claim_links if item["review_state"] == "ACCEPTED"):
+                    reasons.append(("CLAIM_EVIDENCE_ELEMENT_NOT_ACCEPTED",
+                                    "Claim support cites a document element that has not passed review."))
+                if any(item.get("native_page_text") is not None
+                       and not str(item.get("native_page_text") or "").strip()
+                       and item.get("ocr_status") != "ACCEPTED"
+                       for item in claim_links if item["review_state"] == "ACCEPTED"):
+                    reasons.append(("CLAIM_OCR_NOT_ACCEPTED",
+                                    "Claim support depends on OCR that has not been accepted."))
                 block_support_ids = {
                     item["evidence_ref_id"] for item in links
                     if item["relation"] == "SUPPORTS" and item["review_state"] == "ACCEPTED"
