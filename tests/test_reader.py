@@ -43,6 +43,9 @@ def test_reader_uses_only_accepted_clock_alignment_and_persists_position(tmp_pat
     after=reader.open_version(version,anchor_source_id=a.source_id)
     ev=after["chapters"][0]["blocks"][0]["evidence"][0]
     assert ev["course_time_ms"]==-300
+    assert ev["course_end_time_ms"]==4700
+    assert ev["clock_offset_ms"]==-300
+    assert ev["alignment_status"]=="ALIGNED"
     assert ev["source"]["title"]=="Second recording"
     assert ev["transcript_excerpt"][0]["text"]=="Spoken words: Second recording"
     reader.save_position("session-1",version,anchor_source_id=a.source_id,
