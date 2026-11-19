@@ -54,6 +54,10 @@ The foundation now includes stable identifiers, typed transcript inputs, SQLite 
 AI providers are optional adapters. Deterministic core operations must remain available without a model. External processing is disabled unless the user explicitly authorizes it.
 
 
+## Current local media metadata slice
+
+A registered local audio/video asset can be inspected by the optional ffprobe executable. The adapter verifies the content-addressed original asset, invokes ffprobe without a shell and with local-only protocol restrictions, enforces time/stream/output limits, stores immutable container and stream metadata, and records duration on the source only when no duration was already present. It does not decode, transcode, extract audio or frames, inspect subtitles, or create evidence references. See MEDIA_PROBING.md.
+
 ## Current local PDF processing slice
 
 The implemented document path is deliberately staged:
