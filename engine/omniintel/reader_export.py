@@ -24,7 +24,7 @@ def to_reader_export(
     for entry in tree.get("chapters", []):
         chapter = entry.get("chapter")
         if not isinstance(chapter, dict):
-            raise ValueError("Textbook chapter metadata is missing")
+            raise TypeError("Textbook chapter metadata is missing")
         normalized_blocks = []
         for block in entry.get("blocks", []):
             evidence: list[dict[str, Any]] = []

@@ -140,8 +140,15 @@ def _ollama_generate(model: str, prompt: str, *, timeout_seconds: int = 180) -> 
     request = urllib.request.Request(
         endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST"
     )
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    # Do not inherit proxy environment variables or follow redirects: the model
+    # boundary must remain the literal loopback endpoint above.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     try:
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        with opener.open(request, timeout=timeout_seconds) as response:
             if response.status != 200:
                 raise RuntimeError(f"Local Ollama returned HTTP {response.status}")
             result = json.loads(response.read(2_000_000).decode("utf-8"))
@@ -269,8 +276,10 @@ def generate_study_guide(
             )
 
     summary_block = textbook.add_block(chapter_id, BlockInput(
-        "SUMMARY", {"text": validated["chapter_summary"], "ai_assisted": True,
-                    "model": model, "review_notice": "Draft; citations require human review."},
+        "SUMMARY", {"title": "Chapter summary",
+                    "text": "Chapter summary\\n\\n" + validated["chapter_summary"],
+                    "ai_assisted": True, "model": model,
+                    "review_notice": "Draft; citations require human review."},
         "EXPLANATION", "NEEDS_REVIEW", ordinal=0,
     ))
     attach(summary_block, validated["summary_evidence_ids"], "Model-proposed summary citation; review required.")
@@ -312,7 +321,8 @@ def generate_study_guide(
                     element_id=reference_map[evidence_id]["element_id"],
                 ))
             block_id = textbook.add_block(chapter_id, BlockInput(
-                kind[1], {"title": item["title"], "text": item["body"],
+                kind[1], {"title": item["title"],
+                          "text": item["title"] + "\\n\\n" + item["body"],
                           "evidence_ids": evidence_ids, "ai_assisted": True,
                           "review_notice": "Draft; evidence links are pending human review."},
                 kind[2], "NEEDS_REVIEW", ordinal=ordinal,
