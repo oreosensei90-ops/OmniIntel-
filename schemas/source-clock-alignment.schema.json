@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/source-clock-alignment.schema.json",
+  "title": "OmniIntel Reviewed Source Clock Alignment",
+  "type": "object",
+  "properties": {
+    "id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "schema_version": {"const": 1},
+    "collection_id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "source_a_id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "source_b_id": {"$ref": "common.schema.json#/$defs/uuid7"},
+    "offset_ms": {"type": "integer"},
+    "sample_interval_ms": {"type": "integer", "minimum": 1},
+    "correlation": {"type": "number", "minimum": -1, "maximum": 1},
+    "runner_up_correlation": {"type": "number", "minimum": -1, "maximum": 1},
+    "method": {"type": "string", "minLength": 1},
+    "algorithm_version": {"type": "string", "minLength": 1},
+    "input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "rationale": {"type": "string", "minLength": 1},
+    "sign_convention": {"const": "time_A_ms = time_B_ms + offset_ms"},
+    "review_state": {"enum": ["NEEDS_REVIEW", "ACCEPTED", "REJECTED"]},
+    "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "reviewed_at": {"oneOf": [{"$ref": "common.schema.json#/$defs/timestamp"}, {"type": "null"}]}
+  },
+  "required": ["id", "schema_version", "collection_id", "source_a_id", "source_b_id",
+    "offset_ms", "sample_interval_ms", "correlation", "runner_up_correlation", "method",
+    "algorithm_version", "input_sha256", "rationale", "sign_convention", "review_state",
+    "created_at", "reviewed_at"],
+  "additionalProperties": false
+}
