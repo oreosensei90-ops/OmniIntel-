@@ -25,13 +25,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 
 private val Ink = Color(0xFF111318)
 private val Panel = Color(0xFF1B1F27)
 private val Gold = Color(0xFFE2BD71)
 private val Muted = Color(0xFF9BA3B2)
+private const val MAX_IMPORT_BYTES = 50L * 1024L * 1024L
 
 data class Evidence(val source: String, val locator: String, val excerpt: String)
 data class Block(val id: String, val type: String, val text: String, val provenance: String, val evidence: List<Evidence>)
@@ -58,22 +60,25 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun parse(uri: Uri): Book {
-        val raw = contentResolver.openInputStream(uri).use { stream ->
+        val bytes = contentResolver.openInputStream(uri).use { stream ->
             requireNotNull(stream) { "Unable to open selected file." }
-            BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-                val out = StringBuilder()
-                val buffer = CharArray(8192)
-                var size = 0
-                while (true) {
-                    val count = reader.read(buffer)
-                    if (count < 0) break
-                    size += count
-                    require(size <= 50 * 1024 * 1024) { "Reader export exceeds 50 MiB." }
-                    out.append(buffer, 0, count)
-                }
-                out.toString()
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var size = 0L
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                size += count
+                require(size <= MAX_IMPORT_BYTES) { "Reader export exceeds 50 MiB." }
+                out.write(buffer, 0, count)
             }
+            out.toByteArray()
         }
+        val raw = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes))
+            .toString()
         val root = JSONObject(raw)
         val version = root.optJSONObject("version") ?: error("Missing textbook version.")
         val sourceTitles = mutableMapOf<String, String>()
@@ -83,6 +88,7 @@ class MainActivity : ComponentActivity() {
             sourceTitles[source.optString("source_id")] = source.optString("title", "Course source")
         }
         val rawChapters = root.optJSONArray("chapters") ?: error("Missing chapters.")
+        val seenBlockIds = mutableSetOf<String>()
         val chapters = (0 until rawChapters.length()).mapNotNull { i ->
             val entry = rawChapters.optJSONObject(i) ?: return@mapNotNull null
             val chapter = entry.optJSONObject("chapter") ?: JSONObject()
