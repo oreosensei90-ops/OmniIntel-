@@ -29,9 +29,12 @@ blobs. SQLite stores metadata and source associations; bytes remain outside the 
   it does not deeply validate file structure or sanitize active content.
 - ZIP-based office formats are currently identified generically as ZIP. No archive extraction,
   OCR, image decoding, transcoding, thumbnailing or malware scanning is performed.
-- Asset metadata is not yet linked directly from textbook image/diagram blocks, and backups must
-  include both the SQLite database and the asset directory.
-- Orphaned blob cleanup and asset deletion/retention policies remain future work.
+- IMAGE and DIAGRAM textbook blocks can link source-owned image assets through block_assets;
+  database triggers reject cross-source, non-image and role-incompatible attachments.
+- Publication audit blocks visual blocks with no linked image asset. This validates metadata links,
+  not successful image decoding or semantic relevance.
+- Backups must include both the SQLite database and the asset directory. Orphan cleanup and
+  deletion/retention policies remain future work.
 
 ## Python API
 
@@ -41,4 +44,9 @@ from omniintel.assets import AssetStore
 assets = AssetStore("./omniintel.db", "./omniintel-assets")
 record = assets.add_file(source_id, "./lecture-slides.pdf", role="DOCUMENT")
 path = assets.resolve_path(record.id)  # verifies SHA-256 by default
+
+from omniintel.textbook import TextbookStore
+
+# Attach only after creating an IMAGE or DIAGRAM block.
+TextbookStore("./omniintel.db").link_asset(block_id, record.id, caption="Lecture slide")
 ```
