@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from omniintel.store import OmniIntelStore
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.textbook import BlockInput, TextbookStore
@@ -23,7 +21,7 @@ def _book(tmp_path: Path):
 
 
 def test_publication_gate_accepts_reviewed_explanation_block(tmp_path: Path) -> None:
-    path, imported, store, version, chapter = _book(tmp_path)
+    path, _, store, version, chapter = _book(tmp_path)
     block = store.add_block(chapter, BlockInput(
         "PARAGRAPH", {"text": "An explanation."}, "EXPLANATION",
         review_status="ACCEPTED",
@@ -36,7 +34,7 @@ def test_publication_gate_accepts_reviewed_explanation_block(tmp_path: Path) -> 
 
 
 def test_publication_gate_blocks_unreviewed_and_uncertain_blocks(tmp_path: Path) -> None:
-    path, imported, store, version, chapter = _book(tmp_path)
+    path, _, store, version, chapter = _book(tmp_path)
     store.add_block(chapter, BlockInput(
         "PARAGRAPH", {"text": "Needs review."}, "EXPLANATION",
         review_status="NEEDS_REVIEW",
