@@ -12,6 +12,7 @@ from .assets import AssetStore
 from .database import connect, migrate
 from .ids import uuid7
 from .models import utc_now
+from .evidence_refs import register_document_page_references
 
 PARSER_NAME = "pypdf"
 PARSER_VERSION = "1"
@@ -36,6 +37,7 @@ class PDFExtractionResult:
     extracted_pages: int
     empty_pages: int
     pages: tuple[ExtractedPage, ...]
+    evidence_ref_ids: tuple[str, ...] = ()
 
 
 def _normalize_page_text(value: str) -> str:
@@ -119,8 +121,18 @@ def extract_pdf(
             (asset_id, PARSER_NAME, PARSER_VERSION),
         ).fetchone()
         extraction_id = existing["id"] if existing else uuid7()
+        prior_pages: dict[int, str] = {}
         if existing:
-            conn.execute("DELETE FROM document_pages WHERE extraction_id=?", (extraction_id,))
+            prior_rows = conn.execute(
+                "SELECT id,page_number FROM document_pages WHERE extraction_id=?",
+                (extraction_id,),
+            ).fetchall()
+            prior_pages = {row["page_number"]: row["id"] for row in prior_rows}
+            if len(prior_pages) != page_count:
+                raise ValueError(
+                    "PDF page count changed for an existing parser version; "
+                    "bump the parser version to preserve citation history"
+                )
             conn.execute(
                 """UPDATE document_extractions
                    SET status=?,page_count=?,extracted_at=? WHERE id=?""",
@@ -144,22 +156,30 @@ def extract_pdf(
             )
         pages: list[ExtractedPage] = []
         for page_number, text, digest, status in extracted:
-            page_id = uuid7()
-            conn.execute(
-                """INSERT INTO document_pages
-                   (id,extraction_id,page_number,text_content,char_count,
-                    content_sha256,extraction_status,created_at)
-                   VALUES(?,?,?,?,?,?,?,?)""",
-                (page_id, extraction_id, page_number, text, len(text), digest, status, now),
-            )
+            page_id = prior_pages.get(page_number, uuid7())
+            if page_number in prior_pages:
+                conn.execute(
+                    """UPDATE document_pages SET text_content=?,char_count=?,
+                       content_sha256=?,extraction_status=?,created_at=? WHERE id=?""",
+                    (text,len(text),digest,status,now,page_id),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO document_pages
+                       (id,extraction_id,page_number,text_content,char_count,
+                        content_sha256,extraction_status,created_at)
+                       VALUES(?,?,?,?,?,?,?,?)""",
+                    (page_id, extraction_id, page_number, text, len(text), digest, status, now),
+                )
             pages.append(
                 ExtractedPage(page_id, page_number, text, len(text), digest, status)
             )
 
+    reference_ids = register_document_page_references(database_path, extraction_id)
     empty = sum(page.status == "EMPTY" for page in pages)
     return PDFExtractionResult(
         extraction_id, asset["source_id"], asset_id, page_count,
-        page_count - empty, empty, tuple(pages),
+        page_count - empty, empty, tuple(pages), reference_ids,
     )
 
 
