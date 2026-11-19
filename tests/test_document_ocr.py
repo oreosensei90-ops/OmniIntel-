@@ -1,4 +1,5 @@
 from pathlib import Path
+import sqlite3
 
 import pytest
 from reportlab.pdfgen import canvas
@@ -15,6 +16,11 @@ from omniintel.evidence_refs import get_evidence_reference, search_evidence_refe
 from omniintel.knowledge import ClaimEvidenceReferenceInput, ClaimInput
 from omniintel.knowledge_store import KnowledgeStore
 from omniintel.local_files import import_local_file
+from omniintel.document_structure import extract_document_structure, review_document_element
+from omniintel.document_knowledge import create_knowledge_candidates_from_document_elements
+from omniintel.topics import DocumentTopicEvidenceInput, DocumentTopicInput, TopicStore
+from omniintel.textbook import TextbookStore
+from omniintel.textbook_audit import TextbookPublicationAuditor
 
 
 class FakeOCR:
@@ -74,13 +80,69 @@ def test_ocr_page_is_searchable_but_not_publishable_until_reviewed(tmp_path: Pat
     link = knowledge.link_evidence_reference(ClaimEvidenceReferenceInput(
         claim,extracted.evidence_ref_ids[0],"SUPPORTS",0.95,
     ))
-    with pytest.raises(Exception,match="OCR page must be accepted"):
+    with pytest.raises(sqlite3.IntegrityError,match="OCR page must be accepted"):
         knowledge.review_evidence_reference_link(link,"ACCEPTED")
 
     assert review_ocr_page(database,page.page_id,"ACCEPTED") == "ACCEPTED"
     assert knowledge.review_evidence_reference_link(link,"ACCEPTED") == "SUPPORTED"
+
+    structure = extract_document_structure(database,assets,imported.asset.id)
+    assert len(structure.elements) == 2
+    element = structure.elements[0]
+    with pytest.raises(ValueError,match="cannot be relabelled"):
+        review_document_element(
+            database,element.id,"ACCEPTED",provenance="SOURCE"
+        )
+    review_document_element(
+        database,element.id,"ACCEPTED",provenance="DERIVED",
+        rationale="Checked against the rendered source page",
+    )
+
+    candidates = create_knowledge_candidates_from_document_elements(
+        database,imported.source_id
+    )
+    assert len(candidates.candidate_unit_ids) == 1
+    unit_id = candidates.candidate_unit_ids[0]
+    bundle = knowledge.get_unit_bundle(unit_id)
+    knowledge.review_unit_evidence_reference(
+        bundle["evidence_references"][0]["link_id"],"ACCEPTED"
+    )
+    assert knowledge.review_unit(
+        unit_id,status="VALIDATED",provenance="DERIVED"
+    ) == "VALIDATED"
+
+    claim_from_element = knowledge.create_claim(ClaimInput(
+        "Quantum tunnelling is identified in this source.",
+        knowledge_unit_id=unit_id,
+    ))
+    element_link = knowledge.link_evidence_reference(ClaimEvidenceReferenceInput(
+        claim_from_element,extracted.evidence_ref_ids[0],"SUPPORTS",0.95,
+        element_id=element.id,
+    ))
+    assert knowledge.review_evidence_reference_link(
+        element_link,"ACCEPTED"
+    ) == "SUPPORTED"
+
+    topics = TopicStore(database)
+    topic = topics.create_document_topic(
+        DocumentTopicInput(imported.source_id,"Quantum tunnelling",0)
+    )
+    topic_link = topics.link_document_evidence(DocumentTopicEvidenceInput(
+        topic,extracted.evidence_ref_ids[0],"INTRODUCES",0.98,
+        element_id=element.id,
+    ))
+    assert topics.review_document_evidence_link(topic_link,"ACCEPTED") == "ACCEPTED"
+
+    version = TextbookStore(database).compose_from_accepted_document_topics(
+        imported.source_id,"OCR-grounded textbook"
+    )
+    assert TextbookPublicationAuditor(database).audit(version).ready
+
     assert review_ocr_page(database,page.page_id,"NEEDS_REVIEW") == "NEEDS_REVIEW"
     assert knowledge.get_claim_bundle(claim)["claim"]["status"] == "DRAFT"
+    assert knowledge.get_claim_bundle(claim_from_element)["claim"]["status"] == "DRAFT"
+    assert knowledge.get_unit_bundle(unit_id)["unit"]["status"] == "NEEDS_REVIEW"
+    assert not TextbookPublicationAuditor(database).audit(version).ready
 
 
 def test_ocr_skips_native_text_pages_and_validates_limits(tmp_path: Path) -> None:
