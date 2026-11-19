@@ -142,6 +142,10 @@ def ocr_video_frames(
         from PIL import Image
     except ImportError as exc:
         raise RuntimeError("Video OCR requires Pillow: pip install -e '.[vision]'") from exc
+    if not 1 <= max_frames <= 2000:
+        raise ValueError("max_frames must be between 1 and 2000")
+    if not 1 <= timeout_seconds <= 180:
+        raise ValueError("timeout_seconds must be between 1 and 180")
     recognizer=adapter or TesseractOCR()
     store=AssetStore(database_path,asset_dir,max_bytes=64*1024*1024)
     with connect(database_path) as conn:
@@ -287,8 +291,14 @@ def verify_visual_claim(
             "SELECT description FROM visual_descriptions WHERE id=? AND source_id=?",
             (description_id,source_id),
         ).fetchone()
-        if claim is None or description is None:
-            raise ValueError("Claim or source-matched visual description does not exist")
+        linked=conn.execute(
+            """SELECT 1 FROM claim_evidence_refs cer
+               JOIN evidence_refs er ON er.id=cer.evidence_ref_id
+               WHERE cer.claim_id=? AND er.source_id=? LIMIT 1""",
+            (claim_id,source_id),
+        ).fetchone()
+        if claim is None or description is None or linked is None:
+            raise ValueError("Claim must have evidence from this source and description must match it")
         transcript=None
         if transcript_segment_id:
             segment=conn.execute(
