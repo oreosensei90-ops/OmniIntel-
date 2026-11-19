@@ -15,7 +15,7 @@ def test_cross_correlation_estimates_offset_with_documented_sign() -> None:
     a=[0,1,0,0,2,0,0,1,0,0,3,0,0,1,0,0]
     b=[0,0,0,1,0,0,0,2,0,0,1,0,0,3,0,0]
     result=estimate_offset(a,b,sample_interval_ms=100,max_lag_samples=4)
-    assert result["offset_ms"] == -200
+    assert result["offset_ms"] == -300
     assert result["correlation"] > 0.99
 
 
