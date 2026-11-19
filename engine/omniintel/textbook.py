@@ -139,6 +139,31 @@ class TextbookStore:
             )
         return block_id
 
+    def link_asset(
+        self, block_id: str, asset_id: str, *, ordinal: int = 0, caption: str = ""
+    ) -> str:
+        """Attach a source-owned image asset to an IMAGE or DIAGRAM block."""
+        if ordinal < 0:
+            raise ValueError("Asset ordinal must be non-negative")
+        if not isinstance(caption, str):
+            raise TypeError("Asset caption must be text")
+        link_id = uuid7()
+        with connect(self.database_path) as conn:
+            block = conn.execute(
+                "SELECT block_type FROM chapter_blocks WHERE id=?", (block_id,)
+            ).fetchone()
+            if block is None:
+                raise ValueError("Textbook block does not exist")
+            if block["block_type"] not in {"IMAGE", "DIAGRAM"}:
+                raise ValueError("Assets can only be attached to IMAGE or DIAGRAM blocks")
+            conn.execute(
+                """INSERT INTO block_assets
+                   (id,block_id,asset_id,ordinal,caption,created_at)
+                   VALUES(?,?,?,?,?,?)""",
+                (link_id, block_id, asset_id, ordinal, caption.strip(), utc_now()),
+            )
+        return link_id
+
     def link_evidence(
         self, block_id: str, evidence_id: str, *, relation: str = "SUPPORTS",
         review_state: str = "PENDING", rationale: str | None = None,
@@ -186,8 +211,19 @@ class TextbookStore:
                            WHERE be.block_id=? ORDER BY be.created_at,be.id""", (block["id"],),
                     ).fetchall()
                     item = dict(block)
+                    assets = conn.execute(
+                        """SELECT ba.id,ba.asset_id,ba.ordinal,ba.caption,
+                                  sa.role,sa.display_name,sa.source_id,
+                                  ab.sha256,ab.media_type,ab.byte_size,ab.storage_key
+                           FROM block_assets ba
+                           JOIN source_assets sa ON sa.id=ba.asset_id
+                           JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
+                           WHERE ba.block_id=? ORDER BY ba.ordinal,ba.id""",
+                        (block["id"],),
+                    ).fetchall()
                     item["content"] = json.loads(item.pop("content_json"))
                     item["evidence"] = [dict(row) for row in evidence]
+                    item["assets"] = [dict(row) for row in assets]
                     block_items.append(item)
                 chapter_items.append({"chapter": dict(chapter), "blocks": block_items})
         return {"version": dict(version), "chapters": chapter_items}
