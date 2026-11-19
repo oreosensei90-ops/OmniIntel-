@@ -50,6 +50,17 @@ def timestamp_mae_ms(reference: Sequence[tuple[int,int]], hypothesis: Sequence[t
     return sum(errors)/len(errors)
 
 
+def timestamp_match_counts(
+    reference: Sequence[tuple[int,int]], hypothesis: Sequence[tuple[int,int]]
+) -> dict[str,int]:
+    """Expose unmatched segments rather than hiding them behind positional MAE."""
+    return {
+        "matched_segments": min(len(reference),len(hypothesis)),
+        "missing_hypothesis_segments": max(0,len(reference)-len(hypothesis)),
+        "extra_hypothesis_segments": max(0,len(hypothesis)-len(reference)),
+    }
+
+
 def set_precision_recall(expected: Iterable[str], actual: Iterable[str]) -> dict[str,float]:
     truth,pred=set(expected),set(actual)
     tp=len(truth & pred)
@@ -69,10 +80,10 @@ def evaluate_case(case: dict[str,Any]) -> dict[str,Any]:
         result["metrics"]["wer"]=error_rate(case["transcript_reference"],case["transcript_hypothesis"])
         result["metrics"]["cer"]=error_rate(case["transcript_reference"],case["transcript_hypothesis"],character=True)
     if "reference_segments" in case and "hypothesis_segments" in case:
-        result["metrics"]["timestamp_mae_ms"]=timestamp_mae_ms(
-            [tuple(x) for x in case["reference_segments"]],
-            [tuple(x) for x in case["hypothesis_segments"]],
-        )
+        reference=[tuple(x) for x in case["reference_segments"]]
+        hypothesis=[tuple(x) for x in case["hypothesis_segments"]]
+        result["metrics"]["timestamp_mae_ms"]=timestamp_mae_ms(reference,hypothesis)
+        result["metrics"]["timestamp_segment_counts"]=timestamp_match_counts(reference,hypothesis)
     for key in ("evidence_ids","section_ids"):
         ref_key=f"expected_{key}"
         actual_key=f"actual_{key}"
