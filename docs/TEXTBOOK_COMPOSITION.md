@@ -26,6 +26,12 @@ The initial composer creates chapters only from ACCEPTED topics. It places a cla
 
 This composer performs no language-model generation and invents no connective prose. A topic with no qualifying claims remains an empty chapter with its source time range and topic description. Topic hierarchy is preserved where accepted parents exist; unaccepted ancestors are skipped in favor of the nearest accepted ancestor. Cyclic accepted topic hierarchies fail rather than producing a malformed document.
 
+## Publication readiness gate
+
+The deterministic `TextbookPublicationAuditor` checks the stored version before any exporter is allowed to publish it. A block is blocked when it is not ACCEPTED, has UNCERTAIN provenance, has pending/rejected evidence links, or carries an accepted contradiction. Claim-backed blocks must reference a SUPPORTED claim and carry at least one of that claim's accepted SUPPORTS evidence links. SOURCE, DERIVED and EXTERNAL blocks without a claim also require accepted supporting evidence. Empty textbook versions fail the gate; empty individual chapters produce warnings for human review.
+
+The report includes eligible/blocked block counts and machine-readable findings. Passing this gate means only that deterministic structural and review rules passed. It does not prove semantic entailment, factual truth, mathematical correctness, pedagogical quality or completeness. Those require separate validators and human/model review.
+
 ## Integrity rules
 
 - Version numbers are unique within a textbook.
@@ -38,6 +44,6 @@ This composer performs no language-model generation and invents no connective pr
 
 ## Current scope and limitations
 
-Implemented: persistence, version numbering, structured block vocabulary, provenance/review metadata, evidence links, source-boundary guards, sibling ordering, hierarchy-cycle guards and deterministic evidence-gated topic-to-chapter composition.
+Implemented: persistence, version numbering, structured block vocabulary, provenance/review metadata, evidence links, source-boundary guards, sibling ordering, hierarchy-cycle guards, deterministic evidence-gated topic-to-chapter composition and an initial deterministic publication readiness gate.
 
 Not implemented yet: automated topic discovery, semantic claim-to-topic relevance validation, semantic block validation, immutable published-version enforcement, rendering/export, diagrams/equation rendering, annotation remapping or multi-source textbooks. A stored block is not automatically accurate or publication-ready. Exporters must preserve provenance and citations, and must not silently publish UNCERTAIN or unreviewed material.
