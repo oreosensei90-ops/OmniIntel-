@@ -229,7 +229,7 @@ class TextbookDOCXExporter:
                 else:
                     raise ValueError(f"Unsupported DOCX block type: {kind}")
 
-                for evidence in block["evidence"]:
+                for evidence in [*block["evidence"], *block.get("evidence_references", [])]:
                     if evidence["relation"] not in {
                         "SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"
                     }:
