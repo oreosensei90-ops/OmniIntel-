@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/document-topic-evidence-reference.schema.json",
+  "title": "OmniIntel Document Topic Evidence Reference",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "topic_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "evidence_ref_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "relation": { "enum": ["INTRODUCES", "DEVELOPS", "RECAPITULATES", "DEMONSTRATES", "CONTRASTS"] },
+    "review_state": { "enum": ["PENDING", "ACCEPTED", "REJECTED", "NEEDS_REVIEW"] },
+    "relevance_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "rationale": { "type": ["string", "null"] },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "reviewed_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/timestamp" }, { "type": "null" }] }
+  },
+  "required": ["id", "topic_id", "evidence_ref_id", "relation", "review_state", "relevance_score", "rationale", "created_at", "reviewed_at"],
+  "unevaluatedProperties": false
+}
