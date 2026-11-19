@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Private, offline course textbook reader for OmniIntel exports.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <title>OmniIntel Reader</title>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="OmniIntel Reader home"><span class="mark">O</span><span>OMNIINTEL <small>READER</small></span></a>
+    <div class="toolbar">
+      <label class="import-button" for="reader-file">Open reader JSON</label>
+      <input id="reader-file" type="file" accept="application/json,.json">
+      <button id="clear-button" class="quiet" type="button" disabled>Close book</button>
+    </div>
+  </header>
+  <main class="shell">
+    <section id="welcome" class="welcome">
+      <p class="eyebrow">PRIVATE BY DEFAULT · WORKS OFFLINE</p>
+      <h1>Your learning library,<br><span>on your device.</span></h1>
+      <p>Open a reader JSON file exported by OmniIntel. Your document stays in this browser session; reading position is saved locally on this device.</p>
+      <label class="primary-button" for="reader-file">Choose a reader export</label>
+      <p class="hint">Create one with <code>omniintel reader-open DATABASE VERSION_ID &gt; course-reader.json</code></p>
+    </section>
+    <section id="reader" class="reader" hidden>
+      <aside class="sidebar">
+        <div class="book-meta"><p class="eyebrow">COURSE TEXTBOOK</p><h2 id="book-title">Untitled</h2><p id="book-subtitle" class="muted"></p></div>
+        <label class="search-label" for="search">Search this book</label>
+        <input id="search" type="search" placeholder="Find a concept…" autocomplete="off">
+        <nav id="chapter-nav" aria-label="Chapters"></nav>
+        <p class="privacy-note">Offline reader · no account · no network requests</p>
+      </aside>
+      <article class="reading-area">
+        <div class="reading-head"><div><p class="eyebrow" id="chapter-count"></p><h1 id="chapter-title"></h1></div><span id="progress" class="progress"></span></div>
+        <div id="blocks" class="blocks" aria-live="polite"></div>
+        <div class="chapter-controls"><button id="previous" class="quiet" type="button">← Previous</button><button id="next" class="primary-button" type="button">Next chapter →</button></div>
+      </article>
+    </section>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>
