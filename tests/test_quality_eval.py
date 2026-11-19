@@ -34,7 +34,7 @@ def test_suite_aggregates_and_persists_versioned_report(tmp_path: Path) -> None:
     assert report["aggregates"]["wer"]["mean"]==0
     assert report["aggregates"]["alignment_abs_error_ms"]["mean"]==250
     store=QualityBenchmarkStore(tmp_path/"quality.sqlite")
-    run=store.record("smoke","dataset-2026-11",report,dataset_version="golden-v1")
+    run=store.record("smoke",report,dataset_version="golden-v1")
     assert store.list_runs("smoke")[0]["id"]==run
 
 
