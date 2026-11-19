@@ -243,7 +243,8 @@ def ocr_video_frames(
         rows=conn.execute(
             """SELECT ve.id,ve.timestamp_ms,vf.frame_asset_id
                FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
-               WHERE ve.source_id=? ORDER BY ve.timestamp_ms LIMIT ?""",
+               WHERE ve.source_id=? AND ve.review_state='ACCEPTED'
+               ORDER BY ve.timestamp_ms LIMIT ?""",
             (source_id,max_frames),
         ).fetchall()
     results=[]
@@ -336,7 +337,9 @@ def align_visual_semantics(
                FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
                JOIN visual_transcript_alignments vta ON vta.visual_event_id=ve.id
                JOIN transcript_segments ts ON ts.id=vta.transcript_segment_id
-               WHERE ve.source_id=? ORDER BY ve.timestamp_ms,ts.start_ms LIMIT ?""",
+               WHERE ve.source_id=? AND ve.review_state='ACCEPTED'
+                 AND vta.review_state='ACCEPTED'
+               ORDER BY ve.timestamp_ms,ts.start_ms LIMIT ?""",
             (source_id,max_pairs),
         ).fetchall()
     output=[]
@@ -387,8 +390,19 @@ def verify_visual_claim(
                WHERE cer.claim_id=? AND er.source_id=? LIMIT 1""",
             (claim_id,source_id),
         ).fetchone()
-        if claim is None or description is None or linked is None:
-            raise ValueError("Claim must have evidence from this source and description must match it")
+        event=conn.execute(
+            "SELECT review_state FROM visual_events WHERE id=? AND source_id=?",
+            (visual_event_id,source_id),
+        ).fetchone()
+        accepted_description=conn.execute(
+            "SELECT review_state FROM visual_descriptions WHERE id=? AND source_id=?",
+            (description_id,source_id),
+        ).fetchone()
+        if (claim is None or description is None or linked is None or event is None
+                or event["review_state"] != "ACCEPTED"
+                or accepted_description is None
+                or accepted_description["review_state"] != "ACCEPTED"):
+            raise ValueError("Claim, frame, description and source evidence must be accepted and source-matched")
         transcript=None
         if transcript_segment_id:
             segment=conn.execute(
@@ -421,8 +435,8 @@ def review_visual_record(
     database_path: str | Path, table: str, record_id: str, state: str
 ) -> str:
     allowed_tables={
-        "visual_scene_candidates","visual_ocr_results","visual_descriptions",
-        "visual_semantic_alignments","visual_claim_verifications",
+        "visual_transcript_alignments","visual_scene_candidates","visual_ocr_results",
+        "visual_descriptions","visual_semantic_alignments","visual_claim_verifications",
     }
     if table not in allowed_tables:
         raise ValueError("Unsupported visual review table")
@@ -434,7 +448,14 @@ def review_visual_record(
         if row is None:
             raise ValueError("Visual record does not exist")
         if state == "ACCEPTED":
-            if table == "visual_scene_candidates":
+            if table == "visual_transcript_alignments":
+                event=conn.execute(
+                    "SELECT review_state FROM visual_events WHERE id=?",
+                    (row["visual_event_id"],),
+                ).fetchone()
+                if event is None or event["review_state"] != "ACCEPTED":
+                    raise ValueError("Accept the visual frame event before accepting temporal alignment")
+            elif table == "visual_scene_candidates":
                 accepted=conn.execute(
                     """SELECT count(*) FROM visual_events
                        WHERE id IN (?,?) AND review_state='ACCEPTED'""",
