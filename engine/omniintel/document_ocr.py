@@ -109,6 +109,13 @@ class TesseractOCR:
         reader = csv.DictReader(io.StringIO(result.stdout), delimiter="\t")
         rows = list(reader)
         for row in rows:
+            if row.get("level") == "1":
+                try:
+                    image_width = int(row.get("width", 0))
+                    image_height = int(row.get("height", 0))
+                except ValueError:
+                    pass
+                continue
             if row.get("level") != "5":
                 continue
             token = (row.get("text") or "").strip()
@@ -116,8 +123,6 @@ class TesseractOCR:
                 confidence = float(row.get("conf", "-1"))
                 left, top = int(row["left"]), int(row["top"])
                 width, height = int(row["width"]), int(row["height"])
-                image_width = max(image_width, left + width)
-                image_height = max(image_height, top + height)
             except (ValueError, KeyError):
                 continue
             if token and confidence >= 0:
