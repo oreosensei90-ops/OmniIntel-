@@ -186,9 +186,17 @@ def detect_scene_changes(
         migrate(conn)
         rows=conn.execute(
             """SELECT ve.id,ve.timestamp_ms,vf.frame_asset_id
-               FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
-               WHERE ve.source_id=? ORDER BY ve.timestamp_ms,ve.id LIMIT ?""",
-            (source_id,max_comparisons+1),
+               FROM visual_events ve
+               JOIN video_frames vf ON vf.id=ve.frame_id
+               JOIN frame_extractions fe ON fe.id=vf.extraction_id
+               JOIN source_assets sa ON sa.id=fe.source_asset_id
+               WHERE sa.source_id=? AND fe.id=(
+                   SELECT fe2.id FROM frame_extractions fe2
+                   JOIN source_assets sa2 ON sa2.id=fe2.source_asset_id
+                   WHERE sa2.source_id=? ORDER BY fe2.created_at DESC,fe2.id DESC LIMIT 1
+               )
+               ORDER BY ve.timestamp_ms,ve.id LIMIT ?""",
+            (source_id,source_id,max_comparisons+1),
         ).fetchall()
     if len(rows)>max_comparisons:
         raise ValueError("Scene analysis exceeds configured comparison limit")
@@ -249,9 +257,15 @@ def ocr_video_frames(
         rows=conn.execute(
             """SELECT ve.id,ve.timestamp_ms,vf.frame_asset_id
                FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
-               WHERE ve.source_id=? AND ve.review_state='ACCEPTED'
+               JOIN frame_extractions fe ON fe.id=vf.extraction_id
+               JOIN source_assets sa ON sa.id=fe.source_asset_id
+               WHERE sa.source_id=? AND ve.review_state='ACCEPTED' AND fe.id=(
+                   SELECT fe2.id FROM frame_extractions fe2
+                   JOIN source_assets sa2 ON sa2.id=fe2.source_asset_id
+                   WHERE sa2.source_id=? ORDER BY fe2.created_at DESC,fe2.id DESC LIMIT 1
+               )
                ORDER BY ve.timestamp_ms LIMIT ?""",
-            (source_id,max_frames),
+            (source_id,source_id,max_frames),
         ).fetchall()
     results=[]
     for row in rows:
@@ -298,9 +312,14 @@ def describe_visual_events(
                FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
                JOIN source_assets sa ON sa.id=vf.frame_asset_id
                JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
-               WHERE ve.source_id=? AND ve.review_state='ACCEPTED'
+               JOIN frame_extractions fe ON fe.id=vf.extraction_id
+               WHERE ve.source_id=? AND ve.review_state='ACCEPTED' AND fe.id=(
+                   SELECT fe2.id FROM frame_extractions fe2
+                   JOIN source_assets sa2 ON sa2.id=fe2.source_asset_id
+                   WHERE sa2.source_id=? ORDER BY fe2.created_at DESC,fe2.id DESC LIMIT 1
+               )
                ORDER BY ve.timestamp_ms LIMIT ?""",
-            (source_id,max_frames),
+            (source_id,source_id,max_frames),
         ).fetchall()
     output=[]
     for row in rows:
@@ -344,10 +363,15 @@ def align_visual_semantics(
                FROM visual_events ve JOIN video_frames vf ON vf.id=ve.frame_id
                JOIN visual_transcript_alignments vta ON vta.visual_event_id=ve.id
                JOIN transcript_segments ts ON ts.id=vta.transcript_segment_id
+               JOIN frame_extractions fe ON fe.id=vf.extraction_id
                WHERE ve.source_id=? AND ve.review_state='ACCEPTED'
-                 AND vta.review_state='ACCEPTED'
+                 AND vta.review_state='ACCEPTED' AND fe.id=(
+                   SELECT fe2.id FROM frame_extractions fe2
+                   JOIN source_assets sa2 ON sa2.id=fe2.source_asset_id
+                   WHERE sa2.source_id=? ORDER BY fe2.created_at DESC,fe2.id DESC LIMIT 1
+               )
                ORDER BY ve.timestamp_ms,ts.start_ms LIMIT ?""",
-            (source_id,max_pairs),
+            (source_id,source_id,max_pairs),
         ).fetchall()
     output=[]
     for row in rows:
