@@ -146,6 +146,21 @@ The unified locator does not fabricate timestamps for documents. Claims, topic m
 PDF pages can also be organized into a page-native topic hierarchy without inventing timestamps. Accepted source elements can be carried into deterministic textbook chapters; accepted claims must use the same exact page/element citation as the topic alignment. Source-linked draft knowledge units can be reviewed and validated separately. See `docs/DOCUMENT_TOPIC_MAPS.md` and `docs/DOCUMENT_KNOWLEDGE.md`.
 
 
+## Video visual timeline
+
+After extracting bounded timestamped frames from a registered local video, build a reviewable
+visual timeline and propose nearby transcript alignment candidates:
+
+~~~bash
+omniintel extract-frames ./omniintel.db ./omniintel-assets VIDEO_ASSET_ID
+omniintel build-visual-timeline ./omniintel.db FRAME_EXTRACTION_ID --tolerance-ms 10000
+omniintel visual-timeline ./omniintel.db SOURCE_ID
+~~~
+
+Frame events and transcript links remain NEEDS_REVIEW. Alignment is based only on temporal overlap
+or nearest-segment distance; it does not establish that speech describes the image. See
+`docs/VISUAL_TIMELINE.md`.
+
 ## Local PDF intelligence
 
 See `docs/DOCUMENT_PIPELINE.md` for the end-to-end workflow, `docs/DOCUMENT_OCR.md` for
