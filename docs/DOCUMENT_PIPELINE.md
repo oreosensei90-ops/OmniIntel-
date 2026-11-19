@@ -21,6 +21,7 @@ omniintel review-document-element ./omniintel.db ELEMENT_ID ACCEPTED
 
 # 5. Create draft knowledge units from accepted elements.
 omniintel build-document-knowledge ./omniintel.db SOURCE_ID
+omniintel review-knowledge-unit ./omniintel.db UNIT_ID VALIDATED --provenance DERIVED
 
 # 6. After topics and claims have been separately reviewed and linked to the same exact
 #    element/page citations, compose and audit a textbook.
