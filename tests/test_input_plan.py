@@ -26,6 +26,7 @@ def test_plan_classifies_mixed_sources_without_writing(tmp_path: Path) -> None:
     assert [item["modality"] for item in data["inputs"]] == ["DOCUMENT", "VIDEO", "CAPTIONS"]
     assert data["ready_for_execution"] is False
     assert any("spoken language" in q for q in data["questions"])
+    assert any("which media source" in q for q in data["questions"])
     assert any("alignment" in warning for warning in data["warnings"])
     assert {p.name: p.read_bytes() for p in (pdf, video, captions)} == before
     assert set(p.name for p in tmp_path.iterdir()) == set(before)
