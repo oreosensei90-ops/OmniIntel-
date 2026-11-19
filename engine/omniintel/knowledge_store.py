@@ -8,6 +8,7 @@ from .database import connect, migrate
 from .ids import uuid7
 from .knowledge import (
     ClaimEvidenceInput,
+    ClaimEvidenceReferenceInput,
     ClaimInput,
     KnowledgeUnitInput,
     derive_claim_status,
@@ -66,6 +67,63 @@ class KnowledgeStore:
             )
         return link_id
 
+
+    def link_evidence_reference(self, data: ClaimEvidenceReferenceInput) -> str:
+        """Attach a claim to a transcript interval or native document page citation."""
+        data.validate()
+        link_id = uuid7()
+        with connect(self.database_path) as conn:
+            conn.execute(
+                """INSERT INTO claim_evidence_refs
+                   (id,claim_id,evidence_ref_id,relation,review_state,
+                    relevance_score,rationale,created_at)
+                   VALUES(?,?,?,?,'PENDING',?,?,?)""",
+                (link_id,data.claim_id,data.evidence_ref_id,data.relation,
+                 data.relevance_score,data.rationale,utc_now()),
+            )
+        return link_id
+
+    def review_evidence_reference_link(
+        self, link_id: str, review_state: str, *, rationale: str | None = None
+    ) -> str:
+        if review_state not in {"ACCEPTED", "REJECTED", "NEEDS_REVIEW"}:
+            raise ValueError("Review state must be ACCEPTED, REJECTED or NEEDS_REVIEW")
+        now = utc_now()
+        with connect(self.database_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            link = conn.execute(
+                "SELECT claim_id FROM claim_evidence_refs WHERE id=?", (link_id,)
+            ).fetchone()
+            if link is None:
+                raise ValueError("Claim/evidence reference link does not exist")
+            conn.execute(
+                """UPDATE claim_evidence_refs
+                   SET review_state=?,rationale=COALESCE(?,rationale),reviewed_at=?
+                   WHERE id=?""",
+                (review_state,rationale,now,link_id),
+            )
+            claim = conn.execute(
+                "SELECT provenance FROM claims WHERE id=?", (link["claim_id"],)
+            ).fetchone()
+            relations = [
+                dict(row) for row in conn.execute(
+                    "SELECT relation,review_state FROM claim_evidence WHERE claim_id=?",
+                    (link["claim_id"],),
+                ).fetchall()
+            ]
+            relations.extend(
+                dict(row) for row in conn.execute(
+                    "SELECT relation,review_state FROM claim_evidence_refs WHERE claim_id=?",
+                    (link["claim_id"],),
+                ).fetchall()
+            )
+            status = derive_claim_status(relations, claim["provenance"])
+            conn.execute(
+                "UPDATE claims SET status=?,updated_at=? WHERE id=?",
+                (status,now,link["claim_id"]),
+            )
+        return status
+
     def review_evidence_link(
         self, link_id: str, review_state: str, *, rationale: str | None = None
     ) -> str:
@@ -93,6 +151,12 @@ class KnowledgeStore:
                     (link["claim_id"],),
                 ).fetchall()
             ]
+            relations.extend(
+                dict(row) for row in conn.execute(
+                    "SELECT relation,review_state FROM claim_evidence_refs WHERE claim_id=?",
+                    (link["claim_id"],),
+                ).fetchall()
+            )
             status = derive_claim_status(relations, claim["provenance"])
             conn.execute(
                 "UPDATE claims SET status=?,updated_at=? WHERE id=?",
@@ -131,27 +195,58 @@ class KnowledgeStore:
                 """SELECT ce.id AS link_id,ce.relation,ce.review_state,ce.relevance_score,
                           ce.rationale,ce.reviewed_at,e.id AS evidence_id,e.evidence_type,
                           e.content,e.start_ms,e.end_ms,e.provenance AS evidence_provenance,
-                          e.source_id
+                          e.source_id,er.id AS evidence_ref_id,er.locator_kind,er.page_number
                    FROM claim_evidence ce JOIN evidence_items e ON e.id=ce.evidence_id
+                   LEFT JOIN evidence_refs er ON er.evidence_item_id=e.id
                    WHERE ce.claim_id=? ORDER BY ce.created_at,ce.id""",
                 (claim_id,),
             ).fetchall()
-        return {"claim": dict(claim), "evidence": [dict(row) for row in evidence]}
+            references = conn.execute(
+                """SELECT cer.id AS link_id,cer.relation,cer.review_state,
+                          cer.relevance_score,cer.rationale,cer.reviewed_at,
+                          er.id AS evidence_ref_id,er.locator_kind,er.start_ms,er.end_ms,
+                          er.page_number,er.source_id,er.source_asset_id,
+                          COALESCE(e.content,dp.text_content) AS content,
+                          COALESCE(e.provenance,'SOURCE') AS evidence_provenance
+                   FROM claim_evidence_refs cer
+                   JOIN evidence_refs er ON er.id=cer.evidence_ref_id
+                   LEFT JOIN evidence_items e ON e.id=er.evidence_item_id
+                   LEFT JOIN document_pages dp ON dp.id=er.document_page_id
+                   WHERE cer.claim_id=? ORDER BY cer.created_at,cer.id""",
+                (claim_id,),
+            ).fetchall()
+        return {
+            "claim": dict(claim),
+            "evidence": [dict(row) for row in evidence],
+            "evidence_references": [dict(row) for row in references],
+        }
 
     def publishable_claims(self) -> list[dict[str, Any]]:
         with connect(self.database_path) as conn:
             rows = conn.execute(
                 """SELECT c.* FROM claims c
                    WHERE c.status='SUPPORTED'
-                     AND EXISTS (
-                       SELECT 1 FROM claim_evidence ce
-                       WHERE ce.claim_id=c.id AND ce.relation='SUPPORTS'
-                         AND ce.review_state='ACCEPTED'
+                     AND (
+                       EXISTS (
+                         SELECT 1 FROM claim_evidence ce
+                         WHERE ce.claim_id=c.id AND ce.relation='SUPPORTS'
+                           AND ce.review_state='ACCEPTED'
+                       )
+                       OR EXISTS (
+                         SELECT 1 FROM claim_evidence_refs cer
+                         WHERE cer.claim_id=c.id AND cer.relation='SUPPORTS'
+                           AND cer.review_state='ACCEPTED'
+                       )
                      )
                      AND NOT EXISTS (
                        SELECT 1 FROM claim_evidence ce
                        WHERE ce.claim_id=c.id AND ce.relation='CONTRADICTS'
                          AND ce.review_state='ACCEPTED'
+                     )
+                     AND NOT EXISTS (
+                       SELECT 1 FROM claim_evidence_refs cer
+                       WHERE cer.claim_id=c.id AND cer.relation='CONTRADICTS'
+                         AND cer.review_state='ACCEPTED'
                      )
                    ORDER BY c.created_at,c.id"""
             ).fetchall()
