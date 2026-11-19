@@ -5,7 +5,8 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
+from collections.abc import Iterable, Sequence
 
 from .database import connect, migrate
 from .ids import uuid7
