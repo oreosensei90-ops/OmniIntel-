@@ -57,6 +57,13 @@ function requestResult(request) {
     request.onerror = () => reject(request.error);
   });
 }
+function transactionDone(tx) {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Local database transaction aborted"));
+  });
+}
 function blockStorageKey(block) {
   const versionId = state.book?.version?.id || state.book?.version?.version_id || "local";
   return versionId + ":" + (block.id || block.block_id || "ordinal-" + String(block.ordinal ?? "unknown"));
@@ -93,7 +100,7 @@ function addPersonalTools(block, host) {
       const db = await openLocalDB();
       const tx = db.transaction("annotations", "readwrite");
       tx.objectStore("annotations").put({ key, text: note.value, updatedAt: new Date().toISOString() });
-      await requestResult(tx.objectStore("annotations").get(key));
+      await transactionDone(tx);
       status.textContent = "Saved on this device.";
     } catch { status.textContent = "Could not save note."; }
   });
@@ -102,14 +109,17 @@ function addPersonalTools(block, host) {
       const db = await openLocalDB();
       const tx = db.transaction("bookmarks", "readwrite");
       const store = tx.objectStore("bookmarks");
-      const existing = await requestResult(store.get(key));
-      if (existing) {
-        store.delete(key);
-        bookmark.textContent = "☆ Bookmark";
-      } else {
-        store.put({ key, createdAt: new Date().toISOString() });
-        bookmark.textContent = "★ Bookmarked";
-      }
+      const request = store.get(key);
+      request.onsuccess = () => {
+        if (request.result) {
+          store.delete(key);
+          bookmark.textContent = "☆ Bookmark";
+        } else {
+          store.put({ key, createdAt: new Date().toISOString() });
+          bookmark.textContent = "★ Bookmarked";
+        }
+      };
+      await transactionDone(tx);
     } catch { status.textContent = "Could not update bookmark."; }
   });
 }
