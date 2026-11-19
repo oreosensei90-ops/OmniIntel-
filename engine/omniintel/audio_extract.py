@@ -145,9 +145,14 @@ def _read_pcm_wav(path: Path) -> tuple[int, int]:
                 raise ValueError("ffmpeg output does not match the normalized PCM format")
             if frames <= 0:
                 raise ValueError("ffmpeg produced an empty WAV")
-            pcm = wav.readframes(frames)
-            if len(pcm) != frames * channels * sample_width:
-                raise ValueError("ffmpeg produced a truncated PCM WAV")
+            frame_bytes = channels * sample_width
+            remaining = frames
+            while remaining:
+                count = min(remaining,max(1,1_048_576 // frame_bytes))
+                pcm = wav.readframes(count)
+                if len(pcm) != count * frame_bytes:
+                    raise ValueError("ffmpeg produced a truncated PCM WAV")
+                remaining -= count
             duration_ms = frames * 1000 // sample_rate
             if duration_ms <= 0:
                 raise ValueError("ffmpeg output duration is too short")
