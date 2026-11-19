@@ -1,12 +1,12 @@
 # Local audio transcription
 
-OmniIntel now has an adapter-driven local WAV transcription stage with persistent chunk checkpoints. The original audio asset remains immutable; transcript segments become source-linked evidence only after every chunk succeeds.
+OmniIntel now has a local media-to-transcript path: ffprobe identifies audio streams, FFmpeg creates a normalized content-addressed PCM WAV derivative, and an adapter-driven ASR stage transcribes it with persistent chunk checkpoints. Original media remains immutable; transcript segments become source-linked evidence only after every chunk succeeds.
 
 ## Current scope
 
 - Accepts an already-ingested PCM WAV asset, including a normalized derivative created by the local extract-audio stage.
 - Verifies the source-asset relationship and content-addressed SHA-256 blob before processing.
-- Enforces audio duration, channel, sample-rate, sample-width, chunk-duration and chunk-byte limits.
+- FFmpeg extraction enforces local-only protocols, output-size, timeout, stream selection, normalized PCM format and source timeline checks. ASR enforces duration, channel, sample-rate, sample-width, chunk-duration and chunk-byte limits.
 - Writes bounded temporary WAV chunks and processes them sequentially.
 - Persists each completed chunk in SQLite, keyed by the run identity and exact chunk SHA-256.
 - Run identity includes source bytes, adapter name/version, model ID, adapter settings, language and chunking configuration.
