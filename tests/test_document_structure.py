@@ -135,6 +135,8 @@ def test_document_structure_extracts_elements_and_composes_reviewed_textbook(tmp
     assert {item["element_id"] for item in outline_links} == {
         item.id for item in result.elements if item.element_type != "HEADING"
     }
+    assert all(item["element_review_state"] == "ACCEPTED" for item in outline_links)
+    assert all(item["element_provenance"] == "SOURCE" for item in outline_links)
 
     textbooks = TextbookStore(database)
     version = textbooks.compose_from_accepted_document_topics(
