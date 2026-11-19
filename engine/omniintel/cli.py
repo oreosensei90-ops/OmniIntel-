@@ -14,7 +14,6 @@ from .html_export import TextbookHTMLExporter
 from .markdown_export import TextbookMarkdownExporter
 from .captions import import_caption_file
 from .local_files import import_local_file
-from .document_pdf import extract_pdf
 
 
 def main() -> None:
@@ -110,6 +109,8 @@ def main() -> None:
             "rights_status": "UNVERIFIED",
         }, ensure_ascii=False, indent=2))
     elif args.command == "extract-pdf":
+        from .document_pdf import extract_pdf
+
         result = extract_pdf(
             args.database, args.asset_dir, args.asset_id,
             max_pages=args.max_pages,
