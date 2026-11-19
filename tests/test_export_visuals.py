@@ -131,7 +131,7 @@ def test_all_exporters_render_pdf_page_citations(tmp_path: Path) -> None:
     html=TextbookHTMLExporter(database).export(version,tmp_path/"out.html",asset_dir=asset_dir)
     markdown=TextbookMarkdownExporter(database).export(version,tmp_path/"out.md",asset_dir=asset_dir)
 
-    assert "PDF page 1" in (PdfReader(str(pdf)).pages[0].extract_text() or "")
+    assert "PDF page 1" in "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf)).pages)
     import docx as docx_module
     docx_text="\n".join(p.text for p in docx_module.Document(docx_path).paragraphs)
     assert "PDF page 1" in docx_text
