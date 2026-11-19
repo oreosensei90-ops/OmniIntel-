@@ -25,8 +25,7 @@ function renderEvidence(items) {
     row.append(tag, document.createTextNode(evidenceLabel(item)));
     if (item.transcript_excerpt?.length) {
       for (const segment of item.transcript_excerpt) {
-        const excerpt = element("p", "", "“" + segment.text + "”");
-        excerpt.style.marginTop = "5px";
+        const excerpt = element("p", "excerpt", "“" + segment.text + "”");
         row.append(excerpt);
       }
     }
@@ -70,9 +69,7 @@ function renderBlock(block) {
   } else {
     wrap.append(element("p", "", value));
   }
-  const provenance = element("p", "muted", "PROVENANCE · " + (block.provenance || "UNSPECIFIED"));
-  provenance.style.marginTop = "10px";
-  provenance.style.fontSize = "10px";
+  const provenance = element("p", "muted provenance", "PROVENANCE · " + (block.provenance || "UNSPECIFIED"));
   wrap.append(provenance);
   const evidence = renderEvidence(block.evidence);
   if (evidence) wrap.append(evidence);
