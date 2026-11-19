@@ -388,24 +388,30 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Text("CHAPTER ${chapterIndex + 1} / ${current.chapters.size}", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
                 Text(current.chapters[chapterIndex].title, fontSize = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
             }
-            val blocks: List<Pair<String, Block>> = if (query.isBlank()) {
-                current.chapters[chapterIndex].blocks.map { current.chapters[chapterIndex].title to it }
+            val blocks: List<Triple<Int, String, Block>> = if (query.isBlank()) {
+                current.chapters[chapterIndex].blocks.map { Triple(chapterIndex, current.chapters[chapterIndex].title, it) }
             } else {
-                current.chapters.flatMap { chapter ->
+                current.chapters.flatMapIndexed { index, chapter ->
                     chapter.blocks.filter { block ->
                         block.text.contains(query, true) ||
                             block.evidence.any { it.excerpt.contains(query, true) || it.source.contains(query, true) }
-                    }.map { chapter.title to it }
+                    }.map { Triple(index, chapter.title, it) }
                 }
             }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(blocks, key = { it.second.id }) { (chapterTitle, block) ->
+                items(blocks, key = { it.third.id }) { (resultChapterIndex, chapterTitle, block) ->
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                            if (query.isNotBlank()) Text(chapterTitle, color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            if (query.isNotBlank()) {
+                                Text(chapterTitle, color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                TextButton(onClick = {
+                                    chapterIndex = resultChapterIndex
+                                    query = ""
+                                }) { Text("Open chapter", color = Gold) }
+                            }
                             Text(block.type.replace('_', ' '), color = Gold, fontSize = 10.sp, letterSpacing = 1.sp)
                             Text(block.text, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 7.dp))
                             Text("PROVENANCE · ${block.provenance}", color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 8.dp))
