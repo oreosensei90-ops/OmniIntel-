@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .export_visuals import evidence_locator_label, resolve_block_assets
 from .textbook import TextbookStore
 from .textbook_audit import TextbookPublicationAuditor
 
@@ -29,7 +30,7 @@ class TextbookPDFExporter:
         self.auditor = TextbookPublicationAuditor(database_path)
 
     def export(
-        self, version_id: str, output_path: str | Path, *, font_path: str | Path | None = None
+        self, version_id: str, output_path: str | Path, *, font_path: str | Path | None = None, asset_dir: str | Path | None = None
     ) -> Path:
         try:
             from reportlab.lib import colors
@@ -205,6 +206,21 @@ class TextbookPDFExporter:
                             f"{kind} block {block['id']} requires an accessible description"
                         )
                     story.append(paragraph(f"[{kind.title()}] {description}", "OI_Callout"))
+                    for image_path, caption, media_type, digest in resolve_block_assets(
+                        self.database_path,asset_dir,version["source_id"],block
+                    ):
+                        from reportlab.platypus import Image as ReportLabImage
+                        from reportlab.lib.utils import ImageReader
+
+                        reader=ImageReader(str(image_path))
+                        image_width,image_height=reader.getSize()
+                        max_width,max_height=174*mm,210*mm
+                        scale=min(max_width/image_width,max_height/image_height,1.0)
+                        story.append(ReportLabImage(
+                            str(image_path),width=image_width*scale,height=image_height*scale
+                        ))
+                        if caption:
+                            story.append(paragraph(caption,"OI_Small"))
                 else:
                     raise ValueError(f"Unsupported PDF block type: {kind}")
 
@@ -213,9 +229,10 @@ class TextbookPDFExporter:
                     if evidence["relation"] in {"SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"}
                 ]
                 for evidence in citations:
-                    timestamp = f"{evidence['start_ms'] / 1000:.1f}s"
+                    locator = evidence_locator_label(evidence)
+                    provenance = evidence.get("provenance") or evidence.get("evidence_provenance") or "SOURCE"
                     story.append(Paragraph(
-                        f"Source evidence · {timestamp} · {safe(evidence['provenance'])}",
+                        f"Source evidence · {safe(locator)} · {safe(provenance)}",
                         styles["OI_Small"],
                     ))
                 if block["provenance"] in {"DERIVED", "EXTERNAL"}:
