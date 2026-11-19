@@ -1,0 +1,193 @@
+"""Versioned textbook composition model and persistence."""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal
+
+from .database import connect, migrate
+from .ids import uuid7
+from .models import utc_now
+
+BlockType = Literal[
+    "HEADING", "PARAGRAPH", "DEFINITION", "EQUATION", "TABLE", "DIAGRAM", "IMAGE",
+    "CODE", "EXAMPLE", "WORKED_SOLUTION", "WARNING", "MISCONCEPTION", "SUMMARY",
+    "EXERCISE", "SOURCE_REFERENCE", "FOOTNOTE",
+]
+Provenance = Literal["SOURCE", "EXPLANATION", "DERIVED", "EXTERNAL", "UNCERTAIN"]
+CompositionMode = Literal["SOURCE_ORDER", "CONCEPTUAL", "HYBRID"]
+
+
+@dataclass(frozen=True, slots=True)
+class BlockInput:
+    block_type: BlockType
+    content: dict[str, Any]
+    provenance: Provenance
+    review_status: str = "DRAFT"
+    parent_block_id: str | None = None
+    ordinal: int = 0
+    knowledge_unit_id: str | None = None
+    claim_id: str | None = None
+
+    def validate(self) -> None:
+        allowed_types = {
+            "HEADING", "PARAGRAPH", "DEFINITION", "EQUATION", "TABLE", "DIAGRAM", "IMAGE",
+            "CODE", "EXAMPLE", "WORKED_SOLUTION", "WARNING", "MISCONCEPTION", "SUMMARY",
+            "EXERCISE", "SOURCE_REFERENCE", "FOOTNOTE",
+        }
+        if self.block_type not in allowed_types:
+            raise ValueError("Unsupported textbook block type")
+        if not isinstance(self.content, dict):
+            raise ValueError("Block content must be a JSON object")
+        if self.provenance not in {"SOURCE", "EXPLANATION", "DERIVED", "EXTERNAL", "UNCERTAIN"}:
+            raise ValueError("Unsupported block provenance")
+        if self.review_status not in {"DRAFT", "NEEDS_REVIEW", "ACCEPTED", "REJECTED"}:
+            raise ValueError("Unsupported block review status")
+        if self.ordinal < 0:
+            raise ValueError("Block ordinal must be non-negative")
+        try:
+            json.dumps(self.content, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Block content must be finite JSON data") from exc
+
+
+class TextbookStore:
+    def __init__(self, database_path: str | Path):
+        self.database_path = Path(database_path)
+        with connect(self.database_path) as conn:
+            migrate(conn)
+
+    def create_textbook(self, source_id: str, title: str) -> str:
+        if not title.strip():
+            raise ValueError("Textbook title must not be empty")
+        textbook_id, now = uuid7(), utc_now()
+        with connect(self.database_path) as conn:
+            if not conn.execute("SELECT 1 FROM sources WHERE id=?", (source_id,)).fetchone():
+                raise ValueError("Source does not exist")
+            conn.execute(
+                "INSERT INTO textbooks(id,source_id,title,created_at,updated_at) VALUES(?,?,?,?,?)",
+                (textbook_id, source_id, title.strip(), now, now),
+            )
+        return textbook_id
+
+    def create_version(
+        self, textbook_id: str, title: str, *, composition_mode: CompositionMode = "HYBRID"
+    ) -> str:
+        if not title.strip():
+            raise ValueError("Version title must not be empty")
+        if composition_mode not in {"SOURCE_ORDER", "CONCEPTUAL", "HYBRID"}:
+            raise ValueError("Unsupported composition mode")
+        version_id, now = uuid7(), utc_now()
+        with connect(self.database_path) as conn:
+            if not conn.execute("SELECT 1 FROM textbooks WHERE id=?", (textbook_id,)).fetchone():
+                raise ValueError("Textbook does not exist")
+            number = conn.execute(
+                "SELECT COALESCE(MAX(version_number),0)+1 FROM textbook_versions WHERE textbook_id=?",
+                (textbook_id,),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO textbook_versions
+                   (id,textbook_id,version_number,title,status,composition_mode,created_at,updated_at)
+                   VALUES(?,?,?,?,'DRAFT',?,?,?)""",
+                (version_id, textbook_id, number, title.strip(), composition_mode, now, now),
+            )
+        return version_id
+
+    def add_chapter(
+        self, version_id: str, title: str, *, ordinal: int, summary: str = "",
+        parent_chapter_id: str | None = None, source_start_ms: int | None = None,
+        source_end_ms: int | None = None,
+    ) -> str:
+        if not title.strip() or ordinal < 0:
+            raise ValueError("Chapter title and ordinal are invalid")
+        if source_start_ms is not None and source_start_ms < 0:
+            raise ValueError("Chapter source start must be non-negative")
+        if source_end_ms is not None and source_end_ms <= 0:
+            raise ValueError("Chapter source end must be positive")
+        if source_start_ms is not None and source_end_ms is not None and source_end_ms <= source_start_ms:
+            raise ValueError("Chapter source interval is invalid")
+        chapter_id, now = uuid7(), utc_now()
+        with connect(self.database_path) as conn:
+            if not conn.execute("SELECT 1 FROM textbook_versions WHERE id=?", (version_id,)).fetchone():
+                raise ValueError("Textbook version does not exist")
+            conn.execute(
+                """INSERT INTO textbook_chapters
+                   (id,version_id,parent_chapter_id,title,summary,ordinal,source_start_ms,
+                    source_end_ms,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (chapter_id, version_id, parent_chapter_id, title.strip(), summary.strip(),
+                 ordinal, source_start_ms, source_end_ms, now, now),
+            )
+        return chapter_id
+
+    def add_block(self, chapter_id: str, data: BlockInput) -> str:
+        data.validate()
+        block_id, now = uuid7(), utc_now()
+        with connect(self.database_path) as conn:
+            if not conn.execute("SELECT 1 FROM textbook_chapters WHERE id=?", (chapter_id,)).fetchone():
+                raise ValueError("Chapter does not exist")
+            conn.execute(
+                """INSERT INTO chapter_blocks
+                   (id,chapter_id,parent_block_id,ordinal,block_type,content_json,provenance,
+                    review_status,knowledge_unit_id,claim_id,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (block_id, chapter_id, data.parent_block_id, data.ordinal, data.block_type,
+                 json.dumps(data.content, ensure_ascii=False, allow_nan=False, sort_keys=True),
+                 data.provenance, data.review_status, data.knowledge_unit_id, data.claim_id,
+                 now, now),
+            )
+        return block_id
+
+    def link_evidence(
+        self, block_id: str, evidence_id: str, *, relation: str = "SUPPORTS",
+        review_state: str = "PENDING", rationale: str | None = None,
+    ) -> str:
+        if relation not in {"SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES", "CONTRADICTS"}:
+            raise ValueError("Unsupported block/evidence relation")
+        if review_state not in {"PENDING", "ACCEPTED", "REJECTED", "NEEDS_REVIEW"}:
+            raise ValueError("Unsupported evidence review state")
+        link_id = uuid7()
+        with connect(self.database_path) as conn:
+            conn.execute(
+                """INSERT INTO block_evidence
+                   (id,block_id,evidence_id,relation,review_state,rationale,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (link_id, block_id, evidence_id, relation, review_state, rationale, utc_now()),
+            )
+        return link_id
+
+    def get_version_tree(self, version_id: str) -> dict[str, Any] | None:
+        with connect(self.database_path) as conn:
+            version = conn.execute(
+                """SELECT v.*,t.source_id,t.title AS textbook_title
+                   FROM textbook_versions v JOIN textbooks t ON t.id=v.textbook_id
+                   WHERE v.id=?""", (version_id,),
+            ).fetchone()
+            if version is None:
+                return None
+            chapters = conn.execute(
+                """SELECT * FROM textbook_chapters WHERE version_id=? ORDER BY ordinal,id""",
+                (version_id,),
+            ).fetchall()
+            chapter_items = []
+            for chapter in chapters:
+                blocks = conn.execute(
+                    """SELECT * FROM chapter_blocks WHERE chapter_id=?
+                       ORDER BY parent_block_id,ordinal,id""", (chapter["id"],),
+                ).fetchall()
+                block_items = []
+                for block in blocks:
+                    evidence = conn.execute(
+                        """SELECT be.id,be.relation,be.review_state,be.rationale,
+                                  e.id AS evidence_id,e.content,e.start_ms,e.end_ms,
+                                  e.source_id,e.provenance
+                           FROM block_evidence be JOIN evidence_items e ON e.id=be.evidence_id
+                           WHERE be.block_id=? ORDER BY be.created_at,be.id""", (block["id"],),
+                    ).fetchall()
+                    item = dict(block)
+                    item["content"] = json.loads(item.pop("content_json"))
+                    item["evidence"] = [dict(row) for row in evidence]
+                    block_items.append(item)
+                chapter_items.append({"chapter": dict(chapter), "blocks": block_items})
+        return {"version": dict(version), "chapters": chapter_items}
