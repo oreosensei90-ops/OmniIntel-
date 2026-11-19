@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from omniintel.cli import main
 from omniintel.local_files import import_local_file
 from omniintel.media_probe import probe_local_media
 
@@ -191,3 +192,18 @@ def test_probe_refuses_corrupted_asset_before_invoking_ffprobe(
     )
     with pytest.raises(RuntimeError, match="size does not match"):
         probe_local_media(database, assets, asset_id)
+
+def test_probe_media_cli_emits_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    database, assets, asset_id, _ = _import_media(tmp_path)
+    executable = _fake_ffprobe(tmp_path / "ffprobe")
+    monkeypatch.setattr("omniintel.media_probe.shutil.which", lambda _: str(executable))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["omniintel","probe-media",str(database),str(assets),asset_id],
+    )
+    main()
+    result = json.loads(capsys.readouterr().out)
+    assert result["source_asset_id"] == asset_id
+    assert result["duration_ms"] == 125125
+    assert len(result["streams"]) == 2
+
