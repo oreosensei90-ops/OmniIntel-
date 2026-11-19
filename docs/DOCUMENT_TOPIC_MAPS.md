@@ -44,3 +44,17 @@ For a persisted source, the CLI can print the outline and its page references:
 omniintel document-outline ./omniintel.db SOURCE_ID
 \`\`\`
 
+## Deterministic textbook composition
+
+Once topics and claim links are reviewed, compose a draft textbook:
+
+\`\`\`bash
+omniintel compose-document-textbook ./omniintel.db SOURCE_ID "Course textbook"
+omniintel audit-textbook ./omniintel.db VERSION_ID
+\`\`\`
+
+Composition creates chapters from accepted document topics and adds only claims whose exact same
+evidence-reference ID is accepted by both the topic and the claim. It carries that citation into
+the textbook block. It does not generate new prose, infer unsupported relationships or bypass the
+publication auditor.
+
