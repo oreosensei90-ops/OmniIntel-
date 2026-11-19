@@ -66,3 +66,16 @@ def test_import_local_file_does_not_leave_source_after_asset_failure(tmp_path: P
     with __import__("sqlite3").connect(db) as conn:
         count = conn.execute("SELECT count(*) FROM sources").fetchone()[0]
     assert count == 0
+
+
+def test_reserved_source_registration_is_retry_safe(tmp_path: Path) -> None:
+    from omniintel.ids import uuid7
+
+    path=tmp_path/"retry.pdf"
+    path.write_bytes(PDF)
+    db=tmp_path/"retry.db"
+    reserved=uuid7()
+    first=import_local_file(db,tmp_path/"assets",path,source_id=reserved)
+    second=import_local_file(db,tmp_path/"assets",path,source_id=reserved)
+    assert first.source_id==second.source_id==reserved
+    assert first.asset.id==second.asset.id
