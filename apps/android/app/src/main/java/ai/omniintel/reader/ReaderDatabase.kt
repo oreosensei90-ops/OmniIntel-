@@ -198,6 +198,9 @@ interface ReaderAnnotationDao {
     @Query("SELECT * FROM reader_annotations WHERE versionId = :versionId")
     suspend fun forVersion(versionId: String): List<ReaderAnnotationEntity>
 
+    @Query("SELECT * FROM reader_annotations ORDER BY versionId, blockId")
+    suspend fun getAll(): List<ReaderAnnotationEntity>
+
     @Query("SELECT * FROM reader_annotations WHERE versionId = :versionId AND blockId = :blockId LIMIT 1")
     suspend fun find(versionId: String, blockId: String): ReaderAnnotationEntity?
 

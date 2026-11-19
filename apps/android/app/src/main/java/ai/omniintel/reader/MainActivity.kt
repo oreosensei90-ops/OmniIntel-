@@ -252,6 +252,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var videoImports by remember { mutableStateOf<List<VideoImportEntity>>(emptyList()) }
     var videoUrlDraft by remember { mutableStateOf("") }
     var videoImportMessage by remember { mutableStateOf<String?>(null) }
+    var annotationBackupMessage by remember { mutableStateOf<String?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var showBookmarksOnly by remember { mutableStateOf(false) }
@@ -414,6 +415,63 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
             }
         }
     }
+    val annotationBackupExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                val rows = withContext(Dispatchers.IO) { libraryDatabase.annotations().getAll() }
+                val json = annotationBackupJson(rows)
+                withContext(Dispatchers.IO) {
+                    val output = context.contentResolver.openOutputStream(uri)
+                        ?: error("Unable to write the selected backup file.")
+                    output.bufferedWriter(Charsets.UTF_8).use { it.write(json) }
+                }
+                rows.size
+            }.onSuccess { annotationBackupMessage = "Backed up $it annotation records." }
+             .onFailure { annotationBackupMessage = "Backup failed: " + (it.message ?: "storage error") }
+        }
+    }
+    val annotationBackupImporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                val raw = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri).use { input ->
+                        requireNotNull(input) { "Unable to open the selected backup." }
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        var total = 0
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 5 * 1024 * 1024) { "Annotation backup exceeds 5 MiB." }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toString(Charsets.UTF_8.name())
+                    }
+                }
+                val records = parseAnnotationBackup(raw)
+                val valid = withContext(Dispatchers.IO) {
+                    val currentRows = libraryDatabase.annotations().getAll().associateBy { it.versionId to it.blockId }
+                    val accepted = records.filter { record ->
+                        val knownBlock = libraryDatabase.readerContent().blocks(record.versionId)
+                            .any { it.blockId == record.blockId }
+                        knownBlock && (currentRows[record.versionId to record.blockId]?.updatedAtEpochMs
+                            ?: Long.MIN_VALUE) <= record.updatedAtEpochMs
+                    }
+                    libraryDatabase.withTransaction {
+                        libraryDatabase.annotations().upsertAll(accepted)
+                    }
+                    accepted.size
+                }
+                valid
+            }.onSuccess { annotationBackupMessage = "Restored or merged $it annotation records. Newer local edits were preserved." }
+             .onFailure { annotationBackupMessage = "Restore failed: " + (it.message ?: "invalid backup") }
+        }
+    }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         if (selectedSourceId == null) {
@@ -516,6 +574,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 OutlinedButton(onClick = { picker.launch(arrayOf("application/json")) }) {
                     Text(if (book == null) "Import textbook" else "Open another")
                 }
+                TextButton(onClick = { annotationBackupExporter.launch("omniintel-annotations-backup.json") }) {
+                    Text("Backup", color = Gold)
+                }
             }
         }
         val current = book
@@ -530,6 +591,16 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 Text("Open an OmniIntel reader JSON export. It stays on this device; no account or network connection is required.", color = Muted)
                 Spacer(Modifier.height(20.dp))
                 Button(onClick = { picker.launch(arrayOf("application/json")) }) { Text("Choose reader export") }
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { annotationBackupExporter.launch("omniintel-annotations-backup.json") }) {
+                        Text("Back up notes")
+                    }
+                    OutlinedButton(onClick = { annotationBackupImporter.launch(arrayOf("application/json")) }) {
+                        Text("Restore notes")
+                    }
+                }
+                annotationBackupMessage?.let { Text(it, color = Gold, fontSize = 12.sp) }
                 Spacer(Modifier.height(24.dp))
                 Text("LEARN FROM VIDEO", color = Gold, fontSize = 11.sp, letterSpacing = 2.sp)
                 Spacer(Modifier.height(8.dp))
