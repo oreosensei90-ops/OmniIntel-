@@ -134,7 +134,6 @@ class JobQueue:
             result = dict(claimed)
         result["payload"] = json.loads(result.pop("payload_json"))
         result["result"] = json.loads(result.pop("result_json")) if result["result_json"] else None
-        result.pop("result_json")
         return result
 
     def heartbeat(self, job_id: str, lease_token: str, *, lease_ms: int = 60_000) -> None:
