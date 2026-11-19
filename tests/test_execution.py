@@ -134,3 +134,20 @@ def test_execution_reserves_stable_source_effect_ids(tmp_path: Path) -> None:
     other=executor.reserve_source_id(result["plan_id"],"0:REGISTER_SOURCE","b"*64)
     assert first==again
     assert first!=other
+
+
+def test_registration_stage_does_not_misclassify_caption_files(tmp_path: Path) -> None:
+    path=tmp_path/"lesson.srt"
+    path.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n",encoding="utf-8")
+    from omniintel.input_plan import plan_local_inputs
+
+    plan=plan_local_inputs([path]).to_dict()
+    # Caption association and language are separate user decisions; even after planning,
+    # generic source registration is not allowed to pretend captions are a media source.
+    executor=PlanExecutor(tmp_path/"db.sqlite")
+    plan["questions"]=[]
+    with pytest.raises(PlanExecutionError,match="incompatible"):
+        executor.approve_and_run(
+            plan,[{"stage":"REGISTER_SOURCE","input_indices":[0]}],
+            user_approved=True,handlers={"REGISTER_SOURCE":lambda *_:{}},
+        )
