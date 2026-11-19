@@ -165,7 +165,11 @@ def test_android_library_uses_room_and_persistable_document_access() -> None:
     assert 'androidx.room:room-ktx:2.6.1' in app_gradle
     assert 'kapt("androidx.room:room-compiler:2.6.1")' in app_gradle
     assert '@Entity(tableName = "library_books")' in database
-    assert '@Database(entities = [LibraryBookEntity::class], version = 1' in database
+    assert '@Entity(tableName = "video_imports")' in database
+    assert 'VideoImportEntity::class' in database
+    assert 'version = 2' in database
+    assert 'Migration(1, 2)' in database
+    assert 'addMigrations(MIGRATION_1_2)' in database
     assert 'Room.databaseBuilder(' in database
     assert 'dao.upsert(' in activity
     assert 'takePersistableUriPermission' in activity
