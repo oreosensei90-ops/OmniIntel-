@@ -9,7 +9,7 @@ OmniIntel can extract one selected audio stream from a registered local audio/vi
 3. Run extract-audio. By default it selects the first audio stream; use --stream-index to select a different ffprobe stream index.
 4. The output is registered as a content-addressed AUDIO asset belonging to the same source. The original video/audio asset remains unchanged.
 5. The extraction record stores the source and output hashes, stream index, FFmpeg version, normalized format, duration and source-timeline offset.
-6. Pass the returned output_asset_id and time_offset_ms to transcribe-wav.
+6. Pass the returned output_asset_id to transcribe-wav. The transcription stage reads the derivative's stored timeline offset automatically; a manual override is available only when explicitly needed.
 
 Example:
 
@@ -17,7 +17,7 @@ Example:
 omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4
 omniintel probe-media ./omniintel.db ./omniintel-assets SOURCE_ASSET_ID
 omniintel extract-audio ./omniintel.db ./omniintel-assets SOURCE_ASSET_ID
-omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --time-offset-ms 250 --language en
+omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --language en
 ~~~
 
 The WAV output is 16,000 Hz, mono, signed 16-bit PCM. The source stream start timestamp is retained separately; FFmpeg resets the extracted audio's internal timestamps to zero, and the transcription stage adds the stored offset to every segment and evidence reference. Negative stream start times are rejected pending explicit timeline review rather than silently clamped.
