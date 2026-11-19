@@ -130,12 +130,14 @@ class AssetStore:
         *,
         role: AssetRole = "ATTACHMENT",
         display_name: str | None = None,
+        expected_sha256: str | None = None,
     ) -> AssetRecord:
         path = Path(file_path)
         with path.open("rb") as handle:
             return self._ingest(
                 source_id, handle, role=role,
                 display_name=display_name or path.name,
+                expected_sha256=expected_sha256,
             )
 
     def _ingest(
@@ -145,6 +147,7 @@ class AssetStore:
         *,
         role: str,
         display_name: str,
+        expected_sha256: str | None = None,
     ) -> AssetRecord:
         if role not in _ALLOWED_ROLES:
             raise ValueError("Unsupported asset role")
@@ -181,6 +184,8 @@ class AssetStore:
                 raise ValueError("Empty assets are not supported")
             media_type = detect_media_type(bytes(prefix))
             sha256 = digest.hexdigest()
+            if expected_sha256 is not None and sha256 != expected_sha256:
+                raise ValueError("Asset content changed after execution-plan approval")
             storage_key = f"{sha256[:2]}/{sha256[2:4]}/{sha256}"
             target = self.storage_dir / storage_key
             target.parent.mkdir(parents=True, exist_ok=True)
