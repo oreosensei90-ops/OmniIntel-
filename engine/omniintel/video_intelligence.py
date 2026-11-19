@@ -9,6 +9,9 @@ import io
 from itertools import pairwise
 import json
 import math
+import base64
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -59,6 +62,92 @@ class CrossModalVerifier(Protocol):
         self, claim: str, visual_description: str, transcript_text: str | None
     ) -> ClaimVerdict: ...
 
+
+
+class OllamaLocalVisionAdapter:
+    """Opt-in local Ollama vision adapter; connects only to loopback, never a hosted endpoint."""
+
+    name = "ollama-local-vision"
+
+    def __init__(self, model_id: str, *, timeout_seconds: int = 120):
+        if not model_id or len(model_id)>200 or any(ord(ch)<32 for ch in model_id):
+            raise ValueError("A valid local Ollama model identifier is required")
+        if not 5 <= timeout_seconds <= 600:
+            raise ValueError("timeout_seconds must be between 5 and 600")
+        self.model_id=model_id
+        self.version="ollama-local-api-v1"
+        self.timeout_seconds=timeout_seconds
+        self.endpoint="http://127.0.0.1:11434/api/generate"
+
+    def _generate(self, prompt: str, image_bytes: bytes | None = None) -> dict[str,object]:
+        payload={"model":self.model_id,"prompt":prompt,"stream":False,"format":"json",
+                 "options":{"temperature":0}}
+        if image_bytes is not None:
+            if len(image_bytes)>20*1024*1024:
+                raise ValueError("Vision input exceeds 20 MiB")
+            payload["images"]=[base64.b64encode(image_bytes).decode("ascii")]
+        request=urllib.request.Request(
+            self.endpoint,data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type":"application/json"},method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request,timeout=self.timeout_seconds) as response:
+                raw=response.read(2*1024*1024+1)
+        except (urllib.error.URLError,TimeoutError,OSError) as exc:
+            raise RuntimeError("Local Ollama vision service is unavailable") from exc
+        if len(raw)>2*1024*1024:
+            raise ValueError("Local model response exceeds 2 MiB")
+        envelope=json.loads(raw.decode("utf-8"))
+        content=envelope.get("response")
+        if not isinstance(content,str) or len(content)>100_000:
+            raise ValueError("Local model returned an invalid response envelope")
+        result=json.loads(content)
+        if not isinstance(result,dict):
+            raise ValueError("Local model response must be a JSON object")
+        return result
+
+    def describe(self,image_bytes: bytes,*,mime_type: str,timestamp_ms: int) -> VisualDescription:
+        result=self._generate(
+            "Describe only visible content in this video frame. Do not infer hidden context. "
+            "Return JSON with one string field description. Include readable on-screen text "
+            "only when legible. Media timestamp: "+str(timestamp_ms)+" ms.",
+            image_bytes,
+        )
+        text=result.get("description")
+        if not isinstance(text,str) or not text.strip():
+            raise ValueError("Local vision model did not return a description")
+        return VisualDescription(text.strip(),self.model_id)
+
+    def score(self,image_bytes: bytes,transcript_text: str,*,timestamp_ms: int) -> SemanticMatch:
+        result=self._generate(
+            "Assess whether the visible content in this frame is semantically relevant to the "
+            "provided spoken transcript segment. Temporal closeness is not evidence. Return JSON "
+            "with numeric score from 0 to 1 and concise rationale. Transcript: "
+            + transcript_text[:12000] + " Timestamp: "+str(timestamp_ms)+" ms.",
+            image_bytes,
+        )
+        score=result.get("score")
+        rationale=result.get("rationale")
+        if isinstance(score,bool) or not isinstance(score,(int,float)) or not isinstance(rationale,str):
+            raise ValueError("Local semantic model returned invalid score/rationale")
+        return SemanticMatch(float(score),rationale[:5000])
+
+    def verify(
+        self,claim: str,visual_description: str,transcript_text: str|None
+    ) -> ClaimVerdict:
+        result=self._generate(
+            "Evaluate whether the claim is supported by the supplied visual description and "
+            "optional transcript. Do not assume either source is complete. Choose SUPPORTS only "
+            "when directly supported, CONTRADICTS only for a direct conflict, INSUFFICIENT when "
+            "evidence does not decide, or UNCERTAIN when ambiguous. Return JSON verdict and "
+            "rationale. Claim: "+claim[:12000]+" Visual description: "+visual_description[:12000]
+            +" Transcript: "+(transcript_text or "[not supplied]")[:12000]
+        )
+        verdict=result.get("verdict")
+        rationale=result.get("rationale")
+        if not isinstance(verdict,str) or not isinstance(rationale,str):
+            raise ValueError("Local cross-modal verifier returned invalid output")
+        return ClaimVerdict(verdict,rationale[:10000])
 
 def normalized_frame_difference(left: bytes, right: bytes, *, size: tuple[int,int]=(64,36)) -> float:
     """Mean absolute grayscale pixel difference normalized to [0,1]."""
