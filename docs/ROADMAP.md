@@ -63,11 +63,14 @@ This roadmap is a plan, not a claim that every item exists.
 - [ ] Web PWA and offline library.
 - [ ] Native Android app and Room persistence.
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
+- [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
 - [ ] Interactive Web/Android reader UI, annotations, bookmarks and search.
 - [ ] Flashcards, practice and study planning.
 
 ## Intelligence and operations
-- [x] Deterministic offline benchmark metrics for transcript WER/CER, timestamp MAE, OCR CER, evidence-ID precision/recall, section coverage and alignment offset error; versioned local report persistence (golden datasets and expert review still pending).
+- [x] Separate course-textbook Markdown/HTML/PDF/DOCX exporters behind a course publication audit gate (full native math and visual editing remain pending).
+- [x] Explicitly approved local source-registration CLI stage with input revalidation, ingestion-time SHA-256 verification, durable reserved source IDs and retry-safe source/asset attachment.
+- [x] Deterministic offline benchmark metrics for transcript WER/CER, timestamp MAE and unmatched segment counts, OCR CER, evidence-ID precision/recall, section coverage and alignment offset error; versioned local report persistence (golden datasets and expert review still pending).
 - [x] Initial loopback-only local Ollama vision adapter (general provider registry and task routing pending).
 - [ ] Optional approved provider registry and privacy controls.
 - [ ] Model benchmark and routing system.
