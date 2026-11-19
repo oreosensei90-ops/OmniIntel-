@@ -138,3 +138,29 @@ def test_unified_evidence_reference_contract_supports_native_locators():
     page["start_ms"] = 0
     assert not validator.is_valid(page)
 
+def test_claim_and_block_reference_link_contracts():
+    common = {
+        "id": "0190f2a1-1234-7123-8123-123456789abc",
+        "evidence_ref_id": "0190f2a1-1234-7123-8123-123456789abd",
+        "relation": "SUPPORTS",
+        "review_state": "PENDING",
+        "created_at": "2026-11-19T08:00:00Z",
+    }
+    claim = {
+        **common,
+        "claim_id": "0190f2a1-1234-7123-8123-123456789abe",
+        "relevance_score": 0.94,
+        "rationale": "Relevant page citation",
+        "reviewed_at": None,
+    }
+    assert validator_for("claim-evidence-reference.schema.json").is_valid(claim)
+
+    block = {
+        **common,
+        "block_id": "0190f2a1-1234-7123-8123-123456789abf",
+        "rationale": None,
+    }
+    assert validator_for("block-evidence-reference.schema.json").is_valid(block)
+    block["relation"] = "QUALIFIES"
+    assert not validator_for("block-evidence-reference.schema.json").is_valid(block)
+
