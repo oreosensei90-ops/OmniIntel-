@@ -57,7 +57,7 @@ def estimate_offset(
     best_lag, best = candidates[0]
     runner_up = next((score for lag, score in candidates[1:] if abs(lag-best_lag) > 1), -1.0)
     return {
-        "offset_ms": -best_lag * sample_interval_ms,
+        "offset_ms": best_lag * sample_interval_ms,
         "correlation": best,
         "runner_up_correlation": runner_up,
         "sample_interval_ms": sample_interval_ms,
