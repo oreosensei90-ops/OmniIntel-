@@ -271,7 +271,7 @@ function configureMediaSources() {
   select.disabled = !(state.book?.sources || []).length;
   $("#media-file").disabled = true;
   state.mediaSourceId = null;
-  $("#media-status").textContent = select.disabled ? "This reader export has no course sources." : "Select the exact source before attaching its matching local media file.";
+  $("#media-status").textContent = select.disabled ? "This reader export has no course sources." : "Select the exact course source, then attach only the matching local media file.";
 }
 function resetLocalMedia() {
   const video = $("#local-media");
