@@ -109,6 +109,9 @@ def _config_fingerprint(
     tool_version: str,
     stream_index: int,
     max_output_bytes: int,
+    probe_tool_version: str,
+    stream_start_ms: int | None,
+    stream_duration_ms: int | None,
 ) -> str:
     payload = json.dumps(
         {
@@ -117,6 +120,9 @@ def _config_fingerprint(
             "source_sha256": source_sha256,
             "tool_version": tool_version,
             "stream_index": stream_index,
+            "probe_tool_version": probe_tool_version,
+            "stream_start_ms": stream_start_ms,
+            "stream_duration_ms": stream_duration_ms,
             "sample_rate": _SAMPLE_RATE,
             "channels": _CHANNELS,
             "sample_width": _SAMPLE_WIDTH,
@@ -247,7 +253,8 @@ def extract_audio(
         raise RuntimeError("ffmpeg was not found; install FFmpeg tools to extract local audio")
     tool_version = _run_version(executable, timeout_seconds=timeout_seconds)
     config_sha256 = _config_fingerprint(
-        source_asset.sha256, tool_version, selected.stream_index, max_output_bytes,
+        source_asset.sha256,tool_version,selected.stream_index,max_output_bytes,
+        probe.tool_version,selected.start_ms,selected.duration_ms,
     )
     with connect(database_path) as conn:
         existing = conn.execute(
@@ -312,6 +319,8 @@ def extract_audio(
             "source_media_type": source_asset.media_type,
             "source_stream_codec": selected.codec_name,
             "source_stream_start_ms": source_stream_start_ms,
+            "source_stream_duration_ms": selected.duration_ms,
+            "ffprobe_tool_version": probe.tool_version,
             "normalization": "mono-16000hz-s16le",
             "duration_tolerance_ms": 5000,
         }
