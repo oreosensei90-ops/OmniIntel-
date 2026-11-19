@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniintel.local/schemas/claim-evidence-reference.schema.json",
+  "title": "OmniIntel Claim Evidence Reference Link",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "claim_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "evidence_ref_id": { "$ref": "common.schema.json#/$defs/uuid7" },
+    "relation": { "enum": ["SUPPORTS", "CONTRADICTS", "QUALIFIES", "CONTEXTUALIZES", "ILLUSTRATES"] },
+    "review_state": { "enum": ["PENDING", "ACCEPTED", "REJECTED", "NEEDS_REVIEW"] },
+    "relevance_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "rationale": { "type": ["string", "null"] },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "reviewed_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/timestamp" }, { "type": "null" }] }
+  },
+  "required": ["id", "claim_id", "evidence_ref_id", "relation", "review_state", "relevance_score", "rationale", "created_at", "reviewed_at"],
+  "unevaluatedProperties": false
+}
