@@ -62,7 +62,7 @@ def test_review_workflow_acceptance_is_explicit_and_audited(tmp_path: Path):
 
 
 def test_review_workflow_rejects_cross_version_ids(tmp_path: Path):
-    db,version,block,link = _fixture(tmp_path)
+    db,_version,block,link = _fixture(tmp_path)
     with connect(db) as conn:
         conn.execute("INSERT INTO textbooks(id,source_id,title,created_at,updated_at) "
                      "SELECT 'other-book',source_id,'Other',created_at,updated_at "

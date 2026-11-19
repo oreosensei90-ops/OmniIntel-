@@ -266,7 +266,7 @@ def process_youtube_queue(
     seen = set()
     for item in items:
         if not isinstance(item, dict):
-            raise ValueError("Queue entries must be JSON objects")
+            raise TypeError("Queue entries must be JSON objects")
         canonical, video_id = normalize_youtube_url(item.get("url", ""))
         declared_id = item.get("video_id")
         if declared_id is not None and declared_id != video_id:
@@ -290,7 +290,7 @@ def process_youtube_queue(
                 "video_id": video_id, "status": "COMPLETED",
                 "source_id": tree["source"]["id"], "output": str(output),
             })
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - isolate per-video failures and continue the batch
             results.append({
                 "video_id": video_id, "status": "FAILED",
                 "error": f"{type(error).__name__}: {error}"[:1000],
