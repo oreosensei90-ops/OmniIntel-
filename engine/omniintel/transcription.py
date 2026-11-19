@@ -11,7 +11,8 @@ import tempfile
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 from .assets import AssetStore
 from .database import connect
