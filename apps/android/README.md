@@ -32,6 +32,10 @@ The app stores the imported reader content on-device in Room v3: sources, chapte
 
 This is a user-mediated file handoff, not automatic background processing or an in-app network client.
 
+## Annotation backup and restore
+
+Use **Back up notes** to export notes and bookmarks from the Room library to a portable JSON file. **Restore notes** validates the schema, caps the file at 5 MiB and 100,000 records, ignores references to blocks that are not in the local library, and preserves newer local edits when merging. Backups stay under the user's control; no network sync is performed.
+
 ## Build
 
 With JDK 17 and Android SDK platform/build-tools 35:

@@ -71,7 +71,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] One-time, transactional migration of existing DataStore notes, bookmarks and chapter positions into Room; all subsequent annotation writes use Room.
 - [x] Per-textbook paragraph-level resume using the last visible block, with automatic position restoration.
 - [x] Library-wide on-device search across book/chapter titles, block text, evidence excerpts and private notes, opening the matching chapter and paragraph.
-- [ ] Annotation export/backup, background media controls, full-text indexed search at large-library scale and full native study features.
+- [x] Portable JSON export/restore for Android Room notes and bookmarks with bounded validation, referential checks and timestamp-aware merge.
+- [ ] Background media controls, full-text indexed search at large-library scale and full native study features.
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
 - [x] First interactive Web and Android reader UIs with chapter navigation and search; Web also has local source playback, notes and bookmarks, while Android supports source-specific local media playback and evidence jumps.
