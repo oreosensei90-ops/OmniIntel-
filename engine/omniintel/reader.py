@@ -107,6 +107,29 @@ class SynchronizedReader:
                                 (source_id,link["end_ms"],link["start_ms"]),
                             ).fetchall()
                         excerpt=[dict(row) for row in rows]
+                    document_page=None
+                    document_elements=[]
+                    if link["locator_kind"]=="DOCUMENT_PAGE":
+                        with connect(self.database_path) as conn:
+                            page=conn.execute(
+                                """SELECT dp.id,dp.page_number,dp.text_content,dp.extraction_status,
+                                          dp.content_sha256,dp.char_count
+                                   FROM evidence_refs er
+                                   JOIN document_pages dp ON dp.id=er.document_page_id
+                                   WHERE er.id=?""",(link["citation_id"],)
+                            ).fetchone()
+                            if page is not None:
+                                document_page=dict(page)
+                                elements=conn.execute(
+                                    """SELECT id,element_type,ordinal,text_content,content_json,
+                                              x0,y0,x1,y1,confidence,provenance,review_state
+                                       FROM document_elements WHERE page_id=?
+                                       ORDER BY ordinal,id LIMIT 100""",(page["id"],)
+                                ).fetchall()
+                                document_elements=[
+                                    {**dict(element),"content":json.loads(element["content_json"])}
+                                    for element in elements
+                                ]
                     evidence.append({
                         **link,
                         "source":source_map.get(source_id),
@@ -120,6 +143,8 @@ class SynchronizedReader:
                             "ALIGNED" if mapped is not None else "UNALIGNED_OR_AMBIGUOUS"
                         ),
                         "transcript_excerpt":excerpt,
+                        "document_page":document_page,
+                        "document_elements":document_elements,
                     })
                 blocks.append({**block,"evidence":evidence})
             chapters.append({"chapter":chapter,"blocks":blocks})
