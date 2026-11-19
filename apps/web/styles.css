@@ -2,3 +2,5 @@
 .excerpt{margin-top:5px}.provenance{margin-top:10px;font-size:10px}
 
 .personal-tools{margin-top:18px;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px}.personal-tools textarea{display:block;width:100%;resize:vertical;margin:10px 0;padding:11px;border:1px solid var(--line);border-radius:8px;background:#101217;color:var(--text);font:13px/1.6 inherit}.personal-tools textarea:focus{outline:1px solid var(--gold)}.personal-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.personal-actions .quiet{min-height:34px;font-size:11px}.personal-actions .muted{font-size:10px}
+
+.search-results{display:grid;gap:5px;margin-top:10px;max-height:260px;overflow:auto}.search-result{display:grid;gap:4px;text-align:left;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);font-size:11px}.search-result strong{color:var(--gold2);font-size:11px}.search-result span{line-height:1.4}.search-result:hover{border-color:var(--gold)}.search-count{font-size:10px;color:var(--muted);margin:5px 0}
