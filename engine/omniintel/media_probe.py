@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -132,7 +133,7 @@ def _duration_ms(value: Any) -> int | None:
 
 
 def _optional_int(value: Any, *, maximum: int) -> int | None:
-    if value is None or value in {"", "N/A"}:
+    if value is None or (isinstance(value,str) and value in {"", "N/A"}):
         return None
     if isinstance(value, bool):
         raise TypeError("ffprobe returned a boolean where an integer was expected")
@@ -150,7 +151,7 @@ def _optional_nonnegative_int(value: Any, *, maximum: int) -> int | None:
     if value is None or (isinstance(value, str) and value in {"", "N/A"}):
         return None
     if isinstance(value, bool):
-        raise ValueError("ffprobe returned a boolean where an integer was expected")
+        raise TypeError("ffprobe returned a boolean where an integer was expected")
     try:
         number = int(value)
     except (TypeError, ValueError) as error:
@@ -200,7 +201,7 @@ def _parse_probe(
             raise TypeError("ffprobe returned a malformed stream record")
         index = raw.get("index")
         if isinstance(index, bool) or not isinstance(index, int) or index < 0 or index in seen_indices:
-            raise ValueError("ffprobe returned an invalid or duplicate stream index")
+            raise TypeError("ffprobe returned an invalid or duplicate stream index")
         seen_indices.add(index)
         codec_type = _bounded_text(raw.get("codec_type"), maximum=32)
         if not codec_type:
