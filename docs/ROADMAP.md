@@ -7,6 +7,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Stable ID and transcript domain foundation.
 - [x] SQLite migration ledger with checksum verification.
 - [x] Initial source/transcript/evidence persistence and knowledge schema migrations.
+- [x] Initial content-addressed asset blob store, source-asset registry and source-safe IMAGE/DIAGRAM block links (local ingestion only; visual rendering implemented).
 - [x] Initial content-addressed asset blob store, source-asset registry and source-safe IMAGE/DIAGRAM block links (local ingestion only; visual rendering pending).
 - [x] Initial local-file source registration with content-addressed byte preservation and explicit unverified-rights metadata (content extraction pending).
 - [ ] Authorized source adapters and richer evidence types.
@@ -17,7 +18,12 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial local-file signature classification and source metadata registration (deep content extraction pending).
 - [x] Bounded local ffprobe inspection for registered audio/video assets with immutable stream metadata and idempotent tool-version fingerprints.
 - [x] Bounded local FFmpeg audio extraction to content-addressed mono 16 kHz PCM WAV derivatives, including source stream start-offset provenance.
-- [x] Initial bounded timestamped local video-frame extraction with content-addressed frame assets (semantic scene understanding pending).\n- [x] Source-bound visual frame events and reviewable transcript-time alignment candidates (temporal grounding only; semantic matching pending).
+- [x] Bounded timestamped local video-frame extraction with content-addressed frame assets.
+- [x] Source-bound visual frame events and reviewable transcript-time alignment candidates.
+- [x] Heuristic scene-change candidates using bounded grayscale frame-difference analysis (human review required).
+- [x] Optional local Tesseract OCR on accepted video frames with normalized word boxes and confidence.
+- [x] Opt-in loopback-only Ollama vision descriptions and semantic frame/transcript scoring adapters (all results review-gated).
+- [x] Cross-modal claim verification proposals; accepted visual contradictions block textbook publication.
 - [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search.
 - [x] Optional local OCR adapter for image-only pages with pixel/time limits, word boxes, source-owned render assets and mandatory review before evidence acceptance.
 - [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
