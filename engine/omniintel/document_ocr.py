@@ -93,9 +93,10 @@ class TesseractOCR:
         with tempfile.TemporaryDirectory(prefix="omniintel-ocr-") as directory:
             image_path = Path(directory) / "page.png"
             image_path.write_bytes(png_bytes)
+            output_base = Path(directory) / "recognized"
             try:
-                result = subprocess.run(
-                    [self.executable, str(image_path), "stdout", "tsv", "--psm", "3"],
+                subprocess.run(
+                    [self.executable, str(image_path), str(output_base), "tsv", "--psm", "3"],
                     capture_output=True, text=True, timeout=timeout_seconds, check=True,
                     env={"PATH": str(Path(self.executable).parent), "LANG": "C"},
                 )
@@ -103,10 +104,14 @@ class TesseractOCR:
                 raise TimeoutError("Tesseract exceeded the per-page OCR time limit") from exc
             except subprocess.CalledProcessError as exc:
                 raise RuntimeError("Tesseract failed to process a rendered PDF page") from exc
+            tsv_path = output_base.with_suffix(".tsv")
+            if not tsv_path.is_file() or tsv_path.stat().st_size > 25 * 1024 * 1024:
+                raise ValueError("Tesseract TSV output is missing or exceeds 25 MiB")
+            tsv_text = tsv_path.read_text(encoding="utf-8",errors="replace")
 
         words: list[OCRWord] = []
         image_width = image_height = 0
-        reader = csv.DictReader(io.StringIO(result.stdout), delimiter="\t")
+        reader = csv.DictReader(io.StringIO(tsv_text), delimiter="\t")
         rows = list(reader)
         for row in rows:
             if row.get("level") == "1":
@@ -127,6 +132,8 @@ class TesseractOCR:
                 continue
             if token and confidence >= 0:
                 words.append(OCRWord(token, left, top, left + width, top + height, confidence))
+        if words and (image_width <= 0 or image_height <= 0):
+            raise ValueError("Tesseract did not report valid page image dimensions")
         if image_width and image_height:
             words = [
                 OCRWord(
@@ -169,13 +176,18 @@ def ocr_pdf(
     max_pages: int = 200,
     max_pixels_per_page: int = 20_000_000,
     max_total_pixels: int = 200_000_000,
+    max_chars_per_page: int = 100_000,
+    max_total_chars: int = 5_000_000,
     timeout_seconds_per_page: int = 45,
     force: bool = False,
 ) -> OCRRun:
     """OCR image-only pages from a verified local PDF; never accepts OCR automatically."""
     if not 72 <= dpi <= 300:
         raise ValueError("OCR render DPI must be between 72 and 300")
-    if min(max_pages, max_pixels_per_page, max_total_pixels, timeout_seconds_per_page) <= 0:
+    if min(
+        max_pages,max_pixels_per_page,max_total_pixels,max_chars_per_page,
+        max_total_chars,timeout_seconds_per_page,
+    ) <= 0:
         raise ValueError("OCR limits must be positive")
     if adapter is None:
         adapter = TesseractOCR()
@@ -205,6 +217,7 @@ def ocr_pdf(
     results: list[OCRPage] = []
     skipped: list[int] = []
     total_pixels = 0
+    total_chars = 0
     try:
         with pdfplumber.open(pdf_path) as pdf:
             if len(pdf.pages) != len(pages):
@@ -227,6 +240,11 @@ def ocr_pdf(
                     raise ValueError("PDF OCR render exceeds the configured total pixel limit")
                 png = _render_png(page, dpi, max_pixels_per_page)
                 ocr = adapter.recognize_png(png, timeout_seconds=timeout_seconds_per_page)
+                if len(ocr.text) > max_chars_per_page:
+                    raise ValueError("OCR page text exceeds the configured character limit")
+                total_chars += len(ocr.text)
+                if total_chars > max_total_chars:
+                    raise ValueError("OCR output exceeds the configured total character limit")
                 rendered = store.add_bytes(
                     asset["source_id"], png, role="SLIDE",
                     display_name=f"ocr-page-{row['page_number']:04d}.png",
