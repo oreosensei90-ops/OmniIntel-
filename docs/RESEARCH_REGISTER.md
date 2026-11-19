@@ -112,3 +112,57 @@ Topic pages were scanned for relevant candidates; hundreds of unrelated tagged p
 - Add evidence-coverage and output-quality audits; a quotation, chapter marker or page link alone does not prove semantic support.
 - Keep all research leads separate from approved third-party dependencies. No third-party code was copied into OmniIntel during this research pass.
 
+## Highest-priority topic discoveries: deeper review
+
+### CoursePilot — https://github.com/wansui976/CoursePilot
+
+**License signal:** MIT. **Platform:** Tauri/Rust + TypeScript; Android and iOS build configurations and workflows are present.
+
+This was the strongest newly discovered competitor/reference in the video-notes topic scan. Its current source tree includes an Android Gradle project, 44 SQLite migrations, native mobile service, ASR/OCR pipelines, RAG, concepts, FSRS study scheduling, sync, backup, export and tests.
+
+Directly inspected: Android build workflow and manifest; Tauri Android config and Kotlin foreground KeepAliveService; SQLite migration/DB setup and processing job lifecycle; mobile model catalog and sherpa-onnx ASR; local PaddleOCR model management/inference; transcript chunking, backups and atomic replacement; transcript/OCR RAG citations; content+parameter-hash ASR chunk cache; AI artifact source fingerprints; Anki export and sync outbox; FSRS scheduling implementation.
+
+Why it matters:
+1. Demonstrates an offline-capable video-learning app targeting Android/iOS with native media processing and on-device ASR/OCR. This is a closer mobile architecture reference than desktop-only transcription tools.
+2. Separates caption/ASR source records, slide OCR, generated AI artifacts and user study records. Migration 0026 fingerprints the exact transcript/OCR input used for each AI artifact and marks artifacts stale rather than silently regenerating or presenting outdated notes as current.
+3. Protects expensive ASR work with a content+parameters hash cache, including submitted-but-pending cloud jobs, so interruption does not force duplicate paid requests.
+4. Stores transcript backups and replaces transcript segments transactionally, refusing to replace a transcript with zero segments.
+5. RAG searches both transcript and slide OCR; citations preserve time ranges or slide page/image references.
+6. Includes a mobile foreground service, wake lock, notification progress and Android-specific model choice. Source comments document a real process-memory kill on a 4GB iPad and explain why mobile models differ from desktop models.
+7. Its local ASR benchmark is project-reported on a small set of manually transcribed Mandarin lecture samples, not an independent benchmark. Do not generalize those numbers to OmniIntel's corpus or the user's device.
+8. Not purely offline in every mode: Android manifest includes INTERNET; the product supports user-configured remote LLM/ASR and optional sync/download workflows. Local transcription/OCR can run offline after model setup.
+9. Job rows model stage lifecycle/progress, but should not be assumed equivalent to OmniIntel's richer checkpoint/version/recovery model without further auditing.
+10. Current Tauri/Rust/TypeScript stack is a valuable architecture study, not a reason to replace OmniIntel's chosen Kotlin/Compose Android and Python reference-engine approach.
+
+Disposition: highest-priority competitive benchmark and design reference. Do not copy wholesale. Compare native mobile pipeline, study system, migration history, model package licensing, third-party notices, sync protocol and actual release behavior. MIT is only the top-level repository license; model and dependency licenses remain separate.
+
+### LearnNote — https://github.com/hurry060215-tech/learnnote-assistant
+
+**License signal:** Apache-2.0. **Platform:** local-first desktop/web service with browser extension; not a native Android app.
+
+Directly inspected: current README and security policy; localhost-only service boundary; optional browser extension data capture and user-confirmed send flow; per-task model-data consent and page-context fingerprinting; claim/evidence projection; revision-bound document citations; QA retrieval; five-minute ASR chunk checkpoints; durable SQLite queue journal; cancellation state transitions; resource monitor; and the note completion pipeline.
+
+Why it matters:
+1. Treats local service boundaries, external model transfer and browser-captured page data as explicit trust decisions.
+2. Binds claim spans to a specific note revision and evidence revision; stale or foreign-task citations are rejected.
+3. Distinguishes direct text matches from located candidate sources, inference and unsupported claims, with visible review markers in the note.
+4. Checkpoints long ASR in five-minute windows using audio-byte and model-identity signatures; malformed or stale chunks are not reused.
+5. Applies an evidence reliability gate before summary generation and quarantines failed/low-quality drafts rather than publishing them.
+6. Queue journal reads SQLite in read-only mode, supports cancellation without a live worker callback, and uses a transactional state transition to race safely with worker claims.
+7. Measures local CPU/RSS/disk resources without inspecting task contents.
+8. Its security policy candidly notes that localhost is not an authentication boundary against same-user software, short-lived browser cookies may remain after forced termination, and remote model providers receive content required for the selected operation.
+9. Browser extension access to page cookies/subtitles is opt-in and must not be confused with permission to download or reproduce platform media.
+
+Disposition: high-priority architecture reference for claim verification, consent, revision-bound citations, local queue recovery and resource-aware execution. Apache-2.0 is compatible in principle subject to notices, dependency review and attribution; no code was copied.
+
+### Additional topic discoveries queued for a separate source/license review
+
+- https://github.com/cdy1206/video-study-pipeline
+- https://github.com/like-attract/video-to-note
+- https://github.com/lucky-Luor/bilibili-douyin-notes
+- https://github.com/m1429155411-bot/framenote
+- https://github.com/Elviszhuoyu/VidSage-Releases
+- https://github.com/rohansachinpatil/learnquest
+
+These appeared relevant in the supplied GitHub topic scans. They are leads only until source, license, platform support, maintenance and security are separately verified.
+
