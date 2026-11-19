@@ -118,6 +118,43 @@ class KnowledgeStore:
             ).fetchall()
         return {"unit":dict(unit),"evidence_references":[dict(row) for row in links]}
 
+    def review_unit(
+        self,
+        knowledge_unit_id: str,
+        *,
+        status: str,
+        provenance: str,
+    ) -> str:
+        """Review a candidate unit; VALIDATED requires accepted source evidence."""
+        if status not in {"DRAFT","VALIDATED","NEEDS_REVIEW","REJECTED"}:
+            raise ValueError("Unsupported knowledge-unit status")
+        if provenance not in {"EXPLANATION","DERIVED","UNCERTAIN"}:
+            raise ValueError("Unsupported knowledge-unit provenance")
+        if status == "VALIDATED" and provenance == "UNCERTAIN":
+            raise ValueError("Uncertain knowledge units cannot be marked VALIDATED")
+        now = utc_now()
+        with connect(self.database_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            unit = conn.execute(
+                "SELECT id FROM knowledge_units WHERE id=?",(knowledge_unit_id,)
+            ).fetchone()
+            if unit is None:
+                raise ValueError("Knowledge unit does not exist")
+            if status == "VALIDATED":
+                accepted = conn.execute(
+                    """SELECT count(*) FROM knowledge_unit_evidence_refs
+                       WHERE knowledge_unit_id=? AND review_state='ACCEPTED'""",
+                    (knowledge_unit_id,),
+                ).fetchone()[0]
+                if accepted <= 0:
+                    raise ValueError("A knowledge unit needs accepted evidence before validation")
+            conn.execute(
+                """UPDATE knowledge_units SET status=?,provenance=?,updated_at=?
+                   WHERE id=?""",
+                (status,provenance,now,knowledge_unit_id),
+            )
+        return status
+
     def create_claim(self, data: ClaimInput) -> str:
         data.validate()
         claim_id = uuid7()
