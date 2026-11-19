@@ -5,7 +5,7 @@ OmniIntel now has an adapter-driven local WAV transcription stage with persisten
 ## Current scope
 
 - Accepts a user-selected, already-ingested, uncompressed PCM WAV asset.
-- Verifies the source-asset relationship and the content-addressed SHA-256 blob before processing.
+- Verifies the source-asset relationship and content-addressed SHA-256 blob before processing.
 - Enforces audio duration, channel, sample-rate, sample-width, chunk-duration and chunk-byte limits.
 - Writes bounded temporary WAV chunks and processes them sequentially.
 - Persists each completed chunk in SQLite, keyed by the run identity and exact chunk SHA-256.
@@ -20,19 +20,18 @@ OmniIntel now has an adapter-driven local WAV transcription stage with persisten
 
 Install the optional dependency:
 
-\`\`\`bash
+~~~bash
 python -m pip install -e '.[asr]'
-\`\`\`
+~~~
 
 Example:
 
-\`\`\`bash
+~~~bash
 omniintel import-file ./omniintel.db ./assets ./lecture.wav
-omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID ASSET_ID \\
-  --model base --device cpu --compute-type int8 --threads 4 --language en
-\`\`\`
+omniintel transcribe-wav ./omniintel.db ./assets SOURCE_ID ASSET_ID --model base --device cpu --compute-type int8 --threads 4 --language en
+~~~
 
-Use the source and asset IDs returned by import-file. Model weights are downloaded/managed by faster-whisper/CTranslate2; the OmniIntel core does not silently download models or select an external provider. Choose an already available model and verify its license and resource requirements.
+Use the source and asset IDs returned by import-file. Model weights are managed by faster-whisper/CTranslate2; the OmniIntel core does not silently download models or select an external provider. Choose an already available model and verify its license and resource requirements.
 
 ## Adapter contract
 
@@ -45,6 +44,4 @@ An adapter provides a stable name, version, model ID, configuration fingerprint 
 - The faster-whisper adapter is optional and CPU-int8 by default; it is not claimed to run efficiently on Android.
 - Mobile ASR requires a separately implemented native Android adapter and device benchmarks. CoursePilot's sherpa-onnx work is a research reference, not a dependency adopted here.
 - Transcript reprocessing/version history is not yet implemented. Existing source history is protected from overwrite.
-- A transcript's presence and timestamp integrity do not establish that ASR text is correct; quality review remains a later stage.
-
-See also the architecture and engineering constitution for provider consent, checkpoint identity, provenance and mobile resource policy.
+- Transcript presence and timestamp integrity do not establish ASR correctness; quality review remains a later stage.
