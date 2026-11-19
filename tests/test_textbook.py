@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from omniintel.store import OmniIntelStore
+from omniintel.database import connect\nfrom omniintel.store import OmniIntelStore
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.textbook import BlockInput, TextbookStore
 
@@ -79,3 +79,20 @@ def test_textbook_parent_block_must_be_in_same_chapter(tmp_path: Path) -> None:
             "PARAGRAPH", {"text": "Body"}, "EXPLANATION", parent_block_id=parent
         ))
 
+
+
+
+def test_textbook_block_hierarchy_rejects_cycles(tmp_path: Path) -> None:
+    path = tmp_path / "book.db"
+    imported = OmniIntelStore(path).import_transcript(sample())
+    store = TextbookStore(path)
+    book = store.create_textbook(imported.source_id, "Physics")
+    version = store.create_version(book, "Draft")
+    chapter = store.add_chapter(version, "Motion", ordinal=0)
+    parent = store.add_block(chapter, BlockInput("HEADING", {"text": "Parent"}, "EXPLANATION"))
+    child = store.add_block(
+        chapter, BlockInput("PARAGRAPH", {"text": "Child"}, "EXPLANATION", parent_block_id=parent)
+    )
+    with connect(path) as conn:
+        with pytest.raises(sqlite3.IntegrityError, match="cannot contain a cycle"):
+            conn.execute("UPDATE chapter_blocks SET parent_block_id=? WHERE id=?", (child, parent))
