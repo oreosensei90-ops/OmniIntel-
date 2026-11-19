@@ -86,3 +86,41 @@ def test_extract_pdf_rejects_encrypted_pdf(tmp_path: Path) -> None:
     source = import_local_file(database, assets, encrypted_path)
     with pytest.raises(ValueError, match="Encrypted"):
         extract_pdf(database, assets, source.asset.id)
+
+def test_search_document_pages_returns_page_level_source_provenance(
+    tmp_path: Path,
+) -> None:
+    database, assets, asset_id = ingest_pdf(
+        tmp_path, ["Quantum entanglement connects distant measurements", "Classical mechanics"]
+    )
+    extraction = extract_pdf(database, assets, asset_id)
+    from omniintel.document_pdf import search_document_pages
+
+    results = search_document_pages(database, "quantum (entanglement)")
+    assert len(results) == 1
+    assert results[0]["source_id"] == extraction.source_id
+    assert results[0]["asset_id"] == asset_id
+    assert results[0]["page_id"] == extraction.pages[0].id
+    assert results[0]["page_number"] == 1
+    assert "Quantum" in results[0]["excerpt"]
+
+
+def test_document_page_search_index_tracks_page_deletion(tmp_path: Path) -> None:
+    database, assets, asset_id = ingest_pdf(tmp_path, ["Unique searchable phrase"])
+    extraction = extract_pdf(database, assets, asset_id)
+    from omniintel.document_pdf import search_document_pages
+
+    assert search_document_pages(database, "Unique searchable")
+    with connect(database) as conn:
+        conn.execute("DELETE FROM document_pages WHERE id=?", (extraction.pages[0].id,))
+    assert search_document_pages(database, "Unique searchable") == []
+
+
+def test_document_page_search_handles_empty_and_invalid_limits(tmp_path: Path) -> None:
+    database, _, _ = ingest_pdf(tmp_path, ["Any page"])
+    from omniintel.document_pdf import search_document_pages
+
+    assert search_document_pages(database, "   ") == []
+    with pytest.raises(ValueError, match="between 1 and 100"):
+        search_document_pages(database, "page", limit=101)
+
