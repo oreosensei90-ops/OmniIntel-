@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
         for (i in 0 until sources.length()) {
             val source = sources.getJSONObject(i)
             val sourceId = source.optString("source_id")
-            require(sourceId.isNotBlank() && !sourcesById.containsKey(sourceId)) {
+            require(sourceId.isNotBlank() && sourceId.length <= 128 && !sourcesById.containsKey(sourceId)) {
                 "Course source IDs must be non-empty and unique."
             }
             sourcesById[sourceId] = ReaderSource(sourceId, source.optString("title", "Course source"))
