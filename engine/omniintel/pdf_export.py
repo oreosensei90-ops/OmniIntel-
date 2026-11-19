@@ -89,6 +89,10 @@ class TextbookPDFExporter:
             fontSize=25, leading=31, alignment=TA_LEFT, spaceAfter=12,
         ))
         styles.add(ParagraphStyle(
+            name="OI_Subtitle", parent=styles["BodyText"], fontName=body_font,
+            fontSize=14, leading=19, spaceAfter=8,
+        ))
+        styles.add(ParagraphStyle(
             name="OI_Chapter", parent=styles["Heading1"], fontName=body_font,
             fontSize=19, leading=24, spaceBefore=10, spaceAfter=9,
             textColor=colors.HexColor("#202A44"),
@@ -115,7 +119,7 @@ class TextbookPDFExporter:
         story: list[Any] = [
             Spacer(1, 28 * mm),
             Paragraph(html.escape(version["textbook_title"]), styles["OI_Title"]),
-            Paragraph(html.escape(version["title"]), styles["Subtitle"]),
+            Paragraph(html.escape(version["title"]), styles["OI_Subtitle"]),
             Spacer(1, 4 * mm),
             Paragraph(
                 f"Edition {version['version_number']} · {len(chapters)} chapters · "
