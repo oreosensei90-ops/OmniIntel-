@@ -79,7 +79,7 @@ def test_android_audio_player_is_released_when_setup_fails_and_tracks_completion
 def test_android_reader_searches_all_chapters_and_labels_cross_chapter_results() -> None:
     source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
     code = source.read_text(encoding="utf-8")
-    assert 'label = { Text("Search all chapters") }' in code
+    assert 'label = { Text("Search all chapters and notes") }' in code
     assert "current.chapters.flatMap" in code
     assert ".map { Triple(index, chapter.title, it) }" in code
     assert "if (query.isNotBlank()) {" in code
