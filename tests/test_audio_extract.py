@@ -235,7 +235,7 @@ def test_extracted_audio_flows_into_source_aligned_resumable_transcription(
 
     result = run_wav_transcription(
         database,assets,imported.source_id,extracted.output_asset_id,Adapter(),
-        language="en",chunk_seconds=120,time_offset_ms=extracted.time_offset_ms,
+        language="en",chunk_seconds=120,
     )
     assert result.time_offset_ms == 250
     from omniintel.store import OmniIntelStore
