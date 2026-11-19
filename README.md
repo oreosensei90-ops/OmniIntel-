@@ -120,3 +120,7 @@ retain millisecond intervals; PDF citations retain one-based page numbers and th
 The unified locator does not fabricate timestamps for documents. See
 \`docs/UNIFIED_EVIDENCE_REFERENCES.md\`. Claim and textbook link migration to these unified IDs is
 still pending.
+
+
+PDF pages can also be organized into a page-native topic hierarchy without inventing timestamps.
+See \`docs/DOCUMENT_TOPIC_MAPS.md\` for the API, review rules and source-boundary protections.
