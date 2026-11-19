@@ -67,6 +67,20 @@ def main() -> None:
     transcribe_wav.add_argument("--language", default=None)
     transcribe_wav.add_argument("--chunk-seconds", type=int, default=120)
     transcribe_wav.add_argument("--time-offset-ms", type=int, default=None)
+    extract_frames = sub.add_parser("extract-frames", help="Extract bounded timestamped JPEG frames from a local video asset")
+    extract_frames.add_argument("database", type=Path)
+    extract_frames.add_argument("asset_dir", type=Path)
+    extract_frames.add_argument("asset_id")
+    extract_frames.add_argument("--video-stream-index", type=int, default=None)
+    extract_frames.add_argument("--min-interval-ms", type=int, default=5000)
+    extract_frames.add_argument("--max-frames", type=int, default=500)
+    extract_frames.add_argument("--max-frame-bytes", type=int, default=2 * 1024 * 1024)
+    extract_frames.add_argument("--max-total-bytes", type=int, default=256 * 1024 * 1024)
+    extract_frames.add_argument("--max-frame-pixels", type=int, default=20000000)
+    extract_frames.add_argument("--max-total-pixels", type=int, default=100000000)
+    extract_frames.add_argument("--max-width", type=int, default=1280)
+    extract_frames.add_argument("--max-height", type=int, default=720)
+    extract_frames.add_argument("--timeout", type=float, default=600.0)
     extract_audio = sub.add_parser("extract-audio", help="Extract a selected local audio stream to resumable-transcription WAV")
     extract_audio.add_argument("database", type=Path)
     extract_audio.add_argument("asset_dir", type=Path)
@@ -224,6 +238,19 @@ def main() -> None:
             "processed_chunks":result.processed_chunks,
             "time_offset_ms":result.time_offset_ms,
         },ensure_ascii=False,indent=2))
+    elif args.command == "extract-frames":
+        from .video_frames import extract_video_frames, frame_extraction_dict
+
+        result = extract_video_frames(
+            args.database,args.asset_dir,args.asset_id,
+            video_stream_index=args.video_stream_index,
+            min_interval_ms=args.min_interval_ms,max_frames=args.max_frames,
+            max_frame_bytes=args.max_frame_bytes,max_total_bytes=args.max_total_bytes,
+            max_frame_pixels=args.max_frame_pixels,max_total_pixels=args.max_total_pixels,
+            max_width=args.max_width,max_height=args.max_height,
+            timeout_seconds=args.timeout,
+        )
+        print(json.dumps(frame_extraction_dict(result),ensure_ascii=False,indent=2))
     elif args.command == "extract-audio":
         from .audio_extract import audio_extraction_dict, extract_audio
 
