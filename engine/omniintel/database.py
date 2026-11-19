@@ -2136,6 +2136,129 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0033_visual_intelligence_candidates",
+        """
+        CREATE TABLE visual_scene_candidates (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            previous_event_id TEXT NOT NULL REFERENCES visual_events(id) ON DELETE RESTRICT,
+            current_event_id TEXT NOT NULL REFERENCES visual_events(id) ON DELETE RESTRICT,
+            previous_timestamp_ms INTEGER NOT NULL CHECK(previous_timestamp_ms>=0),
+            current_timestamp_ms INTEGER NOT NULL CHECK(current_timestamp_ms>previous_timestamp_ms),
+            difference_score REAL NOT NULL CHECK(difference_score>=0 AND difference_score<=1),
+            threshold REAL NOT NULL CHECK(threshold>0 AND threshold<=1),
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL,
+            UNIQUE(previous_event_id,current_event_id)
+        );
+        CREATE TABLE visual_ocr_results (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            visual_event_id TEXT NOT NULL UNIQUE REFERENCES visual_events(id) ON DELETE RESTRICT,
+            adapter_name TEXT NOT NULL,
+            adapter_version TEXT NOT NULL,
+            text_content TEXT NOT NULL,
+            words_json TEXT NOT NULL CHECK(json_valid(words_json)),
+            mean_confidence REAL CHECK(mean_confidence IS NULL OR (mean_confidence>=0 AND mean_confidence<=100)),
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE visual_descriptions (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            visual_event_id TEXT NOT NULL REFERENCES visual_events(id) ON DELETE RESTRICT,
+            adapter_name TEXT NOT NULL,
+            adapter_version TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            prompt_sha256 TEXT NOT NULL CHECK(length(prompt_sha256)=64),
+            description TEXT NOT NULL CHECK(length(trim(description))>0),
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL,
+            UNIQUE(visual_event_id,model_id,prompt_sha256)
+        );
+        CREATE TABLE visual_semantic_alignments (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            visual_event_id TEXT NOT NULL REFERENCES visual_events(id) ON DELETE RESTRICT,
+            transcript_segment_id TEXT NOT NULL REFERENCES transcript_segments(id) ON DELETE RESTRICT,
+            description_id TEXT REFERENCES visual_descriptions(id) ON DELETE RESTRICT,
+            adapter_name TEXT NOT NULL,
+            adapter_version TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            score REAL NOT NULL CHECK(score>=0 AND score<=1),
+            rationale TEXT NOT NULL,
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL,
+            UNIQUE(visual_event_id,transcript_segment_id,model_id)
+        );
+        CREATE TABLE visual_claim_verifications (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE RESTRICT,
+            visual_event_id TEXT NOT NULL REFERENCES visual_events(id) ON DELETE RESTRICT,
+            description_id TEXT REFERENCES visual_descriptions(id) ON DELETE RESTRICT,
+            transcript_segment_id TEXT REFERENCES transcript_segments(id) ON DELETE RESTRICT,
+            adapter_name TEXT NOT NULL,
+            adapter_version TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            verdict TEXT NOT NULL CHECK(verdict IN ('SUPPORTS','CONTRADICTS','INSUFFICIENT','UNCERTAIN')),
+            rationale TEXT NOT NULL,
+            review_state TEXT NOT NULL DEFAULT 'NEEDS_REVIEW'
+                CHECK(review_state IN ('NEEDS_REVIEW','ACCEPTED','REJECTED')),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_visual_scene_source_time
+            ON visual_scene_candidates(source_id,current_timestamp_ms);
+        CREATE INDEX idx_visual_description_event
+            ON visual_descriptions(visual_event_id,created_at);
+        CREATE INDEX idx_visual_semantic_source
+            ON visual_semantic_alignments(source_id,visual_event_id);
+        CREATE INDEX idx_visual_claim_verification
+            ON visual_claim_verifications(claim_id,review_state);
+        CREATE TRIGGER visual_scene_source_guard
+        BEFORE INSERT ON visual_scene_candidates
+        WHEN
+            (SELECT source_id FROM visual_events WHERE id=NEW.previous_event_id) <> NEW.source_id
+            OR (SELECT source_id FROM visual_events WHERE id=NEW.current_event_id) <> NEW.source_id
+            OR (SELECT timestamp_ms FROM visual_events WHERE id=NEW.previous_event_id) <> NEW.previous_timestamp_ms
+            OR (SELECT timestamp_ms FROM visual_events WHERE id=NEW.current_event_id) <> NEW.current_timestamp_ms
+        BEGIN SELECT RAISE(ABORT,'scene candidate events must match the same source and timestamps'); END;
+        CREATE TRIGGER visual_ocr_source_guard
+        BEFORE INSERT ON visual_ocr_results
+        WHEN (SELECT source_id FROM visual_events WHERE id=NEW.visual_event_id) <> NEW.source_id
+        BEGIN SELECT RAISE(ABORT,'visual OCR must belong to the event source'); END;
+        CREATE TRIGGER visual_description_source_guard
+        BEFORE INSERT ON visual_descriptions
+        WHEN (SELECT source_id FROM visual_events WHERE id=NEW.visual_event_id) <> NEW.source_id
+        BEGIN SELECT RAISE(ABORT,'visual description must belong to the event source'); END;
+        CREATE TRIGGER visual_semantic_source_guard
+        BEFORE INSERT ON visual_semantic_alignments
+        WHEN
+            (SELECT source_id FROM visual_events WHERE id=NEW.visual_event_id) <> NEW.source_id
+            OR (SELECT source_id FROM transcript_segments WHERE id=NEW.transcript_segment_id) <> NEW.source_id
+            OR (NEW.description_id IS NOT NULL AND
+                (SELECT source_id FROM visual_descriptions WHERE id=NEW.description_id) <> NEW.source_id)
+        BEGIN SELECT RAISE(ABORT,'semantic alignment must remain within one source'); END;
+        CREATE TRIGGER visual_claim_source_guard
+        BEFORE INSERT ON visual_claim_verifications
+        WHEN
+            (SELECT source_id FROM visual_events WHERE id=NEW.visual_event_id) <> NEW.source_id
+            OR (NEW.transcript_segment_id IS NOT NULL AND
+                (SELECT source_id FROM transcript_segments WHERE id=NEW.transcript_segment_id) <> NEW.source_id)
+            OR (NEW.description_id IS NOT NULL AND
+                (SELECT source_id FROM visual_descriptions WHERE id=NEW.description_id) <> NEW.source_id)
+            OR NOT EXISTS (
+                SELECT 1 FROM textbooks t WHERE t.source_id=NEW.source_id
+                JOIN claims c ON c.id=NEW.claim_id
+            )
+        BEGIN SELECT RAISE(ABORT,'visual claim verification must remain within one source'); END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
