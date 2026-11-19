@@ -26,7 +26,7 @@ _PROBE_SCHEMA = "omniintel-media-probe-v1"
 _SHOW_ENTRIES = (
     "format=format_name,duration,size,bit_rate:"
     "stream=index,codec_type,codec_name,profile,width,height,sample_rate,"
-    "channels,channel_layout,avg_frame_rate,r_frame_rate,duration"
+    "channels,channel_layout,avg_frame_rate,r_frame_rate,start_time,duration"
 )
 
 
@@ -233,6 +233,7 @@ def _parse_probe(
                 codec_type=codec_type,
                 codec_name=_bounded_text(raw.get("codec_name"), maximum=128),
                 duration_ms=_duration_ms(raw.get("duration")),
+                start_ms=_timestamp_ms(raw.get("start_time")),
                 width=_optional_int(raw.get("width"), maximum=32_768),
                 height=_optional_int(raw.get("height"), maximum=32_768),
                 sample_rate=_optional_int(raw.get("sample_rate"), maximum=768_000),
