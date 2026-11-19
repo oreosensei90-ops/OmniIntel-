@@ -71,27 +71,26 @@ The initial caption adapter preserves cue timestamps and optional WebVTT voice l
 
 ## Local media metadata probing
 
-Inspect a registered local audio/video asset without decoding it, extracting audio/frames or contacting a remote service:
+Inspect a registered local audio/video asset's container and stream metadata without decoding it or contacting a remote service:
 
 ~~~bash
 omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4
 omniintel probe-media ./omniintel.db ./omniintel-assets ASSET_ID
-omniintel extract-audio ./omniintel.db ./omniintel-assets ASSET_ID
 ~~~
 
 Install FFmpeg tools so ffprobe and ffmpeg are available on PATH. The probe verifies the content-addressed asset and records container/stream metadata. extract-audio creates a content-addressed mono 16 kHz PCM WAV derivative and preserves the source stream start offset. Neither stage downloads media or uses network protocols. Video frame extraction remains pending. See docs/MEDIA_PROBING.md and docs/AUDIO_EXTRACTION.md.
 
-## Local audio transcription (initial WAV adapter)
+## Local audio transcription
 
 Register a user-selected PCM WAV file, or extract one audio stream from a local video/audio source, then transcribe it with a CTranslate2 model directory already on disk:
 
 ~~~bash
 omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4 --title "Lecture 01"
 omniintel extract-audio ./omniintel.db ./omniintel-assets SOURCE_ASSET_ID
-omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en --time-offset-ms 250
+omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
 ~~~
 
-Install the optional adapter with python -m pip install -e '.[asr]'. Model downloads are disabled by default; explicitly add --allow-model-download if you authorize faster-whisper to fetch a model by name. Completed chunks are checkpointed by audio content and configuration, so an interrupted run can resume without retranscribing completed chunks. Existing source transcripts are never silently overwritten. The transcription adapter accepts normalized PCM WAV; local FFmpeg extraction now supplies that format for compressed media. VAD filtering is disabled by default to avoid dropping quiet lecture speech; enable it explicitly only when appropriate. Mobile-native ASR, word timestamps and diarization remain future work. See docs/AUDIO_EXTRACTION.md and docs/AUDIO_TRANSCRIPTION.md.
+extract-audio selects the first audio stream by default; use --stream-index when another stream is needed. Its output asset stays linked to the same source, and the stored stream start offset is automatically applied to transcript timestamps. See docs/AUDIO_EXTRACTION.md. Install the optional adapter with python -m pip install -e '.[asr]'. Model downloads are disabled by default; explicitly add --allow-model-download if you authorize faster-whisper to fetch a model by name. Completed chunks are checkpointed by audio content and configuration, so an interrupted run can resume without retranscribing completed chunks. Existing source transcripts are never silently overwritten. The transcription adapter accepts normalized PCM WAV; local FFmpeg extraction now supplies that format for compressed media. VAD filtering is disabled by default to avoid dropping quiet lecture speech; enable it explicitly only when appropriate. Mobile-native ASR, word timestamps and diarization remain future work. See docs/AUDIO_EXTRACTION.md and docs/AUDIO_TRANSCRIPTION.md.
 
 ## Rights and source access
 
