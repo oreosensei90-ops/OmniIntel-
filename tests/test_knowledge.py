@@ -219,6 +219,9 @@ def test_document_page_reference_can_support_and_contest_claim(tmp_path: Path):
     bundle = store.get_claim_bundle(claim)
     assert bundle["evidence_references"][0]["page_number"] == 1
     assert store.publishable_claims()[0]["id"] == claim
+    audit = KnowledgeAuditor(database).audit()
+    assert audit.claims_with_accepted_support == 1
+    assert audit.publishable_claims == 1
 
     contradiction = store.link_evidence_reference(
         ClaimEvidenceReferenceInput(claim, refs[0], "CONTRADICTS", 0.8)
