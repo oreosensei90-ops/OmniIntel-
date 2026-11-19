@@ -1,6 +1,7 @@
 package ai.omniintel.reader
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.media.MediaPlayer
 import android.widget.MediaController
@@ -183,6 +184,8 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var book by remember { mutableStateOf<Book?>(null) }
+    val libraryDatabase = remember { ReaderDatabase.get(context) }
+    var libraryBooks by remember { mutableStateOf<List<LibraryBookEntity>>(emptyList()) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var showBookmarksOnly by remember { mutableStateOf(false) }
@@ -201,10 +204,47 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
     var audioReady by remember { mutableStateOf(false) }
     var videoReady by remember { mutableStateOf(false) }
     var audioPlaying by remember { mutableStateOf(false) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) open(uri) { result ->
+    LaunchedEffect(Unit) {
+        libraryBooks = runCatching {
+            withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().getAll() }
+        }.getOrElse {
+            error = "The on-device library could not be loaded."
+            emptyList()
+        }
+    }
+    fun loadBook(uri: Uri) {
+        open(uri) { result ->
             result.onSuccess { loadedBook ->
                 scope.launch {
+                    val hasGrant = context.contentResolver.persistedUriPermissions.any {
+                        it.uri == uri && it.isReadPermission
+                    } || runCatching {
+                        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }.isSuccess
+                    if (hasGrant) {
+                        runCatching {
+                            val now = System.currentTimeMillis()
+                            withContext(Dispatchers.IO) {
+                                val dao = libraryDatabase.libraryBooks()
+                                val previous = dao.find(loadedBook.versionId)
+                                dao.upsert(
+                                    LibraryBookEntity(
+                                        versionId = loadedBook.versionId,
+                                        title = loadedBook.title,
+                                        documentUri = uri.toString(),
+                                        sourceCount = loadedBook.sources.size,
+                                        chapterCount = loadedBook.chapters.size,
+                                        importedAtEpochMs = previous?.importedAtEpochMs ?: now,
+                                        lastOpenedAtEpochMs = now
+                                    )
+                                )
+                                dao.getAll()
+                            }
+                        }.onSuccess { libraryBooks = it }
+                            .onFailure { error = "Textbook opened, but the local library index could not be updated." }
+                    } else {
+                        error = "Textbook opened for this session only; its document provider did not allow persistent access."
+                    }
                     val progressKey = intPreferencesKey("chapter:${loadedBook.versionId}")
                     val savedChapter = runCatching {
                         context.readerProgressStore.data.first()[progressKey]
@@ -217,7 +257,7 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                     chapterIndex = savedChapter.coerceIn(0, loadedBook.chapters.lastIndex)
                     query = ""
                     showBookmarksOnly = false
-                    error = null
+                    error = error?.takeIf { it.startsWith("Textbook opened") || it.startsWith("The on-device") }
                     selectedSourceId = null; mediaUri = null; mediaMime = null
                     audioPlayer?.release(); audioPlayer = null; audioReady = false; audioPlaying = false; videoReady = false
                     videoView?.stopPlayback(); videoView = null
@@ -225,6 +265,9 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 }
             }.onFailure { error = it.message ?: "Could not open reader export." }
         }
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) loadBook(uri)
     }
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -332,8 +375,18 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Text("OMNIINTEL", color = Color.White, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Text("OFFLINE READER", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
             }
-            OutlinedButton(onClick = { picker.launch(arrayOf("application/json")) }) {
-                Text(if (book == null) "Open textbook" else "Open another")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (book != null) {
+                    TextButton(onClick = {
+                        audioPlayer?.release(); audioPlayer = null
+                        videoView?.stopPlayback(); videoView = null
+                        mediaUri = null; mediaMime = null; selectedSourceId = null
+                        book = null
+                    }) { Text("Library", color = Gold) }
+                }
+                OutlinedButton(onClick = { picker.launch(arrayOf("application/json")) }) {
+                    Text(if (book == null) "Import textbook" else "Open another")
+                }
             }
         }
         val current = book
@@ -349,6 +402,35 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                 Spacer(Modifier.height(20.dp))
                 Button(onClick = { picker.launch(arrayOf("application/json")) }) { Text("Choose reader export") }
                 error?.let { Text(it, color = Color(0xFFFF8C82), modifier = Modifier.padding(top = 12.dp)) }
+                if (libraryBooks.isNotEmpty()) {
+                    Text("ON THIS DEVICE", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(libraryBooks, key = { it.versionId }) { entry ->
+                            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(entry.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                        Text("${entry.chapterCount} chapters · ${entry.sourceCount} sources", color = Muted, fontSize = 10.sp)
+                                    }
+                                    TextButton(onClick = { loadBook(Uri.parse(entry.documentUri)) }) { Text("Open", color = Gold) }
+                                    TextButton(onClick = {
+                                        scope.launch {
+                                            runCatching {
+                                                withContext(Dispatchers.IO) { libraryDatabase.libraryBooks().delete(entry.versionId) }
+                                                runCatching {
+                                                    context.contentResolver.releasePersistableUriPermission(
+                                                        Uri.parse(entry.documentUri), Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                                    )
+                                                }
+                                                libraryBooks = libraryBooks.filterNot { it.versionId == entry.versionId }
+                                            }.onFailure { error = "Could not remove this library entry." }
+                                        }
+                                    }) { Text("Remove", color = Muted) }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         } else {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
