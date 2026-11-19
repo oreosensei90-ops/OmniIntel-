@@ -170,9 +170,9 @@ def connect(path: str | Path) -> sqlite3.Connection:
 def _execute_statements(conn: sqlite3.Connection, sql: str) -> None:
     """Execute a static migration script without executescript's implicit commits."""
     statement = ""
-    for line in sql.splitlines(keepends=True):
-        statement += line
-        if sqlite3.complete_statement(statement):
+    for character in sql:
+        statement += character
+        if character == ";" and sqlite3.complete_statement(statement):
             if statement.strip():
                 conn.execute(statement)
             statement = ""
