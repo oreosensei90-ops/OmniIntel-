@@ -302,7 +302,10 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
         notesByBlock = savedAnnotations.mapNotNull { row -> row.note?.takeIf { it.isNotBlank() }?.let { row.blockId to it } }.toMap()
         bookmarkedBlocks = savedAnnotations.filter { it.bookmarked }.map { it.blockId }.toSet()
         editingBlockId = null; noteDraft = ""; book = loadedBook
-        chapterIndex = (savedProgress?.chapterIndex ?: 0).coerceIn(0, loadedBook.chapters.lastIndex)
+        val targetChapter = targetBlockId?.let { id ->
+            loadedBook.chapters.indexOfFirst { chapter -> chapter.blocks.any { it.id == id } }
+        }?.takeIf { it >= 0 }
+        chapterIndex = (targetChapter ?: savedProgress?.chapterIndex ?: 0).coerceIn(0, loadedBook.chapters.lastIndex)
         resumeBlockId = targetBlockId ?: savedProgress?.lastBlockId
         query = ""; showBookmarksOnly = false; error = warning
         selectedSourceId = null; mediaUri = null; mediaMime = null
