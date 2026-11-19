@@ -20,6 +20,12 @@ Block provenance is one of SOURCE, EXPLANATION, DERIVED, EXTERNAL or UNCERTAIN. 
 
 A block may reference a knowledge unit and/or claim. Evidence links identify source evidence and a relation (supports, illustrates, contextualizes or contradicts), with a separate review state. The database enforces that linked evidence belongs to the same source as the textbook.
 
+## Deterministic outline composition
+
+The initial composer creates chapters only from ACCEPTED topics. It places a claim into a chapter only when the same evidence item has both an ACCEPTED topic/evidence link and an ACCEPTED SUPPORTS claim/evidence link, and the claim status is SUPPORTED. Claims with accepted contradictions are excluded. Evidence links are copied to the resulting block as accepted SUPPORTS references.
+
+This composer performs no language-model generation and invents no connective prose. A topic with no qualifying claims remains an empty chapter with its source time range and topic description. Topic hierarchy is preserved where accepted parents exist; unaccepted ancestors are skipped in favor of the nearest accepted ancestor. Cyclic accepted topic hierarchies fail rather than producing a malformed document.
+
 ## Integrity rules
 
 - Version numbers are unique within a textbook.
@@ -32,6 +38,6 @@ A block may reference a knowledge unit and/or claim. Evidence links identify sou
 
 ## Current scope and limitations
 
-Implemented: persistence, version numbering, structured block vocabulary, provenance/review metadata, evidence links, source-boundary guards, sibling ordering and hierarchy-cycle guards.
+Implemented: persistence, version numbering, structured block vocabulary, provenance/review metadata, evidence links, source-boundary guards, sibling ordering, hierarchy-cycle guards and deterministic evidence-gated topic-to-chapter composition.
 
-Not implemented yet: automatic topic-to-chapter composition, claim placement, semantic block validation, immutable published-version enforcement, rendering/export, diagrams/equation rendering, annotation remapping or multi-source textbooks. A stored block is not automatically accurate or publication-ready. Exporters must preserve provenance and citations, and must not silently publish UNCERTAIN or unreviewed material.
+Not implemented yet: automated topic discovery, semantic claim-to-topic relevance validation, semantic block validation, immutable published-version enforcement, rendering/export, diagrams/equation rendering, annotation remapping or multi-source textbooks. A stored block is not automatically accurate or publication-ready. Exporters must preserve provenance and citations, and must not silently publish UNCERTAIN or unreviewed material.
