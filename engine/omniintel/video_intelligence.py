@@ -12,6 +12,7 @@ import math
 import base64
 import urllib.error
 import urllib.request
+from urllib.request import HTTPRedirectHandler
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -64,6 +65,11 @@ class CrossModalVerifier(Protocol):
 
 
 
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        raise urllib.error.HTTPError(request.full_url,code,"Redirects are disabled",headers,None)
+
+
 class OllamaLocalVisionAdapter:
     """Opt-in local Ollama vision adapter; connects only to loopback, never a hosted endpoint."""
 
@@ -91,7 +97,8 @@ class OllamaLocalVisionAdapter:
             headers={"Content-Type":"application/json"},method="POST",
         )
         try:
-            with urllib.request.urlopen(request,timeout=self.timeout_seconds) as response:
+            opener=urllib.request.build_opener(_NoRedirect)
+            with opener.open(request,timeout=self.timeout_seconds) as response:
                 raw=response.read(2*1024*1024+1)
         except (urllib.error.URLError,TimeoutError,OSError) as exc:
             raise RuntimeError("Local Ollama vision service is unavailable") from exc
