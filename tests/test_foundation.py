@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -67,7 +68,7 @@ def test_applied_migration_cannot_be_changed(tmp_path: Path) -> None:
 def test_failed_migration_rolls_back_ddl_and_ledger(tmp_path: Path):
     path = tmp_path / "rollback.db"
     conn = connect(path)
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.OperationalError):
         migrate(
             conn,
             (("broken_migration", "CREATE TABLE should_rollback(id TEXT); INSERT INTO missing_table VALUES('x');"),),
