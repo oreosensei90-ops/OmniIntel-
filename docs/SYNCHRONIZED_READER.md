@@ -30,3 +30,6 @@ The Web and Android prototypes cap reader JSON imports at 50 MiB. The Web reader
 ## Native Android prototype playback
 
 The first Android reader prototype can attach one user-selected local audio or video file to an explicitly selected course source. Evidence jump controls are enabled only when the evidence source ID matches that selected source; the reader seeks using the source-local millisecond locator and never applies a course-clock offset to the media player. Android playback currently uses platform MediaPlayer/VideoView, so codec support follows the device platform. Playback pauses when the activity leaves the foreground; background playback, persistent media grants, playback-service controls, subtitles, Room-backed library state and device-level testing remain future work. Search spans all chapters and results identify the chapter with an explicit navigation action.
+
+
+The Web Reader displays an accepted course-clock time and alignment status separately from the source-local citation time. Media seeking always uses the source-local locator and requires the exact source to be attached; the mapped course clock is informational and is never substituted for a media player's local timeline.
