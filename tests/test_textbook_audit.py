@@ -78,3 +78,47 @@ def test_publication_gate_requires_claim_support_to_be_carried(tmp_path: Path) -
     report = TextbookPublicationAuditor(path).audit(version)
     assert report.ready
     assert report.eligible_blocks == 1
+
+def test_publication_gate_accepts_claim_supported_by_pdf_page_reference(tmp_path: Path) -> None:
+    from reportlab.pdfgen import canvas
+
+    from omniintel.document_pdf import extract_pdf
+    from omniintel.knowledge import ClaimEvidenceReferenceInput, ClaimInput
+    from omniintel.knowledge_store import KnowledgeStore
+    from omniintel.local_files import import_local_file
+
+    pdf = tmp_path / "source.pdf"
+    output = canvas.Canvas(str(pdf))
+    output.drawString(72, 720, "The first law describes conservation of energy.")
+    output.showPage()
+    output.save()
+    path = tmp_path / "publication.db"
+    assets = tmp_path / "assets"
+    imported = import_local_file(path, assets, pdf, title="Physics source")
+    extraction = extract_pdf(path, assets, imported.asset.id)
+
+    knowledge = KnowledgeStore(path)
+    claim_id = knowledge.create_claim(ClaimInput("Energy is conserved."))
+    claim_link = knowledge.link_evidence_reference(
+        ClaimEvidenceReferenceInput(
+            claim_id, extraction.evidence_ref_ids[0], "SUPPORTS", 0.96
+        )
+    )
+    assert knowledge.review_evidence_reference_link(claim_link, "ACCEPTED") == "SUPPORTED"
+
+    store = TextbookStore(path)
+    textbook = store.create_textbook(imported.source_id, "Physics")
+    version = store.create_version(textbook, "PDF grounded edition")
+    chapter = store.add_chapter(version, "Conservation", ordinal=0)
+    block = store.add_block(chapter, BlockInput(
+        "PARAGRAPH", {"text": "Energy is conserved."}, "EXPLANATION",
+        review_status="ACCEPTED", claim_id=claim_id,
+    ))
+    store.link_evidence_reference(
+        block, extraction.evidence_ref_ids[0],
+        relation="SUPPORTS", review_state="ACCEPTED",
+    )
+    report = TextbookPublicationAuditor(path).audit(version)
+    assert report.ready
+    assert report.eligible_blocks == 1
+
