@@ -120,7 +120,7 @@ class TextbookHTMLExporter:
                 raise ValueError(f"Unsupported HTML block type: {kind}")
 
             citations = []
-            for evidence in block["evidence"]:
+            for evidence in [*block["evidence"], *block.get("evidence_references", [])]:
                 if evidence["relation"] not in {
                     "SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"
                 }:
