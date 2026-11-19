@@ -81,6 +81,23 @@ def main() -> None:
     extract_frames.add_argument("--max-width", type=int, default=1280)
     extract_frames.add_argument("--max-height", type=int, default=720)
     extract_frames.add_argument("--timeout", type=float, default=600.0)
+    detect_scenes = sub.add_parser("detect-scenes", help="Detect reviewable scene-change candidates from sampled frames")
+    detect_scenes.add_argument("database", type=Path)
+    detect_scenes.add_argument("asset_dir", type=Path)
+    detect_scenes.add_argument("source_id")
+    detect_scenes.add_argument("--threshold", type=float, default=0.28)
+    detect_scenes.add_argument("--max-comparisons", type=int, default=2000)
+    ocr_video = sub.add_parser("ocr-video-frames", help="OCR sampled video frames using local Tesseract")
+    ocr_video.add_argument("database", type=Path)
+    ocr_video.add_argument("asset_dir", type=Path)
+    ocr_video.add_argument("source_id")
+    ocr_video.add_argument("--max-frames", type=int, default=200)
+    ocr_video.add_argument("--timeout", type=int, default=30)
+    review_visual_record_cmd = sub.add_parser("review-visual-record", help="Review a scene, OCR, description, semantic or verification record")
+    review_visual_record_cmd.add_argument("database", type=Path)
+    review_visual_record_cmd.add_argument("table", choices=["visual_scene_candidates","visual_ocr_results","visual_descriptions","visual_semantic_alignments","visual_claim_verifications"])
+    review_visual_record_cmd.add_argument("record_id")
+    review_visual_record_cmd.add_argument("state", choices=["ACCEPTED","REJECTED","NEEDS_REVIEW"])
     build_visual_timeline = sub.add_parser("build-visual-timeline", help="Create reviewable visual-frame and transcript alignment candidates")
     build_visual_timeline.add_argument("database", type=Path)
     build_visual_timeline.add_argument("extraction_id")
@@ -262,6 +279,29 @@ def main() -> None:
             timeout_seconds=args.timeout,
         )
         print(json.dumps(frame_extraction_dict(result),ensure_ascii=False,indent=2))
+    elif args.command == "detect-scenes":
+        from .video_intelligence import detect_scene_changes
+
+        print(json.dumps(detect_scene_changes(
+            args.database,args.asset_dir,args.source_id,
+            threshold=args.threshold,max_comparisons=args.max_comparisons,
+        ),ensure_ascii=False,indent=2))
+    elif args.command == "ocr-video-frames":
+        from .video_intelligence import ocr_video_frames
+
+        print(json.dumps(ocr_video_frames(
+            args.database,args.asset_dir,args.source_id,
+            max_frames=args.max_frames,timeout_seconds=args.timeout,
+        ),ensure_ascii=False,indent=2))
+    elif args.command == "review-visual-record":
+        from .video_intelligence import review_visual_record
+
+        print(json.dumps({
+            "record_id":args.record_id,
+            "review_state":review_visual_record(
+                args.database,args.table,args.record_id,args.state,
+            ),
+        },indent=2))
     elif args.command == "build-visual-timeline":
         from .visual_timeline import build_visual_timeline
 
