@@ -54,3 +54,12 @@ def test_reader_stores_personal_notes_in_indexeddb_without_remote_sync() -> None
     assert 'createObjectStore("bookmarks"' in app
     assert "PERSONAL STUDY NOTES · THIS BROWSER ONLY" in app
     assert "fetch(" not in app
+
+
+def test_reader_search_spans_chapters_and_matches_transcript_and_pdf_evidence() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "function renderSearchResults()" in app
+    assert "state.chapters.forEach" in app
+    assert "item.transcript_excerpt" in app
+    assert "item.document_page?.text_content" in app
+    assert "scrollIntoView" in app
