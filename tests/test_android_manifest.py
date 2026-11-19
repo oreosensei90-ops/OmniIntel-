@@ -35,3 +35,14 @@ def test_android_reader_bounds_untrusted_json_structure_and_deduplicates_block_i
     assert "evidenceArray.length() <= 100" in code
     assert "seenBlockIds.add(stableId)" in code
     assert "transcript_excerpt" in code and "document_elements" in code
+
+
+def test_android_reader_media_jumps_are_bound_to_the_selected_source() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert "selectedSourceId == evidence.sourceId" in code
+    assert "evidence.startMs.coerceIn" in code
+    assert "mediaPicker.launch(arrayOf(\"video/*\", \"audio/*\"))" in code
+    assert "MediaPlayer()" in code
+    assert "VideoView(viewContext)" in code
+    assert "Timestamps remain source-local." in code
