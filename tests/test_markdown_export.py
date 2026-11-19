@@ -44,7 +44,7 @@ def test_markdown_exporter_renders_portable_content(tmp_path: Path) -> None:
     content = output.read_text(encoding="utf-8")
     assert content.startswith("# Physics & Motion")
     assert "[Motion](#motion)" in content
-    assert r"Direction \\| change" in content
+    assert r"Direction \| change" in content
     assert "print('hello')" in content
     assert "v = \\frac" in content
 
