@@ -112,33 +112,38 @@ def test_android_reader_keeps_existing_book_visible_when_replacement_import_fail
     assert "Color(0xFFFF8C82)" in header
 
 
-def test_android_reader_restores_chapter_progress_per_textbook_version() -> None:
+def test_android_reader_restores_paragraph_progress_per_textbook_version() -> None:
     root = Path(__file__).parents[1]
     source = root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
-    gradle = (root / "apps" / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
     code = source.read_text(encoding="utf-8")
-    assert 'androidx.datastore:datastore-preferences:1.1.1' in gradle
     assert 'preferencesDataStore(name = "omniintel_reader_progress")' in code
-    assert 'intPreferencesKey("chapter:${loadedBook.versionId}")' in code
     assert "readerProgressStore.data.first()" in code
-    assert "chapterIndex = savedChapter.coerceIn" in code
-    assert "LaunchedEffect(book?.versionId, chapterIndex)" in code
-    assert "preferences[progressKey] = chapterIndex" in code
+    assert "ReaderProgressEntity(versionId, value.coerceAtLeast(0), null, now)" in code
+    assert "database.progress().upsert(it)" in code
+    assert "lastBlockId" in code
+    assert "snapshotFlow { readerListState.firstVisibleItemIndex }" in code
+    assert "readerListState.scrollToItem(target" in code
+    assert "chapterIndex = (targetChapter ?: savedProgress?.chapterIndex ?: 0)" in code
+    assert "intPreferencesKey" not in code
 
 
-def test_android_reader_persists_block_notes_and_bookmarks_locally() -> None:
+def test_android_reader_migrates_and_persists_block_notes_and_bookmarks_in_room() -> None:
     root = Path(__file__).parents[1]
     source = root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
     code = source.read_text(encoding="utf-8")
-    assert "stringPreferencesKey" in code
-    assert "booleanPreferencesKey" in code
-    assert 'note:${currentBook.versionId}:' in code
-    assert 'bookmark:${current.versionId}:' in code
+    migration = code.split("private suspend fun migrateLegacyReaderPreferences", 1)[1].split("@Composable", 1)[0]
+    assert 'name.startsWith("note:")' in migration
+    assert 'name.startsWith("bookmark:")' in migration
+    assert 'name.startsWith("chapter:")' in migration
+    assert "database.annotations().upsertAll" in migration
+    assert "database.progress().upsert(it)" in migration
+    assert migration.index("database.withTransaction") < migration.index("readerProgressStore.edit")
+    assert "it.clear()" in migration
+    assert "ReaderAnnotationEntity" in code
+    assert "libraryDatabase.annotations().upsert(" in code
     assert "Your private note" in code
     assert "it.length <= 5000" in code
-    assert "prefs.remove(key)" in code
-    assert "notesByBlock = preferences.asMap().mapNotNull" in code
-    assert "bookmarkedBlocks = preferences.asMap().mapNotNull" in code
+    assert "saved.takeIf { it.isNotBlank() }" in code
     assert "sourceId.length <= 128" in code
     assert "requestedId.length <= 128" in code
 
@@ -153,7 +158,7 @@ def test_android_reader_can_filter_and_search_saved_bookmarks_and_notes() -> Non
     assert 'current.chapters.flatMapIndexed' in code
 
 
-def test_android_library_uses_room_and_persistable_document_access() -> None:
+def test_android_library_uses_normalized_room_storage_and_persistable_document_access() -> None:
     root = Path(__file__).parents[1]
     app_gradle = (root / "apps" / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
     root_gradle = (root / "apps" / "android" / "build.gradle.kts").read_text(encoding="utf-8")
@@ -166,14 +171,25 @@ def test_android_library_uses_room_and_persistable_document_access() -> None:
     assert 'kapt("androidx.room:room-compiler:2.6.1")' in app_gradle
     assert '@Entity(tableName = "library_books")' in database
     assert '@Entity(tableName = "video_imports")' in database
-    assert 'VideoImportEntity::class' in database
-    assert 'version = 2' in database
+    assert '@Entity(tableName = "textbook_sources"' in database
+    assert '@Entity(tableName = "textbook_chapters"' in database
+    assert 'tableName = "textbook_blocks"' in database
+    assert 'tableName = "textbook_evidence"' in database
+    assert 'tableName = "reader_annotations"' in database
+    assert 'tableName = "reader_progress"' in database
+    assert 'version = 3' in database
     assert 'Migration(1, 2)' in database
-    assert 'addMigrations(MIGRATION_1_2)' in database
+    assert 'Migration(2, 3)' in database
+    assert 'addMigrations(MIGRATION_1_2, MIGRATION_2_3)' in database
     assert 'Room.databaseBuilder(' in database
-    assert 'dao.upsert(' in activity
+    assert 'libraryDatabase.readerContent()' in activity
+    assert 'dao.insertBlocks(' in activity
+    assert 'dao.insertEvidence(' in activity
     assert 'takePersistableUriPermission' in activity
     assert 'releasePersistableUriPermission' in activity
     assert 'libraryDatabase.libraryBooks().getAll()' in activity
-    assert 'TextButton(onClick = { loadBook(Uri.parse(entry.documentUri)) })' in activity
+    assert 'openStoredBook(entry.versionId)' in activity
     assert 'libraryDatabase.libraryBooks().delete(entry.versionId)' in activity
+    assert 'searchLibrary(term)' in activity
+
+
