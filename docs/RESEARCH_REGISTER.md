@@ -103,6 +103,10 @@ The user-supplied repositories below were checked at repository-metadata, README
 
 Topic pages were scanned for relevant candidates; hundreds of unrelated tagged projects were not individually audited. The additional leads are queued for a separate focused source/license review, not treated as vetted.
 
+### Focused topic-page follow-up
+
+A deeper source review of the strongest additional candidates surfaced from the topic indexes is recorded in [RESEARCH_TOPIC_FOLLOWUP.md](RESEARCH_TOPIC_FOLLOWUP.md). This adds direct code inspection of CoursePilot, Course Navigator, Video Study Pipeline, Scribly and LearnQuest. CoursePilot is the closest full-product reference; Course Navigator is strongest for queue/cancellation/source-race handling; Video Study Pipeline is strongest for editorial and visual quality gates. None was copied into OmniIntel.
+
 ### Implementation decisions (no dependency adoption yet)
 
 - Keep canonical typed evidence locators and add page/element/frame references with source-boundary and review gates.
