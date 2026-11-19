@@ -77,6 +77,16 @@ class TextbookPublicationAuditor:
                    WHERE c.version_id=? ORDER BY be.block_id,be.id""",
                 (version_id,),
             ).fetchall()
+            asset_rows = conn.execute(
+                """SELECT ba.block_id,sa.id AS asset_id,sa.role,ab.media_type,ab.byte_size
+                   FROM block_assets ba
+                   JOIN source_assets sa ON sa.id=ba.asset_id
+                   JOIN asset_blobs ab ON ab.sha256=sa.blob_sha256
+                   JOIN chapter_blocks b ON b.id=ba.block_id
+                   JOIN textbook_chapters ch ON ch.id=b.chapter_id
+                   WHERE ch.version_id=? ORDER BY ba.block_id,ba.ordinal,ba.id""",
+                (version_id,),
+            ).fetchall()
             claim_rows = conn.execute(
                 """SELECT c.id,c.status,c.provenance,ce.evidence_id,ce.relation,ce.review_state
                    FROM claims c
@@ -89,6 +99,10 @@ class TextbookPublicationAuditor:
                    ORDER BY c.id,ce.id""",
                 (version_id,),
             ).fetchall()
+
+        assets_by_block: dict[str, list[dict[str, Any]]] = {}
+        for row in asset_rows:
+            assets_by_block.setdefault(row["block_id"], []).append(dict(row))
 
         by_block: dict[str, list[dict[str, Any]]] = {}
         for row in evidence_rows:
@@ -124,6 +138,14 @@ class TextbookPublicationAuditor:
             if block["provenance"] == "UNCERTAIN":
                 reasons.append(("UNCERTAIN_PROVENANCE", "Uncertain content cannot be published."))
             links = by_block.get(block_id, [])
+            attached_assets = assets_by_block.get(block_id, [])
+            if block["block_type"] in {"IMAGE", "DIAGRAM"}:
+                if not attached_assets:
+                    reasons.append(("MISSING_VISUAL_ASSET",
+                                    "IMAGE and DIAGRAM blocks require at least one linked image asset."))
+                elif any(not item["media_type"].startswith("image/") for item in attached_assets):
+                    reasons.append(("INVALID_VISUAL_ASSET",
+                                    "Every linked visual asset must have an image media type."))
             if any(item["relation"] == "CONTRADICTS" and item["review_state"] == "ACCEPTED"
                    for item in links):
                 reasons.append(("BLOCK_HAS_ACCEPTED_CONTRADICTION",
