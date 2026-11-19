@@ -1859,6 +1859,35 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         END;
         """
     ),
+    (
+        "0028_reopen_knowledge_units_after_source_demotion",
+        """
+        CREATE TRIGGER document_element_knowledge_unit_demotion
+        AFTER UPDATE OF review_state ON document_elements
+        WHEN NEW.review_state <> 'ACCEPTED'
+        BEGIN
+            UPDATE knowledge_units SET status='NEEDS_REVIEW',
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE status='VALIDATED' AND id IN (
+                SELECT knowledge_unit_id FROM knowledge_unit_evidence_refs
+                WHERE element_id=NEW.id
+            );
+        END;
+        CREATE TRIGGER document_ocr_knowledge_unit_demotion
+        AFTER UPDATE OF status ON document_ocr_pages
+        WHEN NEW.status <> 'ACCEPTED'
+        BEGIN
+            UPDATE knowledge_units SET status='NEEDS_REVIEW',
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE status='VALIDATED' AND id IN (
+                SELECT knowledge_unit_id FROM knowledge_unit_evidence_refs
+                WHERE evidence_ref_id IN (
+                    SELECT id FROM evidence_refs WHERE document_page_id=NEW.page_id
+                )
+            );
+        END;
+        """
+    ),
 )
 
 class MigrationError(RuntimeError):
