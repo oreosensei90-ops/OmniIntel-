@@ -489,7 +489,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ) THEN RAISE(ABORT,'textbook asset must be a compatible image from the same source') END;
         END;
         """
-    )
+    ),
     (
         "0011_pdf_page_extraction",
         """
