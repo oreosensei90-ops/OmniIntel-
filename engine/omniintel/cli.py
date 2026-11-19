@@ -10,6 +10,7 @@ from .store import OmniIntelStore
 from .textbook_audit import TextbookPublicationAuditor
 from .pdf_export import TextbookPDFExporter
 from .docx_export import TextbookDOCXExporter
+from .html_export import TextbookHTMLExporter
 
 
 def main() -> None:
@@ -31,6 +32,10 @@ def main() -> None:
     export_docx.add_argument("database", type=Path)
     export_docx.add_argument("version_id")
     export_docx.add_argument("output", type=Path)
+    export_html = sub.add_parser("export-html", help="Export a publication-ready textbook to self-contained HTML")
+    export_html.add_argument("database", type=Path)
+    export_html.add_argument("version_id")
+    export_html.add_argument("output", type=Path)
     args = parser.parse_args()
     if args.command == "init":
         OmniIntelStore(args.database)
@@ -56,3 +61,6 @@ def main() -> None:
     elif args.command == "export-docx":
         output = TextbookDOCXExporter(args.database).export(args.version_id, args.output)
         print(f"Exported DOCX: {output}")
+    elif args.command == "export-html":
+        output = TextbookHTMLExporter(args.database).export(args.version_id, args.output)
+        print(f"Exported HTML: {output}")
