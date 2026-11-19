@@ -519,6 +519,39 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ON document_pages(extraction_id,page_number);
         """
     ),
+    ,
+    (
+        "0012_document_page_search",
+        """
+        CREATE VIRTUAL TABLE document_pages_fts USING fts5(
+            text_content,
+            content='document_pages',
+            content_rowid='rowid',
+            tokenize='unicode61 remove_diacritics 2'
+        );
+        CREATE TRIGGER document_pages_fts_insert
+        AFTER INSERT ON document_pages
+        BEGIN
+            INSERT INTO document_pages_fts(rowid,text_content)
+            VALUES(NEW.rowid,NEW.text_content);
+        END;
+        CREATE TRIGGER document_pages_fts_delete
+        AFTER DELETE ON document_pages
+        BEGIN
+            INSERT INTO document_pages_fts(document_pages_fts,rowid,text_content)
+            VALUES('delete',OLD.rowid,OLD.text_content);
+        END;
+        CREATE TRIGGER document_pages_fts_update
+        AFTER UPDATE OF text_content ON document_pages
+        BEGIN
+            INSERT INTO document_pages_fts(document_pages_fts,rowid,text_content)
+            VALUES('delete',OLD.rowid,OLD.text_content);
+            INSERT INTO document_pages_fts(rowid,text_content)
+            VALUES(NEW.rowid,NEW.text_content);
+        END;
+        """
+    )
+
 )
 
 class MigrationError(RuntimeError):
