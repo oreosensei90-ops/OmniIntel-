@@ -82,3 +82,12 @@ def test_android_reader_searches_all_chapters_and_labels_cross_chapter_results()
     assert "current.chapters.flatMap" in code
     assert "chapter.title to it" in code
     assert "if (query.isNotBlank()) Text(chapterTitle" in code
+
+
+def test_android_reader_pauses_local_media_when_backgrounded() -> None:
+    source = Path(__file__).parents[1] / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt"
+    code = source.read_text(encoding="utf-8")
+    assert "LifecycleEventObserver" in code
+    assert "Lifecycle.Event.ON_STOP" in code
+    assert "if (player.isPlaying) player.pause()" in code
+    assert "if (view.isPlaying) view.pause()" in code
