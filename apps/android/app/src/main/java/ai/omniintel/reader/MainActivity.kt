@@ -1,6 +1,9 @@
 package ai.omniintel.reader
 
 import android.net.Uri
+import android.media.MediaPlayer
+import android.widget.MediaController
+import android.widget.VideoView
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,6 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,10 +40,12 @@ private val Gold = Color(0xFFE2BD71)
 private val Muted = Color(0xFF9BA3B2)
 private const val MAX_IMPORT_BYTES = 50L * 1024L * 1024L
 
-data class Evidence(val source: String, val locator: String, val excerpt: String)
+data class ReaderSource(val id: String, val title: String)
+data class Evidence(val sourceId: String, val source: String, val locator: String, val startMs: Long?, val excerpt: String)
 data class Block(val id: String, val type: String, val text: String, val provenance: String, val evidence: List<Evidence>)
 data class Chapter(val title: String, val blocks: List<Block>)
-data class Book(val title: String, val chapters: List<Chapter>)
+data class Book(val title: String, val sources: List<ReaderSource>, val chapters: List<ReaderChapter>)
+data class ReaderChapter(val title: String, val blocks: List<Block>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,7 +88,7 @@ class MainActivity : ComponentActivity() {
             .toString()
         val root = JSONObject(raw)
         val version = root.optJSONObject("version") ?: error("Missing textbook version.")
-        val sourceTitles = mutableMapOf<String, String>()
+        val sourcesById = mutableMapOf<String, ReaderSource>()
         val sources = root.optJSONArray("sources") ?: error("Missing course sources.")
         require(sources.length() in 1..500) { "Reader export must contain between 1 and 500 sources." }
         for (i in 0 until sources.length()) {
@@ -90,7 +97,7 @@ class MainActivity : ComponentActivity() {
             require(sourceId.isNotBlank() && !sourceTitles.containsKey(sourceId)) {
                 "Course source IDs must be non-empty and unique."
             }
-            sourceTitles[sourceId] = source.optString("title", "Course source")
+            sourcesById[sourceId] = ReaderSource(sourceId, source.optString("title", "Course source"))
         }
         val rawChapters = root.optJSONArray("chapters") ?: error("Missing chapters.")
         require(rawChapters.length() in 1..500) { "Reader export must contain between 1 and 500 chapters." }
@@ -123,12 +130,14 @@ class MainActivity : ComponentActivity() {
                         excerpts.getJSONObject(n).optString("text")
                     }.joinToString(" ")
                     val sourceId = item.optString("source_id")
-                    require(sourceTitles.containsKey(sourceId)) { "Evidence references an unknown course source." }
+                    require(sourcesById.containsKey(sourceId)) { "Evidence references an unknown course source." }
                     val pageNo = if (page == null || page.isNull("page_number")) null else page.optInt("page_number")
                     val start = if (item.isNull("local_start_ms")) null else item.optLong("local_start_ms")
                     Evidence(
-                        sourceTitles[sourceId] ?: item.optJSONObject("source")?.optString("title") ?: "Course source",
+                        sourceId,
+                        sourcesById.getValue(sourceId).title,
                         pageNo?.let { "page " + it } ?: start?.let { "%.1fs".format(it / 1000.0) } ?: "source reference",
+                        start,
                         excerpt.ifBlank { page?.optString("text_content").orEmpty().take(700) }
                     )
                 }
@@ -151,7 +160,7 @@ class MainActivity : ComponentActivity() {
             Chapter(chapter.optString("title", "Chapter ${i + 1}"), blocks)
         }
         require(chapters.isNotEmpty()) { "This textbook has no readable chapters." }
-        return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), chapters)
+        return Book(version.optString("textbook_title", version.optString("title", "Course textbook")), sourcesById.values.toList(), chapters)
     }
 }
 
