@@ -28,6 +28,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Source-scoped topic hierarchy and reviewed topic/evidence alignment (initial slice).
 - [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).
 - [x] Deterministic topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
+- [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
+- [ ] Semantic block validation, source coverage and pedagogical quality scoring.
 - [ ] PDF, DOCX, HTML and Markdown exporters.
 
 ## Applications
