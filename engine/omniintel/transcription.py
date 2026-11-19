@@ -374,9 +374,31 @@ def _checkpoint_chunk(
 def _validate_chunk_result(result: ChunkTranscription, duration_ms: int) -> None:
     if not isinstance(result,ChunkTranscription):
         raise TypeError("Transcription adapter must return ChunkTranscription")
+    if result.language is not None and (
+        not isinstance(result.language,str) or len(result.language)>35
+    ):
+        raise ValueError("Transcription adapter language code is invalid")
+    if len(result.segments)>10_000:
+        raise ValueError("Transcription adapter exceeded the per-chunk segment limit")
     previous_start = -1
+    total_chars = 0
     for segment in result.segments:
+        if type(segment.start_ms) is not int or type(segment.end_ms) is not int:
+            raise TypeError("Transcription timestamps must be integer milliseconds")
+        if not isinstance(segment.text,str) or len(segment.text)>20_000:
+            raise ValueError("Transcription adapter segment text exceeds its limit")
+        if segment.language is not None and (
+            not isinstance(segment.language,str) or len(segment.language)>35
+        ):
+            raise ValueError("Transcription segment language code is invalid")
+        if segment.speaker_id is not None and (
+            not isinstance(segment.speaker_id,str) or len(segment.speaker_id)>128
+        ):
+            raise ValueError("Transcription speaker identifier is invalid")
         segment.validate(duration_ms)
+        total_chars += len(segment.text)
+        if total_chars > 250_000:
+            raise ValueError("Transcription adapter exceeded the per-chunk text limit")
         if segment.start_ms < previous_start:
             raise ValueError("Transcription adapter segments must be ordered")
         previous_start = segment.start_ms
@@ -462,6 +484,9 @@ def run_wav_transcription(
     max_chunk_bytes: int = 16 * 1024 * 1024,
     max_duration_ms: int = 12 * 60 * 60 * 1000,
     progress: Callable[[int,int],None] | None = None,
+    max_chunks: int = 10_000,
+    max_total_segments: int = 200_000,
+    max_total_chars: int = 5_000_000,
 ) -> TranscriptionRunResult:
     """Transcribe a user-selected PCM WAV, persisting each completed chunk.
 
@@ -475,6 +500,8 @@ def run_wav_transcription(
         raise ValueError("max_chunk_bytes must be between 64 KiB and 64 MiB")
     if max_duration_ms <= 0:
         raise ValueError("max_duration_ms must be positive")
+    if max_chunks < 1 or max_total_segments < 1 or max_total_chars < 1:
+        raise ValueError("Transcription output limits must be positive")
     asset_store=AssetStore(database_path,asset_dir)
     audio_path=asset_store.resolve_path(asset_id)
     input_sha256=_sha256_file(audio_path)
@@ -516,6 +543,10 @@ def run_wav_transcription(
         chunk_seconds=chunk_seconds,max_chunk_bytes=max_chunk_bytes,
     )
     total_chunks=(total_frames+frames_per_chunk-1)//frames_per_chunk
+    if total_chunks > max_chunks:
+        raise ValueError("WAV audio exceeds the configured transcription chunk-count limit")
+    total_segments=0
+    total_chars=0
     try:
         with tempfile.TemporaryDirectory(prefix="omniintel-asr-") as directory:
             work_dir=Path(directory)
@@ -540,6 +571,10 @@ def run_wav_transcription(
                         start_ms=start_ms,end_ms=end_ms,result=result,
                     )
                     processed+=1
+                total_segments += len(result.segments)
+                total_chars += sum(len(segment.text) for segment in result.segments)
+                if total_segments > max_total_segments or total_chars > max_total_chars:
+                    raise ValueError("Transcription output exceeds configured total limits")
                 combined.append((start_ms,end_ms,result))
                 if progress:
                     progress(index+1,max(1,total_chunks))
