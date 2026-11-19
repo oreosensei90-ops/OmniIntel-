@@ -65,3 +65,14 @@ def test_execution_detects_changed_input_before_start(tmp_path: Path) -> None:
     with pytest.raises(PlanExecutionError,match="changed after planning"):
         executor.approve_and_run(plan,[{"stage":"REGISTER_SOURCE","input_indices":[0]}],
                                  user_approved=True,handlers={"REGISTER_SOURCE":lambda *_:{}})
+
+
+def test_execution_rejects_stage_for_wrong_modality(tmp_path: Path) -> None:
+    path=tmp_path/"a.wav"
+    plan=make_plan(path)
+    executor=PlanExecutor(tmp_path/"db.sqlite")
+    with pytest.raises(PlanExecutionError,match="incompatible"):
+        executor.approve_and_run(
+            plan,[{"stage":"SAMPLE_VIDEO_FRAMES","input_indices":[0]}],
+            user_approved=True,handlers={"SAMPLE_VIDEO_FRAMES":lambda *_:{}},
+        )
