@@ -6,16 +6,19 @@ python-docx is an optional publishing dependency.
 from __future__ import annotations
 
 from pathlib import Path
+
+from .export_visuals import evidence_locator_label, resolve_block_assets
 from typing import Any
 
 
 class TextbookDOCXExporter:
     """Render a publication-ready textbook as an editable Word document."""
 
-    def __init__(self, database_path: str | Path):
+    def __init__(self, database_path: str | Path, asset_dir: str | Path | None = None):
         self.database_path = Path(database_path)
+        self.asset_dir = Path(asset_dir) if asset_dir is not None else None
 
-    def export(self, version_id: str, output_path: str | Path) -> Path:
+    def export(self, version_id: str, output_path: str | Path, *, asset_dir: str | Path | None = None) -> Path:
         try:
             from docx import Document
             from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
@@ -212,6 +215,17 @@ class TextbookDOCXExporter:
                             f"{kind} block {block['id']} requires an accessible description"
                         )
                     add_callout(f"{kind.title()} description", description)
+                    for image_path, caption, media_type, digest in resolve_block_assets(
+                        self.database_path,asset_dir or self.asset_dir,version["source_id"],block
+                    ):
+                        picture=document.add_picture(str(image_path),width=Inches(6.2))
+                        picture._inline.docPr.set("descr",str(description))
+                        if caption:
+                            cap=document.add_paragraph(caption)
+                            cap.alignment=WD_ALIGN_PARAGRAPH.CENTER
+                            for run in cap.runs:
+                                run.italic=True
+                                run.font.size=Pt(8)
                 else:
                     raise ValueError(f"Unsupported DOCX block type: {kind}")
 
@@ -220,12 +234,13 @@ class TextbookDOCXExporter:
                         "SUPPORTS", "ILLUSTRATES", "CONTEXTUALIZES"
                     }:
                         continue
-                    timestamp = f"{evidence['start_ms'] / 1000:.1f}s"
+                    locator = evidence_locator_label(evidence)
+                    provenance = evidence.get("provenance") or evidence.get("evidence_provenance") or "SOURCE"
                     citation = document.add_paragraph()
                     citation.paragraph_format.left_indent = Inches(0.18)
                     citation.paragraph_format.space_after = Pt(3)
                     run = citation.add_run(
-                        f"Source evidence · {timestamp} · {evidence['provenance']}"
+                        f"Source evidence · {locator} · {provenance}"
                     )
                     run.font.size = Pt(8)
                     run.font.color.rgb = RGBColor(95, 105, 120)
