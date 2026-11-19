@@ -31,14 +31,17 @@ def main() -> None:
     export_pdf.add_argument("version_id")
     export_pdf.add_argument("output", type=Path)
     export_pdf.add_argument("--font", type=Path, default=None, help="Unicode TTF font, required for scripts not covered by built-in fonts")
+    export_pdf.add_argument("--asset-dir", type=Path, default=None, help="Asset store directory required when textbook blocks contain linked images")
     export_docx = sub.add_parser("export-docx", help="Export a publication-ready textbook version to editable DOCX")
     export_docx.add_argument("database", type=Path)
     export_docx.add_argument("version_id")
     export_docx.add_argument("output", type=Path)
+    export_docx.add_argument("--asset-dir", type=Path, default=None)
     export_html = sub.add_parser("export-html", help="Export a publication-ready textbook to self-contained HTML")
     export_html.add_argument("database", type=Path)
     export_html.add_argument("version_id")
     export_html.add_argument("output", type=Path)
+    export_html.add_argument("--asset-dir", type=Path, default=None)
     import_captions = sub.add_parser("import-captions", help="Import a local SRT or WebVTT caption file")
     import_captions.add_argument("database", type=Path)
     import_captions.add_argument("caption_file", type=Path)
@@ -197,6 +200,7 @@ def main() -> None:
     export_markdown.add_argument("database", type=Path)
     export_markdown.add_argument("version_id")
     export_markdown.add_argument("output", type=Path)
+    export_markdown.add_argument("--asset-dir", type=Path, default=None)
     args = parser.parse_args()
     if args.command == "init":
         OmniIntelStore(args.database)
@@ -487,15 +491,15 @@ def main() -> None:
         print(json.dumps(outline, ensure_ascii=False, indent=2))
     elif args.command == "export-pdf":
         output = TextbookPDFExporter(args.database).export(
-            args.version_id, args.output, font_path=args.font
+            args.version_id, args.output, font_path=args.font, asset_dir=args.asset_dir
         )
         print(f"Exported PDF: {output}")
     elif args.command == "export-docx":
-        output = TextbookDOCXExporter(args.database).export(args.version_id, args.output)
+        output = TextbookDOCXExporter(args.database).export(args.version_id, args.output, asset_dir=args.asset_dir)
         print(f"Exported DOCX: {output}")
     elif args.command == "export-html":
-        output = TextbookHTMLExporter(args.database).export(args.version_id, args.output)
+        output = TextbookHTMLExporter(args.database).export(args.version_id, args.output, asset_dir=args.asset_dir)
         print(f"Exported HTML: {output}")
     elif args.command == "export-markdown":
-        output = TextbookMarkdownExporter(args.database).export(args.version_id, args.output)
+        output = TextbookMarkdownExporter(args.database).export(args.version_id, args.output, asset_dir=args.asset_dir)
         print(f"Exported Markdown: {output}")
