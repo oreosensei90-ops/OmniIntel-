@@ -486,10 +486,13 @@ def main() -> None:
         def register_sources(paths, context):
             registered=[]
             for path,expected_hash in zip(paths,context["expected_sha256"],strict=True):
+                reserved_id=executor.reserve_source_id(
+                    context["plan_id"],context["stage_key"],expected_hash,
+                )
                 result=import_local_file(
                     args.database,args.asset_dir,path,
                     max_bytes=max(250*1024*1024,path.stat().st_size),
-                    expected_sha256=expected_hash,
+                    expected_sha256=expected_hash,source_id=reserved_id,
                 )
                 registered.append({
                     "source_id":result.source_id,"asset_id":result.asset.id,
@@ -498,7 +501,8 @@ def main() -> None:
                 })
             return {"registered_sources":registered}
 
-        result=PlanExecutor(args.database).approve_and_run(
+        executor=PlanExecutor(args.database)
+        result=executor.approve_and_run(
             plan,stages,user_approved=args.approve,
             handlers={"REGISTER_SOURCE":register_sources},
         )
