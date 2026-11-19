@@ -15,18 +15,22 @@ This roadmap is a plan, not a claim that every item exists.
 
 ## Source and evidence intelligence
 - [x] Initial local-file signature classification and source metadata registration (deep metadata inspection and extraction pending).
-- [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search (OCR pending).
+- [x] Initial bounded local PDF text extraction with stable page-number records, content hashes and SQLite FTS5 page search.
+- [x] Optional local OCR adapter for image-only pages with pixel/time limits, word boxes, source-owned render assets and mandatory review before evidence acceptance.
+- [x] Initial deterministic PDF layout extraction for positioned paragraphs/headings, equation candidates, table candidates and embedded figure assets (classification remains heuristic).
 - [x] Unified source-bound evidence locator IDs for transcript intervals and PDF pages.
 - [x] Claim and textbook block evidence links support unified references, with review and publication gates spanning both locator types.
 - [ ] Authorized source adapters and metadata inspection.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [ ] Local audio transcription adapter.
 - [ ] Video scene/slide extraction and OCR.
+- [x] Document structure elements carry page/element citations, review state and same-source guards.
 - [x] Deterministic claim/evidence audit and uncertainty counters (initial slice).
 - [ ] Source-level topic coverage, semantic entailment and uncertainty analysis.
 
 ## Knowledge and publishing
 - [x] Initial provider-neutral knowledge-unit, claim and relationship persistence.
+- [x] Initial source-linked draft knowledge candidates from accepted document elements (semantic claim extraction remains pending).
 - [ ] Automated topic/concept discovery and claim extraction.
 - [x] Reviewed claim/evidence links with conservative publication gating.
 - [ ] Semantic relevance verifier and contradiction-scope analysis.
@@ -35,7 +39,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Page-native document topic hierarchy with reviewed unified evidence references and same-source guards.
 - [x] Versioned textbook/chapter/block persistence with per-block provenance and evidence links (initial deterministic storage slice).
 - [x] Deterministic video topic-to-chapter outline composition with accepted evidence-gated claim placement (initial slice).
-- [x] Deterministic document topic-to-chapter composition using shared accepted page citations.
+- [x] Deterministic document topic-to-chapter composition using shared accepted page/element citations, including reviewed native paragraphs, equations, tables and figure assets.
 - [x] Initial deterministic textbook publication readiness gate (structural/review rules only).
 - [ ] Semantic block validation, source coverage and pedagogical quality scoring.
 - [x] Initial audited PDF exporter (math typesetting and actual diagram/image rendering remain pending).
