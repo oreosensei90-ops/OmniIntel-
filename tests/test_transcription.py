@@ -228,3 +228,14 @@ def test_no_speech_does_not_create_an_empty_published_transcript(tmp_path: Path)
             "SELECT status FROM transcription_runs WHERE source_id=?",
             (imported.source_id,),
         ).fetchone()["status"] == "PARTIAL"
+
+def test_faster_whisper_requires_local_model_or_explicit_download_consent(tmp_path: Path) -> None:
+    from omniintel.transcription import FasterWhisperAdapter
+
+    audio = tmp_path / "chunk.wav"
+    _make_wav(audio,seconds=1)
+    adapter = FasterWhisperAdapter(model_id="base")
+    with pytest.raises(RuntimeError,match="explicit allow_model_download"):
+        adapter.transcribe_chunk(audio,language="en")
+    assert adapter.configuration["allow_model_download"] is False
+
