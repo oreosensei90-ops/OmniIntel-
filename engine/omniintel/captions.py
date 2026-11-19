@@ -8,11 +8,11 @@ from pathlib import Path
 from .models import TranscriptImport, TranscriptSegmentInput
 
 _TIMESTAMP = re.compile(
-    r"^(?:(?P<hours>\\d{1,2}):)?(?P<minutes>\\d{2}):"
-    r"(?P<seconds>\\d{2})[,.](?P<millis>\\d{1,3})$"
+    r"^(?:(?P<hours>\d{1,2}):)?(?P<minutes>\d{2}):"
+    r"(?P<seconds>\d{2})[,.](?P<millis>\d{1,3})$"
 )
 _TAGS = re.compile(r"<[^>]*>")
-_SPEAKER = re.compile(r"^<v(?:\\s+([^>]+))?>(.*)$", re.IGNORECASE | re.DOTALL)
+_SPEAKER = re.compile(r"^<v(?:\s+([^>]+))?>(.*)$", re.IGNORECASE | re.DOTALL)
 
 
 def _timestamp_ms(value: str) -> int:
@@ -39,8 +39,8 @@ def parse_caption_text(
     """Parse local SRT or WebVTT text; does not fetch URLs or execute markup."""
     if not isinstance(text, str):
         raise TypeError("Caption input must be text")
-    normalized = text.lstrip("\\ufeff").replace("\\r\\n", "\\n").replace("\\r", "\\n")
-    lines = normalized.split("\\n")
+    normalized = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
     is_vtt = bool(lines and lines[0].strip().startswith("WEBVTT"))
     if not is_vtt and not any("-->" in line for line in lines):
         raise ValueError("Input is neither recognizable WebVTT nor SubRip captions")
@@ -55,7 +55,6 @@ def parse_caption_text(
                 index += 1
             continue
         if "-->" not in line:
-            # Cue identifiers are permitted immediately before a timing line.
             if index + 1 < len(lines) and "-->" in lines[index + 1]:
                 index += 1
                 line = lines[index].strip()
@@ -64,10 +63,8 @@ def parse_caption_text(
                 continue
 
         timing = line.split("-->", 1)
-        start_token = timing[0].strip()
-        end_token = timing[1].strip().split()[0]
-        start_ms = _timestamp_ms(start_token)
-        end_ms = _timestamp_ms(end_token)
+        start_ms = _timestamp_ms(timing[0].strip())
+        end_ms = _timestamp_ms(timing[1].strip().split()[0])
         if end_ms <= start_ms:
             raise ValueError("Caption cue end must be later than its start")
         index += 1
@@ -82,7 +79,7 @@ def parse_caption_text(
             speaker_id = speaker_match.group(1)
             cue_text = speaker_match.group(2)
         cue_text = html.unescape(_TAGS.sub("", cue_text))
-        cue_text = re.sub(r"\\s+", " ", cue_text).strip()
+        cue_text = re.sub(r"\s+", " ", cue_text).strip()
         if cue_text:
             segments.append(TranscriptSegmentInput(
                 cue_text, start_ms, end_ms, language=language, speaker_id=speaker_id
@@ -96,7 +93,7 @@ def parse_caption_text(
         title=title,
         source_uri=source_uri,
         language=language,
-        duration_ms=duration_ms or inferred_duration,
+        duration_ms=duration_ms if duration_ms is not None else inferred_duration,
         segments=tuple(segments),
         metadata={"transcript_origin": "caption", "caption_format": "webvtt" if is_vtt else "srt"},
     )
