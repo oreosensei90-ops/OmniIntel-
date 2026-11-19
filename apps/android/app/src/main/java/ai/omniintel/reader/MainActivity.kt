@@ -82,27 +82,39 @@ class MainActivity : ComponentActivity() {
         val root = JSONObject(raw)
         val version = root.optJSONObject("version") ?: error("Missing textbook version.")
         val sourceTitles = mutableMapOf<String, String>()
-        val sources = root.optJSONArray("sources") ?: JSONArray()
+        val sources = root.optJSONArray("sources") ?: error("Missing course sources.")
+        require(sources.length() in 1..500) { "Reader export must contain between 1 and 500 sources." }
         for (i in 0 until sources.length()) {
-            val source = sources.optJSONObject(i) ?: continue
+            val source = sources.getJSONObject(i)
             sourceTitles[source.optString("source_id")] = source.optString("title", "Course source")
         }
         val rawChapters = root.optJSONArray("chapters") ?: error("Missing chapters.")
+        require(rawChapters.length() in 1..500) { "Reader export must contain between 1 and 500 chapters." }
         val seenBlockIds = mutableSetOf<String>()
-        val chapters = (0 until rawChapters.length()).mapNotNull { i ->
-            val entry = rawChapters.optJSONObject(i) ?: return@mapNotNull null
-            val chapter = entry.optJSONObject("chapter") ?: JSONObject()
-            val rawBlocks = entry.optJSONArray("blocks") ?: JSONArray()
-            val blocks = (0 until rawBlocks.length()).mapNotNull { j ->
-                val block = rawBlocks.optJSONObject(j) ?: return@mapNotNull null
+        var totalBlocks = 0
+        val chapters = (0 until rawChapters.length()).map { i ->
+            val entry = rawChapters.getJSONObject(i)
+            val chapter = entry.optJSONObject("chapter") ?: error("Chapter metadata is missing.")
+            val rawBlocks = entry.optJSONArray("blocks") ?: error("Chapter blocks are missing.")
+            totalBlocks += rawBlocks.length()
+            require(totalBlocks <= 25000) { "Reader export exceeds the 25,000 block safety limit." }
+            val blocks = (0 until rawBlocks.length()).map { j ->
+                val block = rawBlocks.getJSONObject(j)
                 val content = block.optJSONObject("content") ?: JSONObject()
-                val evidenceArray = block.optJSONArray("evidence") ?: JSONArray()
-                val evidence = (0 until evidenceArray.length()).mapNotNull { k ->
-                    val item = evidenceArray.optJSONObject(k) ?: return@mapNotNull null
+                val evidenceArray = block.optJSONArray("evidence") ?: error("Block evidence list is missing.")
+                require(evidenceArray.length() <= 100) { "A block exceeds the 100 evidence-reference safety limit." }
+                val evidence = (0 until evidenceArray.length()).map { k ->
+                    val item = evidenceArray.getJSONObject(k)
+                    require((item.optJSONArray("transcript_excerpt")?.length() ?: 0) <= 40) {
+                        "An evidence reference exceeds the transcript excerpt safety limit."
+                    }
+                    require((item.optJSONArray("document_elements")?.length() ?: 0) <= 100) {
+                        "An evidence reference exceeds the document element safety limit."
+                    }
                     val page = item.optJSONObject("document_page")
                     val excerpts = item.optJSONArray("transcript_excerpt") ?: JSONArray()
-                    val excerpt = (0 until excerpts.length()).mapNotNull { n ->
-                        excerpts.optJSONObject(n)?.optString("text")
+                    val excerpt = (0 until excerpts.length()).map { n ->
+                        excerpts.getJSONObject(n).optString("text")
                     }.joinToString(" ")
                     val sourceId = item.optString("source_id")
                     val pageNo = if (page == null || page.isNull("page_number")) null else page.optInt("page_number")
