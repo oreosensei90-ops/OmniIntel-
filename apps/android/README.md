@@ -1,6 +1,6 @@
 # OmniIntel Android — first native reader slice
 
-A native Kotlin + Jetpack Compose reader for local OmniIntel synchronized-reader JSON exports. It renders chapters, blocks, provenance, transcript excerpts and PDF page citations. Users can explicitly pair a course source with a local audio/video file and jump to source-local evidence timestamps; it never applies an unreviewed cross-source offset.
+A native Kotlin + Jetpack Compose reader for local OmniIntel synchronized-reader JSON exports. It renders chapters, blocks, provenance, transcript excerpts and PDF page citations, with cross-chapter search. Users can explicitly pair a course source with a local audio/video file and jump to source-local evidence timestamps; it never applies an unreviewed cross-source offset.
 
 ## Create a reader export
 
