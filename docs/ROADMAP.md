@@ -7,7 +7,8 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Stable ID and transcript domain foundation.
 - [x] SQLite migration ledger with checksum verification.
 - [x] Initial source/transcript/evidence persistence and knowledge schema migrations.
-- [ ] Asset repository, source adapters and richer evidence types.
+- [x] Initial content-addressed asset blob store and source-asset registry (local ingestion only; richer metadata/asset linking pending).
+- [ ] Authorized source adapters and richer evidence types.
 - [x] Persistent leased job queue with idempotency and bounded retries (initial slice; stage DAG/checkpoints remain pending).
 - [x] Initial cross-platform JSON Schema contracts and validation tests.
 
