@@ -209,6 +209,10 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                     val savedChapter = runCatching {
                         context.readerProgressStore.data.first()[progressKey]
                     }.getOrNull() ?: 0
+                    notesByBlock = emptyMap()
+                    bookmarkedBlocks = emptySet()
+                    editingBlockId = null
+                    noteDraft = ""
                     book = loadedBook
                     chapterIndex = savedChapter.coerceIn(0, loadedBook.chapters.lastIndex)
                     query = ""
