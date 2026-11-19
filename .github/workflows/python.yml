@@ -26,3 +26,6 @@ jobs:
       - run: ruff check engine tests
       - name: Check Web Reader JavaScript syntax
         run: node --check apps/web/app.js && node --check apps/web/service-worker.js
+
+      - name: Check deployment entrypoint shell syntax
+        run: bash -n deploy/start-service.sh

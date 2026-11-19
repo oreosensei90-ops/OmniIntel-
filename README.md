@@ -388,3 +388,17 @@ Deploy the Web Reader from `apps/web/` over HTTPS. Enter the API origin and bear
 Required server configuration: keep the database on persistent storage, use a strong unique API token, set exact Web origins in `OMNIINTEL_CORS_ORIGINS`, terminate TLS at a trusted reverse proxy, and restrict the API to trusted users. The API currently supports YouTube videos with retrievable public captions. If no supported public captions are available, the job fails with an explicit message; it does not silently download the video or bypass access controls. Authorized media upload and no-caption transcription are not yet wired into this hosted API. AI notes are drafts: evidence IDs are checked structurally, but semantic entailment and factual correctness still require human review.
 
 For a local smoke test, use `OMNIINTEL_API_TOKEN`, `OMNIINTEL_DATABASE`, run `omniintel-api` and `omniintel-worker` in separate terminals, and configure the Web app with `http://127.0.0.1:8000`.
+
+
+## Docker deployment
+
+The repository includes a single-container API + worker deployment for a self-hosted Docker host. It uses persistent Docker storage for the SQLite job queue, imported media and generated library. Copy `deploy/.env.example` to `.env`, replace the API token/provider key, and set the exact public Web origin:
+
+```bash
+cp deploy/.env.example .env
+# Edit .env and set real secrets and your Web origin.
+docker compose up --build -d
+docker compose logs -f omniintel
+```
+
+The container installs FFmpeg and the Python service/YouTube/ASR extras. To enable no-caption media uploads, place a compatible local CTranslate2 faster-whisper model at the configured `OMNIINTEL_ASR_MODEL_HOST_PATH` (default `./models/faster-whisper-small`). For example, with Hugging Face Hub installed, download `Systran/faster-whisper-small` into that directory. YouTube public-caption jobs do not require the ASR model. Keep the Docker volume persistent, terminate public traffic with HTTPS, and never commit the real `.env` file. This compose setup is self-hosted deployment scaffolding; no production host, API token or provider secret is supplied by the repository.

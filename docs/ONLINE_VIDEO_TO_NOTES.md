@@ -55,3 +55,8 @@ The job request accepts `url`, `approve_network`, `approve_ai`, optional `langua
 - A server and worker must actually be deployed and configured. The repository does not include a production API hostname or secrets.
 
 Never process content without appropriate rights and authorization. Public availability does not automatically grant download, reproduction or redistribution rights.
+
+
+## Docker deployment
+
+The root `Dockerfile`, `docker-compose.yml` and `deploy/start-service.sh` run the API and worker in one container, with a persistent named volume for the database/assets/uploads. Copy `deploy/.env.example` to `.env`, set a long random API token, a server-side OpenAI key, the exact Web origin and the ASR model host directory, then run `docker compose up --build -d`. The container installs FFmpeg and the ASR Python extra. The local CTranslate2 model directory must be supplied separately for upload transcription; public-caption YouTube jobs do not require it. Use HTTPS at a reverse proxy before exposing the API publicly.
