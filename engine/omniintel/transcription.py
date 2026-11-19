@@ -56,6 +56,7 @@ class FasterWhisperAdapter:
     device: str = "cpu"
     compute_type: str = "int8"
     cpu_threads: int = 4
+    allow_model_download: bool = False
     name: str = "faster-whisper"
     version: str = "1"
     _model: object | None = field(default=None,init=False,repr=False,compare=False)
@@ -66,6 +67,7 @@ class FasterWhisperAdapter:
             "device":self.device,
             "compute_type":self.compute_type,
             "cpu_threads":self.cpu_threads,
+            "allow_model_download":self.allow_model_download,
             "beam_size":5,
             "vad_filter":True,
             "word_timestamps":False,
@@ -80,6 +82,10 @@ class FasterWhisperAdapter:
     def transcribe_chunk(
         self, wav_path: Path, *, language: str | None
     ) -> ChunkTranscription:
+        if not Path(self.model_id).is_dir() and not self.allow_model_download:
+            raise RuntimeError(
+                "ASR model must be a local CTranslate2 directory; pass explicit allow_model_download=True to permit a model download"
+            )
         try:
             from faster_whisper import WhisperModel
         except ImportError as error:
