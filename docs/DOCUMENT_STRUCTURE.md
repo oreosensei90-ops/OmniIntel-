@@ -22,7 +22,7 @@ omniintel ocr-pdf ./omniintel.db ./omniintel-assets ASSET_ID
 omniintel structure-pdf ./omniintel.db ./omniintel-assets ASSET_ID
 omniintel search-document-elements ./omniintel.db "conservation momentum"
 omniintel list-document-elements ./omniintel.db
-omniintel review-document-element ./omniintel.db ELEMENT_ID ACCEPTED
+omniintel review-document-element ./omniintel.db ELEMENT_ID ACCEPTED --provenance DERIVED
 \`\`\`
 
 Each element stores its page citation ID, ordinal, normalized bounding box, parser/version,
