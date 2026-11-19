@@ -8,7 +8,7 @@ The product direction includes native Android and installable web applications, 
 
 ## Current implementation status
 
-The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Registered local audio/video assets can also be inspected with bounded, hash-verified ffprobe metadata probing. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Compressed audio/video decoding, native Android ASR, web apps, automated knowledge generation and general AI orchestration remain pending.
+The repository is an actively evolving foundation implementation. The feature branch currently includes deterministic transcript ingestion, SQLite persistence, knowledge/evidence records, reviewed topic maps, versioned textbook composition and a deterministic publication-readiness audit. Audited PDF, editable DOCX, self-contained HTML and portable Markdown export are implemented. Initial content-addressed source-asset storage and safe local-file source registration are implemented for supported PDF, text, image, audio and video file signatures. Local-file registration preserves original bytes and records provenance/rights as unverified. Bounded local PDF text extraction stores page-numbered records and indexes them with SQLite FTS5. Optional local OCR handles image-only pages with explicit human review; positioned document structure extraction identifies headings, paragraphs, equation candidates, tables and embedded figures. Registered local audio/video assets can also be inspected with bounded, hash-verified ffprobe metadata probing. Accepted elements can seed draft knowledge units and deterministic textbook chapters with element-level citations. OCR, layout and classification remain heuristic and do not constitute semantic claim extraction or mathematical validation. IMAGE/DIAGRAM textbook blocks can link source-owned image assets with database-enforced source/type/role checks and publication gating. Visual asset rendering in export formats remains pending. Initial local PCM WAV transcription with content-addressed chunk checkpoints and source-linked timestamp evidence is implemented through an optional faster-whisper adapter. Registered compressed audio/video can be decoded locally to a normalized PCM WAV derivative with its original stream offset preserved. Native Android ASR, web apps, video frame extraction, automated knowledge generation and general AI orchestration remain pending.
 
 ## Engineering principles
 
@@ -76,20 +76,22 @@ Inspect a registered local audio/video asset without decoding it, extracting aud
 ~~~bash
 omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4
 omniintel probe-media ./omniintel.db ./omniintel-assets ASSET_ID
+omniintel extract-audio ./omniintel.db ./omniintel-assets ASSET_ID
 ~~~
 
-Install FFmpeg tools so ffprobe is available on PATH. The probe verifies the content-addressed asset, records container/stream metadata and tool version, and reuses identical results. It does not extract audio or video frames. See docs/MEDIA_PROBING.md.
+Install FFmpeg tools so ffprobe and ffmpeg are available on PATH. The probe verifies the content-addressed asset and records container/stream metadata. extract-audio creates a content-addressed mono 16 kHz PCM WAV derivative and preserves the source stream start offset. Neither stage downloads media or uses network protocols. Video frame extraction remains pending. See docs/MEDIA_PROBING.md and docs/AUDIO_EXTRACTION.md.
 
 ## Local audio transcription (initial WAV adapter)
 
-Register a user-selected PCM WAV file, then transcribe it locally with a CTranslate2 model directory already on disk:
+Register a user-selected PCM WAV file, or extract one audio stream from a local video/audio source, then transcribe it with a CTranslate2 model directory already on disk:
 
 ~~~bash
-omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.wav --title "Lecture 01"
-omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en
+omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4 --title "Lecture 01"
+omniintel extract-audio ./omniintel.db ./omniintel-assets SOURCE_ASSET_ID
+omniintel transcribe-wav ./omniintel.db ./omniintel-assets SOURCE_ID OUTPUT_ASSET_ID --model /path/to/local-ct2-model --device cpu --compute-type int8 --threads 4 --language en --time-offset-ms 250
 ~~~
 
-Install the optional adapter with python -m pip install -e '.[asr]'. Model downloads are disabled by default; explicitly add --allow-model-download if you authorize faster-whisper to fetch a model by name. Completed chunks are checkpointed by audio content and configuration, so an interrupted run can resume without retranscribing completed chunks. Existing source transcripts are never silently overwritten. This first adapter accepts uncompressed PCM WAV only; compressed audio and video decoding, mobile-native ASR, word timestamps and diarization remain future work. See docs/AUDIO_TRANSCRIPTION.md.
+Install the optional adapter with python -m pip install -e '.[asr]'. Model downloads are disabled by default; explicitly add --allow-model-download if you authorize faster-whisper to fetch a model by name. Completed chunks are checkpointed by audio content and configuration, so an interrupted run can resume without retranscribing completed chunks. Existing source transcripts are never silently overwritten. The transcription adapter accepts normalized PCM WAV; local FFmpeg extraction now supplies that format for compressed media. VAD filtering is disabled by default to avoid dropping quiet lecture speech; enable it explicitly only when appropriate. Mobile-native ASR, word timestamps and diarization remain future work. See docs/AUDIO_EXTRACTION.md and docs/AUDIO_TRANSCRIPTION.md.
 
 ## Rights and source access
 
@@ -107,7 +109,7 @@ omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.pdf --title "L
 ```
 
 This records the source, detected media type, content hash and an asset reference. It does not
-extract PDF text, OCR, transcribe or decode media. The source rights status remains UNVERIFIED.
+extract PDF text, OCR, transcribe or decode media. Those are separate local stages; the source rights status remains UNVERIFIED.
 See `docs/LOCAL_FILE_INGESTION.md` for supported types and limitations.
 
 
