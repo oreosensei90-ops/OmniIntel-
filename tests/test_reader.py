@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from omniintel.alignment import AlignmentStore
+from omniintel.alignment import AlignmentStore, estimate_offset
 from omniintel.collections import CollectionStore
 from omniintel.course_textbook import CourseTextbookStore
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
@@ -28,10 +28,12 @@ def test_reader_uses_only_accepted_clock_alignment_and_persists_position(tmp_pat
     block=books.add_block(chapter,"PARAGRAPH",{"text":"A grounded paragraph"},provenance="SOURCE",review_status="ACCEPTED")
     link=books.link_evidence(block,b.evidence_ref_ids[0])
     books.review_evidence(link,"ACCEPTED")
-    estimate={"offset_ms":1200,"sample_interval_ms":100,"correlation":0.95,"runner_up_correlation":0.4}
+    signal_a=[0,1,0,0,2,0,0,1,0,0,3,0,0,1,0,0]
+    signal_b=[0,0,0,1,0,0,0,2,0,0,1,0,0,3,0,0]
+    estimate=estimate_offset(signal_a,signal_b,sample_interval_ms=100,max_lag_samples=4)
     alignment=AlignmentStore(db).propose(
         course,a.source_id,b.source_id,estimate,rationale="Measured shared audio envelope",
-        signal_a=[0,1,0,2,0,1,0,2],signal_b=[0,1,0,2,0,1,0,2],
+        signal_a=signal_a,signal_b=signal_b,
     )
     reader=SynchronizedReader(db)
     before=reader.open_version(version,anchor_source_id=a.source_id)
@@ -40,7 +42,7 @@ def test_reader_uses_only_accepted_clock_alignment_and_persists_position(tmp_pat
     AlignmentStore(db).review(alignment,"ACCEPTED")
     after=reader.open_version(version,anchor_source_id=a.source_id)
     ev=after["chapters"][0]["blocks"][0]["evidence"][0]
-    assert ev["course_time_ms"]==1200
+    assert ev["course_time_ms"]==-300
     assert ev["source"]["title"]=="Second recording"
     assert ev["transcript_excerpt"][0]["text"]=="Spoken words: Second recording"
     reader.save_position("session-1",version,anchor_source_id=a.source_id,
