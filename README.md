@@ -69,6 +69,17 @@ omniintel import-captions ./omniintel.db ./lecture.vtt --title "Lecture 01" --la
 
 The initial caption adapter preserves cue timestamps and optional WebVTT voice labels. It does not download media or fetch caption URLs. See `docs/CAPTION_INGESTION.md` for supported syntax and boundaries.
 
+## Local media metadata probing
+
+Inspect a registered local audio/video asset without decoding it, extracting audio/frames or contacting a remote service:
+
+~~~bash
+omniintel import-file ./omniintel.db ./omniintel-assets ./lecture.mp4
+omniintel probe-media ./omniintel.db ./omniintel-assets ASSET_ID
+~~~
+
+Install FFmpeg tools so ffprobe is available on PATH. The probe verifies the content-addressed asset, records container/stream metadata and tool version, and reuses identical results. It does not extract audio or video frames. See docs/MEDIA_PROBING.md.
+
 ## Local audio transcription (initial WAV adapter)
 
 Register a user-selected PCM WAV file, then transcribe it locally with a CTranslate2 model directory already on disk:
