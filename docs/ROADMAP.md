@@ -79,6 +79,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Initial Android Room-backed offline library catalog with persistable SAF document references, reopen/remove actions and local metadata.
 - [x] Normalize textbook chapters/blocks and annotations into Room; add database migrations, paragraph-level resume and library-wide on-device search (background media controls, full-text indexing at scale and optional cross-device sync remain pending).
 - [x] Web offline active-recall cards from existing definitions, exercises and flashcard blocks, with reveal/self-rating and browser-local progress.
+- [x] Web JSON backup/restore for local notes, bookmarks, study ratings and reading positions with bounded validation and timestamp-aware merge.
 - [ ] Native Android flashcards, adaptive practice scheduling and study planning.
 
 ## Intelligence and operations
