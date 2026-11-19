@@ -23,14 +23,15 @@ def create_knowledge_candidates_from_document_elements(
     *,
     accepted_elements_only: bool = True,
     max_elements: int = 10_000,
+    max_total_chars: int = 5_000_000,
 ) -> DocumentKnowledgeImport:
     """Create idempotent draft knowledge units from structured, source-linked PDF elements.
 
     This is a handoff into knowledge reconstruction, not automated claim extraction.
     Every unit retains its exact element/page citation and stays NEEDS_REVIEW.
     """
-    if not 1 <= max_elements <= 50_000:
-        raise ValueError("Knowledge candidate limit must be between 1 and 50000")
+    if not 1 <= max_elements <= 50_000 or max_total_chars <= 0:
+        raise ValueError("Knowledge candidate limits must be positive and bounded")
     with connect(database_path) as conn:
         rows = conn.execute(
             """SELECT de.id,de.element_type,de.text_content,de.content_json,
@@ -50,8 +51,6 @@ def create_knowledge_candidates_from_document_elements(
     skipped = len(rows) - len(accepted)
     selected = accepted if accepted_elements_only else list(rows)
 
-    store = KnowledgeStore(database_path)
-    ids: list[str] = []
     type_map = {
         "HEADING": "concept",
         "EQUATION": "formula",
@@ -61,6 +60,8 @@ def create_knowledge_candidates_from_document_elements(
         "CAPTION": "reference",
         "FIGURE": "reference",
     }
+    prepared = []
+    total_chars = 0
     for row in selected:
         content = json.loads(row["content_json"])
         body = row["text_content"].strip()
@@ -69,7 +70,15 @@ def create_knowledge_candidates_from_document_elements(
         title = row["text_content"].strip().splitlines()[0][:120] if row["text_content"].strip() else (
             f"{row['element_type'].title()} on page {row['page_number']}"
         )
+        total_chars += len(title) + len(body)
+        if total_chars > max_total_chars:
+            raise ValueError("Knowledge candidates exceed the configured total character limit")
         provenance = "UNCERTAIN" if row["provenance"] == "UNCERTAIN" else "DERIVED"
+        prepared.append((row,content,title,body,provenance))
+
+    store = KnowledgeStore(database_path)
+    ids: list[str] = []
+    for row,content,title,body,provenance in prepared:
         unit_id = store.create_unit(KnowledgeUnitInput(
             unit_type=type_map[row["element_type"]],
             title=title,
