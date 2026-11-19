@@ -35,6 +35,7 @@ def _fake_ffprobe(path: Path, *, version: str = "7.1", payload: dict | None = No
                 "height": 1080,
                 "avg_frame_rate": "30/1",
                 "duration": "125.125",
+                "start_time": "0.000",
             },
             {
                 "index": 1,
@@ -44,6 +45,7 @@ def _fake_ffprobe(path: Path, *, version: str = "7.1", payload: dict | None = No
                 "channels": 2,
                 "channel_layout": "stereo",
                 "duration": "125.000",
+                "start_time": "0.250",
             },
         ],
     }
@@ -92,6 +94,7 @@ def test_probe_persists_container_and_stream_metadata_and_reuses_result(
     assert first.streams[0].height == 1080
     assert first.streams[1].sample_rate == 48000
     assert first.streams[1].channels == 2
+    assert first.streams[1].start_ms == 250
     with sqlite3.connect(database) as conn:
         duration = conn.execute(
             "SELECT duration_ms FROM sources WHERE id=?", (source_id,)
