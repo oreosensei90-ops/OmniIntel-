@@ -43,6 +43,24 @@ def test_course_textbook_keeps_evidence_source_specific_and_auditable(tmp_path: 
         books.add_chapter(version,"Foreign source",ordinal=2,source_id="not-a-course-source")
     with pytest.raises(sqlite3.IntegrityError,match="chapter source"):
         books.link_evidence(block_a,second.evidence_ref_ids[0])
+    with pytest.raises(sqlite3.IntegrityError,match="chapter update"):
+        with connect(db) as conn:
+            conn.execute(
+                "UPDATE course_textbook_chapters SET source_id=? WHERE id=?",
+                (second.source_id,chapter_a),
+            )
+    with pytest.raises(sqlite3.IntegrityError,match="course textbook evidence"):
+        with connect(db) as conn:
+            conn.execute(
+                "UPDATE course_textbook_block_evidence SET evidence_ref_id=? WHERE id=?",
+                (second.evidence_ref_ids[0],link),
+            )
+    with pytest.raises(sqlite3.IntegrityError,match="collection source"):
+        with connect(db) as conn:
+            conn.execute(
+                "DELETE FROM collection_sources WHERE collection_id=? AND source_id=?",
+                (course,first.source_id),
+            )
 
 
 def test_course_textbook_blocks_unreviewed_and_uncertain_content(tmp_path: Path) -> None:
