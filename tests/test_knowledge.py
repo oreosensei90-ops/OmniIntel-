@@ -10,6 +10,7 @@ from omniintel.knowledge import (
     is_publishable_claim,
 )
 from omniintel.knowledge_store import KnowledgeStore
+from omniintel.knowledge_audit import KnowledgeAuditor
 from omniintel.models import TranscriptImport, TranscriptSegmentInput
 from omniintel.store import OmniIntelStore
 
@@ -84,3 +85,22 @@ def test_knowledge_unit_and_relationship_persist(tmp_path: Path):
 def test_knowledge_unit_cannot_claim_source_provenance():
     with pytest.raises(ValueError):
         KnowledgeUnitInput("concept", "X", "Y", "SOURCE").validate()
+
+
+
+def test_audit_reports_evidence_coverage_without_claiming_source_completeness(tmp_path: Path):
+    path, evidence_id = imported_evidence(tmp_path)
+    store = KnowledgeStore(path)
+    supported = store.create_claim(ClaimInput("Supported claim"))
+    link = store.link_evidence(
+        ClaimEvidenceInput(supported, evidence_id, "SUPPORTS", 0.95)
+    )
+    store.review_evidence_link(link, "ACCEPTED")
+    store.create_claim(ClaimInput("Unreviewed claim"))
+    report = KnowledgeAuditor(path).audit()
+    assert report.total_claims == 2
+    assert report.claims_with_accepted_support == 1
+    assert report.publishable_claims == 1
+    assert report.claims_without_evidence == 1
+    assert report.accepted_support_ratio == 0.5
+    assert "not source coverage" in report.to_dict()["ratio_note"]
