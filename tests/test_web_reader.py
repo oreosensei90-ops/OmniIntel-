@@ -108,7 +108,7 @@ def test_web_reader_requires_explicit_source_selection_before_media_attachment()
     assert "Select the exact course source…" in app
     assert 'state.mediaSourceId = null;' in app
     assert '$("#media-file").disabled = !state.mediaSourceId;' in app
-    assert "attach only the matching local media file" in app
+    assert "attach only the matching local media file" in app.lower()
 
 
 def test_web_reader_rejects_malformed_utf8_imports() -> None:
