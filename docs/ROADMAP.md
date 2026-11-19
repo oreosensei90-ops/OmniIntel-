@@ -8,11 +8,13 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] SQLite migration ledger with checksum verification.
 - [x] Initial source/transcript/evidence persistence and knowledge schema migrations.
 - [x] Initial content-addressed asset blob store, source-asset registry and source-safe IMAGE/DIAGRAM block links (local ingestion only; visual rendering pending).
+- [x] Initial local-file source registration with content-addressed byte preservation and explicit unverified-rights metadata (content extraction pending).
 - [ ] Authorized source adapters and richer evidence types.
 - [x] Persistent leased job queue with idempotency and bounded retries (initial slice; stage DAG/checkpoints remain pending).
 - [x] Initial cross-platform JSON Schema contracts and validation tests.
 
 ## Source and evidence intelligence
+- [x] Initial local-file signature classification and source metadata registration (deep metadata inspection and extraction pending).
 - [ ] Authorized source adapters and metadata inspection.
 - [x] Initial local SRT/WebVTT caption ingestion with timestamp preservation (additional formats and semantic alignment pending).
 - [ ] Local audio transcription adapter.
