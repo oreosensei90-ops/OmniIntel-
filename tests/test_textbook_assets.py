@@ -1,4 +1,5 @@
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -65,9 +66,9 @@ def test_visual_asset_link_rejects_cross_source_and_non_image_assets(tmp_path: P
     assets = AssetStore(db, tmp_path / "assets")
     foreign = assets.add_bytes(source_b, PNG, role="FRAME")
     audio = assets.add_bytes(source_a, MP3, role="AUDIO")
-    with pytest.raises(Exception, match="same source"):
+    with pytest.raises(sqlite3.IntegrityError, match="same source"):
         store.link_asset(block, foreign.id)
-    with pytest.raises(Exception, match="compatible image"):
+    with pytest.raises(sqlite3.IntegrityError, match="compatible image"):
         store.link_asset(block, audio.id)
 
 
@@ -94,5 +95,5 @@ def test_visual_asset_ordinals_are_unique_per_block(tmp_path: Path) -> None:
     first = assets.add_bytes(source, PNG, role="FRAME")
     second = assets.add_bytes(source, PNG + b"2", role="SLIDE")
     store.link_asset(block, first.id, ordinal=0)
-    with pytest.raises(Exception, match="UNIQUE"):
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
         store.link_asset(block, second.id, ordinal=0)
