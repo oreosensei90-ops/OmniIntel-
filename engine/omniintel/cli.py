@@ -57,7 +57,8 @@ def main() -> None:
     transcribe_wav.add_argument("asset_dir", type=Path)
     transcribe_wav.add_argument("source_id")
     transcribe_wav.add_argument("asset_id")
-    transcribe_wav.add_argument("--model", default="base")
+    transcribe_wav.add_argument("--model", required=True, help="Local CTranslate2 model directory, or model name with --allow-model-download")
+    transcribe_wav.add_argument("--allow-model-download", action="store_true", help="Explicitly permit faster-whisper to download the selected model")
     transcribe_wav.add_argument("--device", default="cpu")
     transcribe_wav.add_argument("--compute-type", default="int8")
     transcribe_wav.add_argument("--threads", type=int, default=4)
@@ -196,6 +197,7 @@ def main() -> None:
         adapter = FasterWhisperAdapter(
             model_id=args.model,device=args.device,
             compute_type=args.compute_type,cpu_threads=args.threads,
+            allow_model_download=args.allow_model_download,
         )
         result = run_wav_transcription(
             args.database,args.asset_dir,args.source_id,args.asset_id,adapter,
