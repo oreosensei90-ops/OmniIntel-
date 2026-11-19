@@ -23,6 +23,7 @@ Open `http://localhost:8080` and choose `course-reader.json`. The service worker
 - Explicit local audio/video attachment per selected course source; timestamp jumps are enabled only for the exact attached source and never apply unreviewed cross-source offsets.
 - Transcript excerpts, PDF page text and positioned document elements with confidence/review state when present in the reader payload.
 - Local IndexedDB notes and bookmarks per textbook block.
+- Offline active-recall study cards built from existing definition, exercise and flashcard blocks; reveal answers and mark cards known or needing review, with per-browser progress.
 - Per-block personal notes and bookmarks stored in IndexedDB on this browser only; no remote sync.
 - Responsive desktop/mobile layout and reduced-motion support.
 - Offline shell caching; no external fonts, scripts, analytics, APIs or network calls.
