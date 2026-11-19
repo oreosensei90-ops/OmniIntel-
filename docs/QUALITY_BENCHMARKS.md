@@ -24,7 +24,7 @@ Example case:
 ]
 ```
 
-Metrics include normalized WER/CER, OCR CER, positional timestamp-boundary MAE, evidence-ID precision/recall/F1, section-ID coverage and alignment absolute offset error. Empty references and empty sets have explicitly deterministic conventions; review those conventions before comparing suites.
+Metrics include normalized WER/CER, OCR CER, positional timestamp-boundary MAE plus unmatched-segment counts, evidence-ID precision/recall/F1, section-ID coverage and alignment absolute offset error. Empty references and empty sets have explicitly deterministic conventions; review those conventions before comparing suites.
 
 Run and persist a report:
 
