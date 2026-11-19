@@ -172,3 +172,20 @@ def test_uncertain_topic_never_becomes_accepted(tmp_path: Path):
         TopicEvidenceInput(topic_id, evidence_id, "INTRODUCES")
     )
     assert topics.review_link(link, "ACCEPTED") == "NEEDS_REVIEW"
+
+
+
+def test_topic_evidence_must_overlap_topic_time_range(tmp_path: Path):
+    path, evidence_id = imported_evidence(tmp_path)
+    with sqlite3.connect(path) as conn:
+        source_id = conn.execute(
+            "SELECT source_id FROM evidence_items WHERE id=?", (evidence_id,)
+        ).fetchone()[0]
+    topics = TopicStore(path)
+    topic_id = topics.create_topic(
+        TopicInput(source_id, "Unrelated time window", 2_000, 3_000, 0)
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        topics.link_evidence(
+            TopicEvidenceInput(topic_id, evidence_id, "DEVELOPS")
+        )
