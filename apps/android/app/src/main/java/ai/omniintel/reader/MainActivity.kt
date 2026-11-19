@@ -315,6 +315,16 @@ private fun ReaderScreen(open: (Uri, (Result<Book>) -> Unit) -> Unit) {
                                     controller.setAnchorView(view)
                                     view.setMediaController(controller)
                                 }
+                                view.setOnPreparedListener {
+                                    mediaStatus = "Video ready · selected source only."
+                                }
+                                view.setOnErrorListener { _, what, extra ->
+                                    mediaStatus = "The selected video could not be played (error $what/$extra)."
+                                    true
+                                }
+                                view.setOnCompletionListener {
+                                    mediaStatus = "Video playback complete."
+                                }
                                 view.setVideoURI(attachedUri)
                                 videoView = view
                             }
