@@ -115,3 +115,9 @@ def test_web_reader_rejects_malformed_utf8_imports() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     assert 'new TextDecoder("utf-8", { fatal: true })' in app
     assert "file.arrayBuffer()" in app
+
+
+def test_personal_note_keys_include_textbook_version_and_chapter_scope() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "const chapterId = state.chapters[state.index]?.chapter?.id" in app
+    assert 'return versionId + ":" + chapterId + ":"' in app
