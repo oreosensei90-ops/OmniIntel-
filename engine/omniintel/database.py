@@ -411,7 +411,31 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
             ) THEN RAISE(ABORT,'block hierarchy cannot contain a cycle') END;
         END;
         """
-    ),
+    ),,
+    (
+        "0009_content_addressed_assets",
+        """
+        CREATE TABLE asset_blobs (
+            sha256 TEXT PRIMARY KEY CHECK(length(sha256)=64 AND sha256 NOT GLOB '*[^0-9a-f]*'),
+            media_type TEXT NOT NULL CHECK(length(trim(media_type)) > 0),
+            byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+            storage_key TEXT NOT NULL UNIQUE CHECK(length(trim(storage_key)) > 0),
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE source_assets (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            blob_sha256 TEXT NOT NULL REFERENCES asset_blobs(sha256) ON DELETE RESTRICT,
+            role TEXT NOT NULL CHECK(role IN (
+                'THUMBNAIL','FRAME','SLIDE','AUDIO','VIDEO','DOCUMENT','DIAGRAM','ATTACHMENT'
+            )),
+            display_name TEXT NOT NULL CHECK(length(trim(display_name)) > 0),
+            created_at TEXT NOT NULL,
+            UNIQUE(source_id,blob_sha256,role)
+        );
+        CREATE INDEX idx_source_assets_source ON source_assets(source_id,role,created_at);
+        """
+    )
 )
  
 class MigrationError(RuntimeError):
