@@ -45,9 +45,17 @@ jobs:
       - run: npm run typecheck
       - name: Apply D1 migrations
         run: npx wrangler d1 migrations apply omniintel-db --remote
-      - name: Sync worker API token
+      - name: Deploy Worker with synchronized API token
         run: |
+          set -euo pipefail
           test -n "$OMNIINTEL_API_TOKEN"
-          printf '%s' "$OMNIINTEL_API_TOKEN" | npx wrangler secret put OMNIINTEL_API_TOKEN
-      - name: Deploy Worker
-        run: npx wrangler deploy --var "CORS_ORIGIN:${WEB_ORIGIN}"
+          secret_file="$(mktemp)"
+          trap 'rm -f "$secret_file"' EXIT
+          node -e '
+            require("node:fs").writeFileSync(
+              process.argv[1],
+              JSON.stringify({ OMNIINTEL_API_TOKEN: process.env.OMNIINTEL_API_TOKEN }),
+              { mode: 0o600 }
+            );
+          ' "$secret_file"
+          npx wrangler deploy --var "CORS_ORIGIN:${WEB_ORIGIN}" --secrets-file "$secret_file"
