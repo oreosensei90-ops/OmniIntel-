@@ -18,6 +18,22 @@ from .jobs import IdempotencyConflict, JobQueue
 from .youtube_pipeline import normalize_youtube_url
 
 
+def _ai_provider_configured() -> bool:
+    provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "openai").strip().lower()
+    if provider == "openai":
+        return bool(os.environ.get("OMNIINTEL_OPENAI_API_KEY"))
+    if provider == "ollama":
+        # Reachability is checked by the worker; no cloud fallback is attempted.
+        return True
+    if provider == "freelm":
+        return any(os.environ.get(name) for name in (
+            "GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY",
+            "MISTRAL_API_KEY", "NVIDIA_API_KEY", "COHERE_API_KEY", "KILO_API_KEY",
+            "ZAI_API_KEY", "CEREBRAS_API_KEY",
+        )) or bool(os.environ.get("CLOUDFLARE_API_TOKEN") and os.environ.get("CLOUDFLARE_ACCOUNT_ID"))
+    return False
+
+
 class YouTubeJobRequest(BaseModel):
     url: str = Field(min_length=8, max_length=2048)
     approve_network: bool = False
@@ -82,11 +98,8 @@ def create_app(
             canonical_url, video_id = normalize_youtube_url(body.url)
         except (TypeError, ValueError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
-        if body.approve_ai and not os.environ.get("OMNIINTEL_OPENAI_API_KEY"):
-            raise HTTPException(
-                status_code=503,
-                detail="External AI generation is not configured on this server.",
-            )
+        if body.approve_ai and not _ai_provider_configured():
+            raise HTTPException(status_code=503, detail="The explicitly selected AI provider is not configured.")
         payload = {
             "url": canonical_url,
             "video_id": video_id,
@@ -126,11 +139,8 @@ def create_app(
             raise HTTPException(status_code=415, detail="Upload an audio or video file.")
         if not 1 <= chapter_minutes <= 30:
             raise HTTPException(status_code=422, detail="chapter_minutes must be between 1 and 30.")
-        if approve_ai and not os.environ.get("OMNIINTEL_OPENAI_API_KEY"):
-            raise HTTPException(
-                status_code=503,
-                detail="External AI generation is not configured on this server.",
-            )
+        if approve_ai and not _ai_provider_configured():
+            raise HTTPException(status_code=503, detail="The explicitly selected AI provider is not configured.")
         upload_dir = Path(os.environ.get("OMNIINTEL_UPLOAD_DIR", str(db_path.parent / "uploads")))
         upload_dir.mkdir(parents=True, exist_ok=True)
         original_name = Path(file.filename or "uploaded-media").name[:255]

@@ -134,3 +134,15 @@ def test_process_claimed_job_rejects_bad_reader_before_remote_completion(tmp_pat
             job, database=tmp_path / "bridge.db", origin="https://worker.example",
             token="secret", upload_dir=tmp_path / "uploads", asset_dir=tmp_path / "assets",
         )
+
+
+def test_download_input_rejects_untrusted_host_before_network(tmp_path):
+    import omniintel.cloud_worker_bridge as bridge
+    with pytest.raises(BridgeError, match="untrusted B2"):
+        bridge._download_input("https://attacker.example/object?signature=x", tmp_path / "x.bin")
+
+
+def test_download_input_rejects_nonstandard_port(tmp_path):
+    import omniintel.cloud_worker_bridge as bridge
+    with pytest.raises(BridgeError, match="untrusted B2"):
+        bridge._download_input("https://s3.us-east-005.backblazeb2.com:8443/object", tmp_path / "x.bin")

@@ -3,6 +3,7 @@ import { AwsClient } from "aws4fetch";
 interface Env {
   DB: D1Database;
   OMNIINTEL_API_TOKEN: string;
+  OMNIINTEL_WORKER_TOKEN: string;
   B2_KEY_ID: string;
   B2_APPLICATION_KEY: string;
   B2_BUCKET_NAME: string;
@@ -43,22 +44,26 @@ async function signedDownload(env: Env, key: string) {
   const signed = await client.sign(url, { method: "GET", aws: { signQuery: true } });
   return signed.url;
 }
-function authorized(request: Request, env: Env) {
+async function authorized(
+  request: Request,
+  expectedToken: string | undefined,
+): Promise<boolean> {
   const supplied = request.headers.get("authorization") || "";
-  return !!env.OMNIINTEL_API_TOKEN && supplied.startsWith("Bearer ") &&
-    supplied.slice(7).length === env.OMNIINTEL_API_TOKEN.length &&
-    crypto.subtle.digest("SHA-256", new TextEncoder().encode(supplied.slice(7)))
-      .then(async (digest) => {
-        const expected = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(env.OMNIINTEL_API_TOKEN));
-        const left = new Uint8Array(digest);
-        const right = new Uint8Array(expected);
-        let difference = 0;
-        for (let i = 0; i < left.length; i++) difference |= left[i] ^ right[i];
-        return difference === 0;
-      });
-}
-async function requireAuth(request: Request, env: Env) {
-  return await authorized(request, env);
+  if (!expectedToken || !supplied.startsWith("Bearer ")) return false;
+
+  const candidate = supplied.slice(7);
+  if (!candidate || candidate.length !== expectedToken.length) return false;
+
+  const [actual, expected] = await Promise.all([
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(candidate)),
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(expectedToken)),
+  ]);
+
+  const left = new Uint8Array(actual);
+  const right = new Uint8Array(expected);
+  let difference = 0;
+  for (let i = 0; i < left.length; i++) difference |= left[i] ^ right[i];
+  return difference === 0;
 }
 async function readJson(request: Request, limit = 1024 * 1024): Promise<any> {
   const length = Number(request.headers.get("content-length") || "0");
@@ -120,6 +125,7 @@ async function finalizeUpload(env: Env, jobId: string) {
 async function claimJob(env: Env) {
   const timestamp = now();
   await env.DB.prepare("UPDATE jobs SET state='FAILED', last_error=COALESCE(last_error,'Worker lease expired after final attempt'), lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE state='RUNNING' AND lease_expires_at < ? AND attempt_count >= max_attempts").bind(timestamp, timestamp).run();
+  await env.DB.prepare("UPDATE jobs SET state='QUEUED', available_at=? + MIN(900, 30 * (1 << MIN(attempt_count, 5))), lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE state='RUNNING' AND lease_expires_at < ? AND attempt_count < max_attempts").bind(timestamp, timestamp, timestamp).run();
   const leaseToken = id();
   const row = await env.DB.prepare(`
     UPDATE jobs
@@ -127,7 +133,7 @@ async function claimJob(env: Env) {
         lease_token = ?, lease_expires_at = ?, updated_at = ?
     WHERE id = (
       SELECT id FROM jobs
-      WHERE (state = 'QUEUED' OR (state = 'RUNNING' AND lease_expires_at < ?))
+      WHERE state = 'QUEUED' AND available_at <= ?
         AND attempt_count < max_attempts AND input_uploaded = 1
       ORDER BY created_at ASC LIMIT 1
     )
@@ -156,7 +162,22 @@ async function completeJob(request: Request, env: Env, jobId: string) {
   const result = await env.DB.prepare(
     "UPDATE jobs SET state='COMPLETED', result_key=?, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=? AND state='RUNNING' AND lease_token=? AND lease_expires_at > ?"
   ).bind(key, now(), jobId, body.lease_token, now()).run();
-  if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
+  if (!result.meta.changes) {
+    // The lease may expire while the artifact is being uploaded.
+    // This key is lease-specific, so deleting it cannot remove another
+    // worker's successful artifact.
+    try {
+      const cleanup = await b2(env).fetch(objectUrl(env, key), {
+        method: "DELETE",
+      });
+      if (!cleanup.ok && cleanup.status !== 404) {
+        console.error("Unable to clean up stale reader artifact", cleanup.status);
+      }
+    } catch (cleanupError) {
+      console.error("Unable to clean up stale reader artifact", cleanupError);
+    }
+    return json({ error: "Lease lost or job is no longer running" }, 409);
+  }
   return json({ job_id: jobId, status: "COMPLETED", result_key: key });
 }
 
@@ -177,9 +198,10 @@ async function failJob(request: Request, env: Env, jobId: string) {
   const timestamp = now();
   const result = await env.DB.prepare(`
     UPDATE jobs SET state=CASE WHEN attempt_count < max_attempts THEN 'QUEUED' ELSE 'FAILED' END,
+      available_at=CASE WHEN attempt_count < max_attempts THEN ? + MIN(900, 30 * (1 << MIN(attempt_count, 5))) ELSE 0 END,
       last_error=?, lease_token=NULL, lease_expires_at=NULL, updated_at=?
     WHERE id=? AND state='RUNNING' AND lease_token=? AND lease_expires_at > ?
-  `).bind(error, timestamp, jobId, body.lease_token, timestamp).run();
+  `).bind(timestamp, error, timestamp, jobId, body.lease_token, timestamp).run();
   if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
   return json({ job_id: jobId, status: "REQUEUED_OR_FAILED" });
 }
@@ -212,7 +234,15 @@ export default {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), request, env);
     if (request.method === "GET" && url.pathname === "/health") return withCors(json({ status: "ok", service: "omniintel-api" }), request, env);
-    if (!(await requireAuth(request, env))) return withCors(json({ error: "A valid bearer token is required" }, 401), request, env);
+    const workerOnly =
+      url.pathname === "/v1/worker/claim" ||
+      url.pathname.startsWith("/v1/worker/");
+    const requiredToken = workerOnly
+      ? env.OMNIINTEL_WORKER_TOKEN
+      : env.OMNIINTEL_API_TOKEN;
+    if (!(await authorized(request, requiredToken))) {
+      return withCors(json({ error: "A valid bearer token is required" }, 401), request, env);
+    }
     try {
       if (request.method === "POST" && url.pathname === "/v1/jobs") return withCors(await createJob(request, env), request, env);
       if (request.method === "POST" && url.pathname === "/v1/youtube/jobs") {

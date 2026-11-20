@@ -64,12 +64,21 @@ def _request_json(origin: str, token: str, path: str, *, method: str = "GET",
 
 def _download_input(url: str, destination: Path, *, max_bytes: int = _MAX_UPLOAD) -> int:
     parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise BridgeError("Worker supplied an invalid B2 download URL.")
+    allowed_hosts = {x.strip().lower() for x in os.environ.get(
+        "OMNIINTEL_B2_DOWNLOAD_HOSTS", "s3.us-east-005.backblazeb2.com"
+    ).split(",") if x.strip()}
+    if (parsed.scheme != "https" or not parsed.hostname
+            or parsed.hostname.lower() not in allowed_hosts
+            or parsed.username or parsed.password or parsed.port not in (None, 443)):
+        raise BridgeError("Worker supplied an untrusted B2 download URL.")
     request = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     total = 0
     try:
-        with urllib.request.urlopen(request, timeout=120) as response, destination.open("xb") as output:
+        with opener.open(request, timeout=120) as response, destination.open("xb") as output:
             declared = response.headers.get("Content-Length")
             if declared and int(declared) > max_bytes:
                 raise BridgeError("Uploaded media exceeds the 250 MiB processing limit.")
@@ -205,12 +214,12 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
             os.environ["OMNIINTEL_ASSET_DIR"] = old_asset
 
 
-def run_bridge_once(*, api_base: str, api_token: str, database: Path,
+def run_bridge_once(*, api_base: str, worker_token: str, database: Path,
                     upload_dir: Path, asset_dir: Path) -> bool:
     origin = _api_origin(api_base)
-    if not api_token:
-        raise ValueError("Set OMNIINTEL_API_TOKEN before starting the bridge.")
-    claimed = _request_json(origin, api_token, "/v1/worker/claim", method="POST", body={})
+    if not worker_token:
+        raise ValueError("Set OMNIINTEL_WORKER_TOKEN before starting the bridge.")
+    claimed = _request_json(origin, worker_token, "/v1/worker/claim", method="POST", body={})
     job = claimed.get("job")
     if job is None:
         return False
@@ -218,13 +227,13 @@ def run_bridge_once(*, api_base: str, api_token: str, database: Path,
     heartbeat_errors: list[BaseException] = []
     thread = threading.Thread(
         target=_heartbeat_loop,
-        args=(origin, api_token, str(job["job_id"]), str(job["lease_token"]),
+        args=(origin, worker_token, str(job["job_id"]), str(job["lease_token"]),
               stop, heartbeat_errors),
         daemon=True,
     )
     thread.start()
     try:
-        process_claimed_job(job, database=database, origin=origin, token=api_token,
+        process_claimed_job(job, database=database, origin=origin, token=worker_token,
                             upload_dir=upload_dir, asset_dir=asset_dir)
         if heartbeat_errors:
             raise BridgeError(f"Remote job lease heartbeat failed: {heartbeat_errors[0]}")
@@ -232,7 +241,7 @@ def run_bridge_once(*, api_base: str, api_token: str, database: Path,
         failure = f"{type(error).__name__}: {error}"[:1900]
         try:
             _request_json(
-                origin, api_token, f"/v1/worker/jobs/{job['job_id']}/fail",
+                origin, worker_token, f"/v1/worker/jobs/{job['job_id']}/fail",
                 method="POST", body={"lease_token": job["lease_token"],
                                      "error": failure},
             )
@@ -260,11 +269,11 @@ def main() -> None:
         parser.error("Provide --api or set OMNIINTEL_WORKER_API.")
     if not 0.5 <= args.poll_seconds <= 60:
         parser.error("--poll-seconds must be between 0.5 and 60.")
-    token = os.environ.get("OMNIINTEL_API_TOKEN", "")
+    token = os.environ.get("OMNIINTEL_WORKER_TOKEN", "")
     if not token:
-        parser.error("Set OMNIINTEL_API_TOKEN in the environment.")
+        parser.error("Set OMNIINTEL_WORKER_TOKEN in the environment.")
     while True:
-        worked = run_bridge_once(api_base=args.api, api_token=token, database=args.database,
+        worked = run_bridge_once(api_base=args.api, worker_token=token, database=args.database,
                                  upload_dir=args.upload_dir, asset_dir=args.asset_dir)
         if args.once:
             break

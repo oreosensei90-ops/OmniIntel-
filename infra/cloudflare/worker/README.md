@@ -18,6 +18,7 @@ Set secrets interactively; never commit their values:
 ```sh
 cd infra/cloudflare/worker
 npx wrangler secret put OMNIINTEL_API_TOKEN
+npx wrangler secret put OMNIINTEL_WORKER_TOKEN
 npx wrangler secret put B2_KEY_ID
 npx wrangler secret put B2_APPLICATION_KEY
 ```
@@ -59,7 +60,7 @@ architecture work.
 
 ## API contract
 
-All routes except `GET /health` require `Authorization: Bearer <OMNIINTEL_API_TOKEN>`.
+`GET /health` is public. Client routes require `Authorization: Bearer <OMNIINTEL_API_TOKEN>`. The `/v1/worker/*` routes require the separate `Authorization: Bearer <OMNIINTEL_WORKER_TOKEN>`.
 
 - `POST /v1/youtube/jobs`: JSON containing `url`, `approve_network: true`,
   `approve_ai`, optional `language` and `chapter_minutes`.
@@ -98,13 +99,13 @@ For uploaded audio/video, also install FFmpeg and the optional ASR dependency, t
 local faster-whisper/CTranslate2 model directory. The model files are not downloaded
 automatically by the bridge.
 
-Set the same API bearer token that was configured as the Worker secret. Set the AI provider key
+Set the worker bearer token configured as the separate `OMNIINTEL_WORKER_TOKEN` Worker secret. Do not use the public API token for the local processing agent. Set the AI provider key
 locally only if users explicitly approve AI generation and the existing engine is configured to
 use it. The key stays on the processing machine; it is never sent to D1 or B2.
 
 ```sh
 export OMNIINTEL_WORKER_API="https://<your-worker-subdomain>.workers.dev"
-export OMNIINTEL_API_TOKEN="<same-token-as-worker-secret>"
+export OMNIINTEL_WORKER_TOKEN="<worker-only-secret>"
 export OMNIINTEL_DATABASE="$HOME/omniintel/omniintel.db"
 export OMNIINTEL_ASR_MODEL_PATH="$HOME/models/faster-whisper-small"
 # Optional, only when approved AI generation is enabled:

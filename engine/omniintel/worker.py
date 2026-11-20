@@ -11,7 +11,7 @@ from .jobs import JobQueue, LeaseLost
 from .audio_extract import extract_audio
 from .local_files import import_local_file
 from .transcription import FasterWhisperAdapter, run_wav_transcription
-from .remote_generation import generate_openai_study_json
+from .generation_providers import resolve_study_generator
 from .study_generation import generate_study_guide
 from .youtube_pipeline import compose_registered_source, process_youtube_video
 
@@ -76,16 +76,27 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             "ai_generation": "NOT_REQUESTED",
         }
         if payload.get("approve_ai") is True:
-            model = os.environ.get("OMNIINTEL_OPENAI_MODEL", "gpt-4.1-mini")
+            provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "openai").strip().lower()
+            default_model = (
+                os.environ.get("OMNIINTEL_OLLAMA_MODEL", "llama3.1")
+                if provider == "ollama"
+                else os.environ.get("OMNIINTEL_FREE_LLM_MODEL", "chat:fast")
+                if provider == "freelm"
+                else os.environ.get("OMNIINTEL_OPENAI_MODEL", "gpt-4.1-mini")
+            )
+            model = os.environ.get("OMNIINTEL_AI_MODEL", default_model)
+            generator = resolve_study_generator(provider)
             study_reader = generate_study_guide(
                 database_path,
                 transcript_reader["source"]["id"],
                 model=model,
                 approve_local_model=True,
-                generator=generate_openai_study_json,
+                generator=generator,
             )
-            study_reader["pipeline"]["provider"] = "openai-api"
-            study_reader["pipeline"]["network_access"] = "external-user-approved"
+            study_reader["pipeline"]["provider"] = provider
+            study_reader["pipeline"]["network_access"] = (
+                "loopback-only" if provider == "ollama" else "external-user-approved"
+            )
             result["reader"] = study_reader
             result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
         queue.complete(job["id"], job["lease_token"], result)

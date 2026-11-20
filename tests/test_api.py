@@ -94,3 +94,21 @@ def test_media_upload_rejects_non_media_content_type(tmp_path):
         files={"file": ("notes.txt", b"hello", "text/plain")},
     )
     assert response.status_code == 415
+
+
+def test_ai_provider_ollama_does_not_require_cloud_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIINTEL_AI_PROVIDER", "ollama")
+    monkeypatch.delenv("OMNIINTEL_OPENAI_API_KEY", raising=False)
+    client = TestClient(create_app(tmp_path / "api.db", api_token="test-secret"))
+    response = client.post("/v1/youtube/jobs", headers={"Authorization": "Bearer test-secret"},
+        json={"url": "https://youtu.be/abcdefghijk", "approve_network": True, "approve_ai": True})
+    assert response.status_code == 202
+
+
+def test_unknown_ai_provider_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIINTEL_AI_PROVIDER", "unknown-provider")
+    monkeypatch.setenv("OMNIINTEL_OPENAI_API_KEY", "configured")
+    client = TestClient(create_app(tmp_path / "api.db", api_token="test-secret"))
+    response = client.post("/v1/youtube/jobs", headers={"Authorization": "Bearer test-secret"},
+        json={"url": "https://youtu.be/abcdefghijk", "approve_network": True, "approve_ai": True})
+    assert response.status_code == 503
