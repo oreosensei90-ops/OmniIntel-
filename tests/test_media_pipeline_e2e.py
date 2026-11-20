@@ -23,7 +23,7 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
     asset_root = tmp_path / "assets"
     upload_root.mkdir()
     upload = upload_root / "physics-lecture.mp4"
-    upload.write_bytes(b"\\x00\\x00\\x00\\x18ftypisom" + b"synthetic-video-fixture")
+    upload.write_bytes(bytes([0, 0, 0, 24]) + b"ftypisom" + b"synthetic-video-fixture")
 
     probe_payload = {
         "format": {"format_name": "mp4", "duration": "8.000", "size": str(upload.stat().st_size)},
@@ -41,21 +41,21 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
     }
     ffprobe = _write_executable(
         tmp_path / "ffprobe",
-        "#!/usr/bin/env python3\\n"
-        "import json, sys\\n"
-        "if '-version' in sys.argv: print('ffprobe version 7.1')\\n"
-        f"else: print({json.dumps(probe_payload)!r})\\n",
+        "#!/usr/bin/env python3\n"
+        "import json, sys\n"
+        "if '-version' in sys.argv: print('ffprobe version 7.1')\n"
+        f"else: print({json.dumps(probe_payload)!r})\n",
     )
     ffmpeg = _write_executable(
         tmp_path / "ffmpeg",
-        "#!/usr/bin/env python3\\n"
-        "import pathlib, sys, wave\\n"
-        "if '-version' in sys.argv: print('ffmpeg version 7.1')\\n"
-        "else:\\n"
-        " output = pathlib.Path(sys.argv[-1])\\n"
-        " with wave.open(str(output), 'wb') as audio:\\n"
-        "  audio.setnchannels(1); audio.setsampwidth(2); audio.setframerate(16000)\\n"
-        "  audio.writeframes(bytes(2) * 16000 * 8)\\n",
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys, wave\n"
+        "if '-version' in sys.argv: print('ffmpeg version 7.1')\n"
+        "else:\n"
+        " output = pathlib.Path(sys.argv[-1])\n"
+        " with wave.open(str(output), 'wb') as audio:\n"
+        "  audio.setnchannels(1); audio.setsampwidth(2); audio.setframerate(16000)\n"
+        "  audio.writeframes(bytes(2) * 16000 * 8)\n",
     )
     monkeypatch.setattr(
         "omniintel.media_probe.shutil.which",
