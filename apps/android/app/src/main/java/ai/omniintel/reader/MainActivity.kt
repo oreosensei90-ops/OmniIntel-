@@ -263,6 +263,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var onlineBusy by remember { mutableStateOf(false) }
     var uploadUri by remember { mutableStateOf<Uri?>(null) }
     var uploadConsent by remember { mutableStateOf(false) }
+    var visualApproved by remember { mutableStateOf(false) }
     var annotationBackupMessage by remember { mutableStateOf<String?>(null) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
@@ -490,6 +491,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
             }
             uploadUri = uri
             uploadConsent = false
+            visualApproved = false
             videoImportMessage = "Media selected. Approve upload and AI processing below."
         }
     }
@@ -761,6 +763,12 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     Checkbox(checked = uploadConsent, onCheckedChange = { uploadConsent = it })
                     Text("I authorize uploading this media to my OmniIntel server for transcription.", color = Muted, fontSize = 11.sp)
                 }
+                if (uploadUri?.let { context.contentResolver.getType(it)?.startsWith("video/") == true } == true) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = visualApproved, onCheckedChange = { visualApproved = it })
+                        Text("I separately approve bounded local frame sampling for a reviewable visual timeline. No frame or transcript link is auto-accepted.", color = Muted, fontSize = 11.sp)
+                    }
+                }
                 Button(
                     enabled = !onlineBusy && uploadUri != null && apiBaseDraft.isNotBlank() &&
                         apiTokenDraft.isNotBlank() && uploadConsent,
@@ -774,7 +782,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                             scope.launch {
                                 try {
                                     val created = withContext(Dispatchers.IO) {
-                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri, approveAi = aiApproved)
+                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri, approveAi = aiApproved, approveVisual = visualApproved)
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
@@ -806,6 +814,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                     loadBook(Uri.fromFile(cached))
                                     uploadUri = null
                                     uploadConsent = false
+                                    visualApproved = false
                                     videoImportMessage = "AI notes generated. Importing into your on-device library…"
                                 } catch (failure: Throwable) {
                                     videoImportMessage = failure.message ?: "Media upload or transcription failed."
