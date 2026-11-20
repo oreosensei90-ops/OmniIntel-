@@ -170,7 +170,7 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
         local_queue = JobQueue(database)
         local_id = local_queue.enqueue(
             str(job["job_type"]), local_payload,
-            idempotency_key="cloudflare:" + job_id, max_attempts=1,
+            idempotency_key="cloudflare:" + job_id + ":" + str(job.get("attempt", 1)), max_attempts=1,
         )
         run_local_once(database, worker_id="cloudflare-" + job_id)
         completed = local_queue.get(local_id)
