@@ -133,3 +133,67 @@ def test_uploaded_media_worker_allows_explicit_hosted_model_download(tmp_path, m
     assert queue.get(job_id)["state"] == "COMPLETED"
     assert not upload.exists()
 
+
+
+def test_uploaded_media_worker_preserves_input_until_retry_finishes(tmp_path, monkeypatch):
+    database = tmp_path / "worker.db"
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir()
+    upload = upload_root / "retry-lecture.mp4"
+    upload.write_bytes(b"test media fixture")
+    model_root = tmp_path / "asr-model"
+    model_root.mkdir()
+    monkeypatch.setenv("OMNIINTEL_UPLOAD_DIR", str(upload_root))
+    monkeypatch.setenv("OMNIINTEL_ASSET_DIR", str(tmp_path / "assets"))
+    monkeypatch.setenv("OMNIINTEL_ASR_MODEL_PATH", str(model_root))
+
+    reader = {
+        "source": {"id": "source-retry", "title": "Retry lecture"},
+        "version": {"id": "version-retry"},
+        "chapters": [],
+    }
+    queue = JobQueue(database)
+    job_id = queue.enqueue(
+        "UPLOADED_MEDIA_TO_NOTES",
+        {
+            "upload_path": str(upload.resolve()),
+            "original_name": "retry-lecture.mp4",
+            "title": "Retry lecture",
+            "language": "en",
+            "chapter_minutes": 10,
+            "approve_ai": False,
+        },
+        max_attempts=2,
+    )
+    imported = SimpleNamespace(
+        source_id="source-retry",
+        asset=SimpleNamespace(id="video-asset"),
+    )
+    extracted = SimpleNamespace(output_asset_id="audio-asset")
+    attempts = {"extract": 0}
+
+    monkeypatch.setattr("omniintel.worker.import_local_file", lambda *args, **kwargs: imported)
+
+    def extract_once_then_succeed(*args, **kwargs):
+        attempts["extract"] += 1
+        if attempts["extract"] == 1:
+            raise RuntimeError("temporary extraction failure")
+        return extracted
+
+    monkeypatch.setattr("omniintel.worker.extract_audio", extract_once_then_succeed)
+
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("omniintel.worker.FasterWhisperAdapter", FakeAdapter)
+    monkeypatch.setattr("omniintel.worker.run_wav_transcription", lambda *args, **kwargs: None)
+    monkeypatch.setattr("omniintel.worker.compose_registered_source", lambda *args, **kwargs: reader)
+
+    assert run_once(database, worker_id="retry-worker") is True
+    assert queue.get(job_id)["state"] == "RETRYING"
+    assert upload.exists(), "retryable jobs must retain their staged input"
+
+    assert run_once(database, worker_id="retry-worker") is True
+    assert queue.get(job_id)["state"] == "COMPLETED"
+    assert not upload.exists(), "completed jobs should clean up their staged input"

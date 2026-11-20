@@ -146,3 +146,42 @@ def test_download_input_rejects_nonstandard_port(tmp_path):
     import omniintel.cloud_worker_bridge as bridge
     with pytest.raises(BridgeError, match="untrusted B2"):
         bridge._download_input("https://s3.us-east-005.backblazeb2.com:8443/object", tmp_path / "x.bin")
+
+
+def test_late_heartbeat_failure_does_not_override_successful_job_completion(tmp_path, monkeypatch):
+    import threading
+    import omniintel.cloud_worker_bridge as bridge
+
+    job = {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "lease_token": "lease-1",
+    }
+    calls = []
+    heartbeat_seen = threading.Event()
+
+    def fake_request(_origin, _token, path, **_kwargs):
+        calls.append(path)
+        if path == "/v1/worker/claim":
+            return {"job": job}
+        pytest.fail("a completed job must not be reported as failed")
+
+    def fake_heartbeat(_origin, _token, _job_id, _lease, _stop, errors):
+        errors.append(RuntimeError("late heartbeat returned 409 after completion"))
+        heartbeat_seen.set()
+
+    def fake_process(*_args, **_kwargs):
+        assert heartbeat_seen.wait(timeout=2)
+        return {"status": "COMPLETED"}
+
+    monkeypatch.setattr(bridge, "_request_json", fake_request)
+    monkeypatch.setattr(bridge, "_heartbeat_loop", fake_heartbeat)
+    monkeypatch.setattr(bridge, "process_claimed_job", fake_process)
+
+    assert bridge.run_bridge_once(
+        api_base="https://worker.example",
+        worker_token="worker-secret",
+        database=tmp_path / "bridge.db",
+        upload_dir=tmp_path / "uploads",
+        asset_dir=tmp_path / "assets",
+    ) is True
+    assert calls == ["/v1/worker/claim"]

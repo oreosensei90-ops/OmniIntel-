@@ -21,9 +21,10 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
     job = queue.claim(worker_id or socket.gethostname(), lease_ms=60 * 60 * 1000)
     if job is None:
         return False
+    upload_path: Path | None = None
+    cleanup_upload = False
     try:
         payload = job["payload"]
-        upload_path: Path | None = None
         if job["job_type"] == "YOUTUBE_TO_NOTES":
             if payload.get("approve_network") is not True:
                 raise PermissionError("Job is missing explicit network approval")
@@ -100,18 +101,20 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             result["reader"] = study_reader
             result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
         queue.complete(job["id"], job["lease_token"], result)
+        cleanup_upload = True
     except Exception as error:  # noqa: BLE001 - persist bounded failure for client recovery
         try:
-            queue.fail(
+            failure_state = queue.fail(
                 job["id"],
                 job["lease_token"],
                 f"{type(error).__name__}: {error}",
                 retry_delay_ms=0,
             )
+            cleanup_upload = failure_state == "FAILED"
         except LeaseLost:
             return True
     finally:
-        if "upload_path" in locals() and upload_path is not None:
+        if cleanup_upload and upload_path is not None:
             upload_root = Path(os.environ.get(
                 "OMNIINTEL_UPLOAD_DIR", str(Path(database_path).parent / "uploads")
             )).resolve()

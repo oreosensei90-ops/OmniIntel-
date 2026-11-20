@@ -233,10 +233,11 @@ def run_bridge_once(*, api_base: str, worker_token: str, database: Path,
     )
     thread.start()
     try:
+        # The conditional /complete write is authoritative. A heartbeat can race
+        # with successful completion and receive 409 after the lease is cleared;
+        # that late heartbeat failure must not turn a completed job into a failure.
         process_claimed_job(job, database=database, origin=origin, token=worker_token,
                             upload_dir=upload_dir, asset_dir=asset_dir)
-        if heartbeat_errors:
-            raise BridgeError(f"Remote job lease heartbeat failed: {heartbeat_errors[0]}")
     except Exception as error:
         failure = f"{type(error).__name__}: {error}"[:1900]
         try:
