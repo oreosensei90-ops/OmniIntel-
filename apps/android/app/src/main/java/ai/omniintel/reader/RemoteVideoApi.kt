@@ -3,6 +3,7 @@ package ai.omniintel.reader
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import java.io.File
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -136,20 +137,13 @@ fun uploadRemoteMedia(
     require(uploadUrl.startsWith("https://") && completePath.startsWith("/v1/jobs/")) {
         "The Worker did not return valid upload instructions."
     }
-    val upload = URL(uploadUrl).openConnection() as HttpURLConnection
-    upload.requestMethod = "PUT"
-    upload.connectTimeout = 20_000
-    upload.readTimeout = 180_000
-    upload.instanceFollowRedirects = false
-    upload.doOutput = true
-    upload.setChunkedStreamingMode(64 * 1024)
-    upload.setRequestProperty("Content-Type", mime)
+    val staged = File.createTempFile("omniintel-upload-", ".tmp", context.cacheDir)
     try {
-        upload.outputStream.use { output ->
-            val input = context.contentResolver.openInputStream(uri)
-                ?: error("Could not open the selected media file.")
-            var total = 0L
-            input.use { stream ->
+        val input = context.contentResolver.openInputStream(uri)
+            ?: error("Could not open the selected media file.")
+        var total = 0L
+        input.use { stream ->
+            staged.outputStream().use { output ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
                     val count = stream.read(buffer)
@@ -159,12 +153,27 @@ fun uploadRemoteMedia(
                     output.write(buffer, 0, count)
                 }
             }
-            require(total > 0) { "The selected media file is empty." }
         }
-        val status = upload.responseCode
-        if (status !in 200..299) error("Backblaze upload failed (HTTP $status).")
+        require(total > 0) { "The selected media file is empty." }
+        val upload = URL(uploadUrl).openConnection() as HttpURLConnection
+        upload.requestMethod = "PUT"
+        upload.connectTimeout = 20_000
+        upload.readTimeout = 180_000
+        upload.instanceFollowRedirects = false
+        upload.doOutput = true
+        upload.setFixedLengthStreamingMode(staged.length())
+        upload.setRequestProperty("Content-Type", mime)
+        try {
+            upload.outputStream.use { output ->
+                staged.inputStream().use { source -> source.copyTo(output, 64 * 1024) }
+            }
+            val status = upload.responseCode
+            if (status !in 200..299) error("Backblaze upload failed (HTTP $status).")
+        } finally {
+            upload.disconnect()
+        }
     } finally {
-        upload.disconnect()
+        staged.delete()
     }
     remoteApiRequest(apiBase, token, completePath, "POST", JSONObject())
     return created
