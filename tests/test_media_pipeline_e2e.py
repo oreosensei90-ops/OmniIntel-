@@ -115,7 +115,7 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
     assert run_once(database, worker_id="media-e2e-worker") is True
 
     completed = queue.get(job_id)
-    assert completed["state"] == "COMPLETED"
+    assert completed["state"] == "COMPLETED", completed.get("last_error")
     reader = completed["result"]["reader"]
     assert reader["source"]["title"] == "Physics lecture"
     assert reader["pipeline"]["status"] == "TRANSCRIPT_DRAFT_READY"
