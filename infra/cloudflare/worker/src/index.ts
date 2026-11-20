@@ -95,7 +95,7 @@ async function readJson(request: Request, limit = 1024 * 1024): Promise<any> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
   return JSON.parse(text);
 }
 function validatePayload(type: JobType, payload: any) {
