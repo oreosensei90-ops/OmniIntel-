@@ -66,6 +66,7 @@ def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_pa
         def enqueue(self, job_type, payload, **kwargs):
             calls["job_type"] = job_type
             calls["payload"] = payload
+            calls["idempotency_key"] = kwargs["idempotency_key"]
             return "local-job"
 
         def get(self, _job_id):
@@ -93,6 +94,7 @@ def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_pa
     assert response["status"] == "COMPLETED"
     assert calls["job_type"] == "YOUTUBE_TO_NOTES"
     assert calls["payload"]["approve_network"] is True
+    assert calls["idempotency_key"] == "cloudflare:11111111-1111-4111-8111-111111111111:1"
     assert calls["complete_path"].endswith("/complete")
     assert calls["complete_body"]["reader"] == reader
 
