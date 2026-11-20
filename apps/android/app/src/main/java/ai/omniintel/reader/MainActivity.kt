@@ -727,11 +727,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                         }
                                         when (status.optString("status")) {
                                             "COMPLETED" -> {
-                                                val result = status.optJSONObject("result")
-                                                    ?: error("The server returned no job result.")
-                                                val reader = result.optJSONObject("reader")
-                                                    ?: error("The server completed without a reader export.")
-                                                readerJson = reader.toString()
+                                                val resultUrl = status.optString("result_url")
+                                                if (!resultUrl.startsWith("https://")) error("The server completed without a reader download URL.")
+                                                readerJson = downloadRemoteReaderJson(resultUrl)
                                             }
                                             "FAILED" -> error(status.optString("error").ifBlank { "Video processing failed." })
                                             else -> {
@@ -790,11 +788,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                         }
                                         when (status.optString("status")) {
                                             "COMPLETED" -> {
-                                                val result = status.optJSONObject("result")
-                                                    ?: error("The server returned no job result.")
-                                                val reader = result.optJSONObject("reader")
-                                                    ?: error("The server completed without a reader export.")
-                                                readerJson = reader.toString()
+                                                val resultUrl = status.optString("result_url")
+                                                if (!resultUrl.startsWith("https://")) error("The server completed without a reader download URL.")
+                                                readerJson = downloadRemoteReaderJson(resultUrl)
                                             }
                                             "FAILED" -> error(status.optString("error").ifBlank { "Media transcription failed." })
                                             else -> {
