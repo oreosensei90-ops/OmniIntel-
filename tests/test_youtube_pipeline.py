@@ -257,9 +257,11 @@ def test_youtube_audio_asr_downloads_audio_and_preserves_video_provenance(tmp_pa
         "duration_ms": 240_000,
         "language": "en",
     }
+    download_options = {}
     class FakeYDL:
         def __init__(self, options):
             self.options = options
+            download_options.update(options)
         def __enter__(self):
             return self
         def __exit__(self, *_args):
@@ -295,6 +297,8 @@ def test_youtube_audio_asr_downloads_audio_and_preserves_video_provenance(tmp_pa
     assert result is expected_reader
     assert adapter["model_id"] == "tiny"
     assert adapter["allow_model_download"] is True
+    assert download_options["format"] == "bestaudio"
+    assert download_options["max_filesize"] == 250 * 1024 * 1024
     with connect(database) as conn:
         source = conn.execute("SELECT source_uri,metadata_json FROM sources WHERE id=?", (source_id,)).fetchone()
     assert source["source_uri"] == metadata["url"]
