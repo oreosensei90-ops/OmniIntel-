@@ -77,7 +77,7 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
         def transcribe_chunk(self, wav_path: Path, *, language: str | None):
             with wave.open(str(wav_path), "rb") as audio:
                 duration_ms = audio.getnframes() * 1000 // audio.getframerate()
-            end_ms = min(4_000, duration_ms)
+            end_ms = min(7_500, duration_ms)
             return ChunkTranscription(
                 language=language or "en",
                 segments=(
