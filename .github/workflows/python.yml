@@ -43,6 +43,11 @@ jobs:
       OMNIINTEL_DATABASE: .omniintel/worker.sqlite3
       OMNIINTEL_UPLOAD_DIR: .omniintel/uploads
       OMNIINTEL_ASSET_DIR: .omniintel/assets
+      OMNIINTEL_ASR_MODEL_ID: tiny
+      OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD: "1"
+      OMNIINTEL_ASR_DEVICE: cpu
+      OMNIINTEL_ASR_COMPUTE_TYPE: int8
+      OMNIINTEL_ASR_THREADS: "2"
     steps:
       - name: Check whether the API secret is configured
         id: guard
@@ -61,12 +66,18 @@ jobs:
         if: steps.guard.outputs.enabled == 'true'
         with:
           python-version: "3.12"
-      - name: Install engine and YouTube adapter
+      - name: Cache the small Faster-Whisper model
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: omniintel-faster-whisper-tiny-v1
+      - name: Install engine, YouTube adapter and local ASR
         if: steps.guard.outputs.enabled == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install --no-deps -e .
-          python -m pip install "yt-dlp>=2025.1.15"
+          python -m pip install "yt-dlp>=2025.1.15" "faster-whisper>=1.1"
       - name: Process one job
         if: steps.guard.outputs.enabled == 'true'
         run: |
