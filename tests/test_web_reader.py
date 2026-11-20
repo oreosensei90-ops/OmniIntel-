@@ -139,7 +139,7 @@ def test_web_reader_bounds_imported_chapter_block_and_evidence_counts() -> None:
 
 
 
-def test_video_to_notes_requires_separate_network_and_ai_approval() -> None:
+def test_video_to_notes_requires_network_and_keeps_ai_optional() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert 'id="approve-network"' in html
@@ -179,7 +179,9 @@ def test_cloudflare_job_schema_tracks_upload_completion_gate() -> None:
     migrations = root / "infra" / "cloudflare" / "worker" / "migrations"
     schema = (migrations / "0001_jobs.sql").read_text(encoding="utf-8")
     upload_gate = (migrations / "0002_upload_gate.sql").read_text(encoding="utf-8")
-    worker = (root / "infra" / "cloudflare" / "worker" / "src" / "index.ts").read_text(encoding="utf-8")
+    worker = (
+        root / "infra" / "cloudflare" / "worker" / "src" / "index.ts"
+    ).read_text(encoding="utf-8")
     assert "input_uploaded INTEGER NOT NULL DEFAULT 1" in upload_gate
     assert "input_uploaded" not in schema
     assert "input_uploaded = 1" in worker
