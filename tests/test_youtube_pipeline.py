@@ -227,8 +227,11 @@ def test_youtube_processing_falls_back_to_audio_asr_when_public_captions_are_mis
         ),
     )
     calls = {}
-    def fake_asr(database, info, *, language=None):
-        calls.update(database=database, metadata=info, language=language)
+    def fake_asr(database, info, *, language=None, chapter_minutes=10):
+        calls.update(
+            database=database, metadata=info, language=language,
+            chapter_minutes=chapter_minutes,
+        )
         return expected_reader
     monkeypatch.setattr(pipeline, "transcribe_youtube_audio", fake_asr)
 
@@ -239,6 +242,7 @@ def test_youtube_processing_falls_back_to_audio_asr_when_public_captions_are_mis
     assert result is expected_reader
     assert calls["metadata"]["video_id"] == "AbCdEf12345"
     assert calls["language"] == "en"
+    assert calls["chapter_minutes"] == 10
     assert result["pipeline"]["transcript_origin"] == "youtube_audio_asr"
 
 
