@@ -30,8 +30,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: infra/cloudflare/worker/package.json
       - name: Validate deployment configuration
         run: |
           node --input-type=module -e '
