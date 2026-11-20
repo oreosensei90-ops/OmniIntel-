@@ -3,11 +3,26 @@ package ai.omniintel.reader
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import java.io.ByteArrayOutputStream
 import java.io.File
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
+
+private fun readBoundedBytes(input: java.io.InputStream, maxBytes: Int): ByteArray {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    var total = 0
+    while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        total += count
+        require(total <= maxBytes) { "Server response exceeds the ${maxBytes / (1024 * 1024)} MiB safety limit." }
+        output.write(buffer, 0, count)
+    }
+    return output.toByteArray()
+}
 
 private fun remoteApiBase(raw: String): String {
     val value = raw.trim().trimEnd('/')
@@ -16,8 +31,9 @@ private fun remoteApiBase(raw: String): String {
     require(url.protocol == "https" || (local && url.protocol == "http")) {
         "Use HTTPS for a remote OmniIntel API. HTTP is allowed only for localhost."
     }
-    require(url.userInfo == null && url.query == null && url.ref == null) {
-        "API address must be an origin only, without credentials, query or fragment."
+    require(url.host.isNotBlank() && url.userInfo == null && url.query == null && url.ref == null &&
+        (url.path.isNullOrEmpty() || url.path == "/")) {
+        "API address must be an origin only, without a path, credentials, query or fragment."
     }
     return value
 }
@@ -41,7 +57,7 @@ private fun remoteApiRequest(
     try {
         val status = connection.responseCode
         val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-        val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+        val raw = stream?.use { readBoundedBytes(it, 1024 * 1024).toString(Charsets.UTF_8) }.orEmpty()
         val result = runCatching { JSONObject(raw) }.getOrElse {
             error("OmniIntel API returned an invalid response (HTTP $status).")
         }
@@ -69,7 +85,7 @@ fun submitRemoteVideoJob(
 }
 
 fun getRemoteVideoJob(apiBase: String, token: String, statusPath: String): JSONObject {
-    require(statusPath.startsWith("/v1/jobs/") && !statusPath.contains("://")) {
+    require(Regex("^/v1/jobs/[A-Za-z0-9-]{1,64}$").matches(statusPath)) {
         "The server returned an invalid job status path."
     }
     return remoteApiRequest(apiBase, token, statusPath, "GET")
@@ -77,7 +93,8 @@ fun getRemoteVideoJob(apiBase: String, token: String, statusPath: String): JSONO
 
 fun downloadRemoteReaderJson(resultUrl: String): String {
     val url = URL(resultUrl)
-    require(url.protocol == "https" && url.host.isNotBlank()) {
+    require(url.protocol == "https" && url.host.isNotBlank() &&
+        url.userInfo == null && url.ref == null) {
         "The server returned an invalid reader download URL."
     }
     val connection = url.openConnection() as HttpURLConnection
@@ -88,9 +105,13 @@ fun downloadRemoteReaderJson(resultUrl: String): String {
     try {
         val status = connection.responseCode
         if (status !in 200..299) error("Reader download failed (HTTP $status).")
-        val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        require(text.toByteArray(Charsets.UTF_8).size <= 20 * 1024 * 1024) {
+        val maxBytes = 20 * 1024 * 1024
+        val declaredLength = connection.contentLengthLong
+        require(declaredLength < 0 || declaredLength <= maxBytes) {
             "Reader export exceeds the 20 MiB download limit."
+        }
+        val text = connection.inputStream.use {
+            readBoundedBytes(it, maxBytes).toString(Charsets.UTF_8)
         }
         JSONObject(text) // fail closed before handing the export to the importer
         return text
@@ -137,7 +158,10 @@ fun uploadRemoteMedia(
     val created = remoteApiRequest(apiBase, token, "/v1/media/jobs", "POST", payload)
     val uploadUrl = created.optString("upload_url")
     val completePath = created.optString("upload_complete_url")
-    require(uploadUrl.startsWith("https://") && completePath.startsWith("/v1/jobs/")) {
+    val signedUpload = runCatching { URL(uploadUrl) }.getOrNull()
+    require(signedUpload?.protocol == "https" && !signedUpload.host.isNullOrBlank() &&
+        signedUpload.userInfo == null && signedUpload.ref == null &&
+        Regex("^/v1/jobs/[A-Za-z0-9-]{1,64}/upload-complete$").matches(completePath)) {
         "The Worker did not return valid upload instructions."
     }
     val staged = File.createTempFile("omniintel-upload-", ".tmp", context.cacheDir)
