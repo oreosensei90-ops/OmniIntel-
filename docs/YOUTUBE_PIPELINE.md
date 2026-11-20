@@ -1,15 +1,19 @@
 # YouTube caption-to-reader pipeline
 
-The first YouTube adapter is an explicit, caption-first intake path. It is deliberately
-separate from local-file transcription and does not silently download or process media.
+The YouTube adapter is an explicit, caption-first intake path. When public captions are
+unavailable, it can download only the audio stream and pass it through the existing local
+FFmpeg/Faster-Whisper pipeline. The web client asks the user to approve that fallback.
 
 ## What is implemented
 
 1. Validates a single YouTube video URL (watch, youtu.be, shorts, live and embed forms).
 2. Retrieves bounded public metadata using the optional `yt-dlp` adapter.
-3. Retrieves public subtitle sidecars only (manual captions first as supplied by yt-dlp,
-   then automatic captions), preferring the requested language and otherwise trying
-   English and Hindi.
+3. Retrieves public subtitle sidecars first (manual captions and automatic captions),
+   preferring the requested language and otherwise trying English and Hindi.
+4. If no usable public captions are available, downloads the audio stream only (never the
+   video stream), registers it as a source asset, extracts mono 16 kHz PCM WAV with FFmpeg,
+   and transcribes checkpointed chunks with Faster-Whisper. The original YouTube URL and
+   video metadata remain attached to the source.
 4. Parses WebVTT into timestamped transcript segments and persists source, transcript,
    evidence and citation references in SQLite.
 5. Creates a versioned, source-ordered reader draft. Transcript paragraphs are exact
@@ -22,16 +26,19 @@ separate from local-file transcription and does not silently download or process
 ## Install and run
 
 ```bash
-python -m pip install -e '.[youtube,dev,publishing]'
+python -m pip install -e '.[youtube,asr,dev,publishing]'
+# FFmpeg and ffprobe must also be installed and available on PATH.
 omniintel-youtube ./omniintel.db 'https://www.youtube.com/watch?v=VIDEO_ID' \
   --approve-network --language en --output ./exports/video-reader.json
 ```
 
-The approval flag is mandatory. It confirms that the user is authorized to process the
-video's public captions and permits the metadata/caption network requests. No cookies,
-account credentials, private endpoints, DRM circumvention, video download or audio
-download are used by this adapter. Follow the platform's current terms and the source
-owner's rights.
+The approval flag is mandatory. It confirms authorization to process the video and permits
+metadata/caption requests. The web client separately explains that, if captions are missing,
+the audio stream will be downloaded for transcription. Only audio is downloaded; the video
+stream is not saved. No cookies, account credentials, private endpoints or DRM circumvention
+are used. Follow the platform's current terms and the source owner's rights. Audio fallback
+requires an ASR model configured with `OMNIINTEL_ASR_MODEL_PATH`, or an explicit model ID
+plus `OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1`.
 
 ## Android queue handoff
 
@@ -50,20 +57,20 @@ Open OmniIntel Android, choose **Import reader JSON**, and select the generated
 `video-reader.json`. The app imports normalized chapters, blocks and evidence into
 Room. The resulting book is available offline; no web reader service is required.
 
-## No-caption fallback
+## No-caption audio fallback
 
-Some videos have no public captions or do not expose them in a supported language. The
-adapter fails clearly and does not download the media as a fallback. For media the user
-owns or is authorized to process, use the existing local-file workflow:
+When no public captions are available, the approved YouTube path downloads only the
+audio stream with yt-dlp (bounded to 250 MiB), registers the temporary media asset,
+extracts mono 16 kHz PCM WAV with FFmpeg, and runs the existing checkpointed
+Faster-Whisper transcription engine. The source URI remains the canonical YouTube URL,
+and the transcript records `transcript_origin=youtube_audio_asr`. The temporary download
+is not retained as a separate user-facing file; the registered source asset and normalized
+WAV remain in the engine asset store so provenance and resumable ASR checkpoints work.
 
-1. Import the local media file with `omniintel import-file`.
-2. Probe/extract audio locally with the existing FFmpeg-backed commands.
-3. Transcribe a registered PCM WAV with `omniintel transcribe-wav` and an explicitly
-   selected local faster-whisper model.
-4. Import the resulting transcript into the textbook composition workflow.
-
-Model downloads are disabled by default in the local ASR adapter unless the user
-explicitly opts in.
+For local runs, configure either a local CTranslate2 model directory with
+`OMNIINTEL_ASR_MODEL_PATH`, or explicitly permit a named model download by setting
+`OMNIINTEL_ASR_MODEL_ID=tiny` and `OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1`.
+Install FFmpeg/ffprobe on PATH. Hosted CI uses the tiny model, CPU int8 and a cache.
 
 ## Honest capability boundary
 
