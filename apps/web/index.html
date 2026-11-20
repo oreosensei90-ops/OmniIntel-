@@ -37,7 +37,7 @@
         <input id="api-token" type="password" autocomplete="off" placeholder="Server-issued bearer token" required>
         <label for="video-language">Preferred caption language (optional)</label>
         <input id="video-language" type="text" placeholder="en, hi, fr…" maxlength="16">
-        <label class="consent-line"><input id="approve-network" type="checkbox" required> I am authorized to process this video, and approve retrieving its public metadata and captions.</label>
+        <label class="consent-line"><input id="approve-network" type="checkbox" required> I am authorized to process this video and approve its public metadata/captions; if captions are unavailable, I also approve downloading its audio stream for transcription.</label>
         <label class="consent-line"><input id="approve-ai" type="checkbox"> I approve sending the retrieved transcript to the AI provider configured on my processing machine to generate study notes.</label>
         <button id="online-submit" class="primary-button" type="submit">Generate video notes</button>
         <p id="online-status" class="hint" role="status" aria-live="polite">Requires a deployed OmniIntel API. AI-generated study notes are optional and require separate consent. Your token is kept in this tab only.</p>
