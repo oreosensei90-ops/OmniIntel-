@@ -5,7 +5,7 @@ concurrency:
 
 on:
   push:
-    branches: [main, "build/**", "migration/omniintel-foundation", "fix/**", "research/**"]
+    branches: [main, "build/**", "migration/omniintel-foundation", "fix/**", "research/**", "milestone/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
