@@ -36,7 +36,7 @@ jobs:
   hosted-worker:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     env:
       OMNIINTEL_WORKER_API: https://omniintel-api.scrbaba502.workers.dev
       OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
@@ -66,6 +66,9 @@ jobs:
         if: steps.guard.outputs.enabled == 'true'
         with:
           python-version: "3.12"
+      - name: Install FFmpeg for audio extraction
+        if: steps.guard.outputs.enabled == 'true'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Cache the small Faster-Whisper model
         if: steps.guard.outputs.enabled == 'true'
         uses: actions/cache@v4
