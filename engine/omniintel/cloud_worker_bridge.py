@@ -46,6 +46,7 @@ def _request_json(origin: str, token: str, path: str, *, method: str = "GET",
     request = urllib.request.Request(
         origin + path, data=data, method=method,
         headers={"Authorization": "Bearer " + token, "Accept": "application/json",
+                 "User-Agent": "OmniIntel-CloudWorker/1.0 (+https://omniintel.pages.dev)",
                  **({"Content-Type": "application/json"} if data is not None else {})},
     )
     try:
