@@ -164,5 +164,7 @@ def test_web_supports_authorized_media_upload_for_no_caption_transcription_fallb
     assert 'id="approve-upload-ai"' in html
     assert 'accept="audio/*,video/*"' in html
     assert '"/v1/media/jobs"' in app
-    assert 'form.append("file", file, file.name)' in app
+    assert "filename: file.name" in app
+    assert "fetch(created.upload_url" in app
+    assert "created.upload_complete_url" in app
     assert "250 * 1024 * 1024" in app
