@@ -152,8 +152,8 @@ async function completeJob(request: Request, env: Env, jobId: string) {
   });
   if (!response.ok) return json({ error: "Artifact storage failed", storage_status: response.status }, 502);
   const result = await env.DB.prepare(
-    "UPDATE jobs SET state='COMPLETED', result_key=?, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=? AND state='RUNNING' AND lease_token=?"
-  ).bind(key, now(), jobId, body.lease_token).run();
+    "UPDATE jobs SET state='COMPLETED', result_key=?, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=? AND state='RUNNING' AND lease_token=? AND lease_expires_at > ?"
+  ).bind(key, now(), jobId, body.lease_token, now()).run();
   if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
   return json({ job_id: jobId, status: "COMPLETED", result_key: key });
 }
@@ -163,8 +163,8 @@ async function heartbeatJob(request: Request, env: Env, jobId: string) {
   if (typeof body.lease_token !== "string" || !body.lease_token) return json({ error: "lease_token is required" }, 400);
   const expires = now() + 900;
   const result = await env.DB.prepare(
-    "UPDATE jobs SET lease_expires_at=?, updated_at=? WHERE id=? AND state='RUNNING' AND lease_token=?"
-  ).bind(expires, now(), jobId, body.lease_token).run();
+    "UPDATE jobs SET lease_expires_at=?, updated_at=? WHERE id=? AND state='RUNNING' AND lease_token=? AND lease_expires_at > ?"
+  ).bind(expires, now(), jobId, body.lease_token, now()).run();
   if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
   return json({ job_id: jobId, lease_expires_at: expires });
 }
@@ -176,8 +176,8 @@ async function failJob(request: Request, env: Env, jobId: string) {
   const result = await env.DB.prepare(`
     UPDATE jobs SET state=CASE WHEN attempt_count < max_attempts THEN 'QUEUED' ELSE 'FAILED' END,
       last_error=?, lease_token=NULL, lease_expires_at=NULL, updated_at=?
-    WHERE id=? AND state='RUNNING' AND lease_token=?
-  `).bind(error, timestamp, jobId, body.lease_token).run();
+    WHERE id=? AND state='RUNNING' AND lease_token=? AND lease_expires_at > ?
+  `).bind(error, timestamp, jobId, body.lease_token, timestamp).run();
   if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
   return json({ job_id: jobId, status: "REQUEUED_OR_FAILED" });
 }
@@ -215,7 +215,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/jobs") return withCors(await createJob(request, env), request, env);
       if (request.method === "POST" && url.pathname === "/v1/youtube/jobs") {
         const payload = await readJson(request, 32 * 1024);
-        return withCors(await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "YOUTUBE_TO_NOTES", payload }) }), env), request, env);
+        return withCors(await createJob(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": request.headers.get("authorization") || "" }, body: JSON.stringify({ job_type: "YOUTUBE_TO_NOTES", payload }) }), env), request, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/media/jobs") {
         const payload = await readJson(request, 32 * 1024);
