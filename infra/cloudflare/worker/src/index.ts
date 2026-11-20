@@ -192,36 +192,48 @@ async function jobStatus(env: Env, jobId: string) {
     status_url: "/v1/jobs/" + jobId,
   });
 }
+function withCors(response: Response, request: Request, env: Env): Response {
+  const origin = request.headers.get("origin");
+  const allowed = (env.CORS_ORIGIN || "").split(",").map((value) => value.trim()).filter(Boolean);
+  const headers = new Headers(response.headers);
+  if (origin && allowed.includes(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    headers.append("Vary", "Origin");
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "OPTIONS") return new Response(null, { status: 204 });
-    if (request.method === "GET" && url.pathname === "/health") return json({ status: "ok", service: "omniintel-api" });
-    if (!(await requireAuth(request, env))) return json({ error: "A valid bearer token is required" }, 401);
+    if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), request, env);
+    if (request.method === "GET" && url.pathname === "/health") return withCors(json({ status: "ok", service: "omniintel-api" }), request, env);
+    if (!(await requireAuth(request, env))) return withCors(json({ error: "A valid bearer token is required" }, 401), request, env);
     try {
-      if (request.method === "POST" && url.pathname === "/v1/jobs") return await createJob(request, env);
+      if (request.method === "POST" && url.pathname === "/v1/jobs") return withCors(await createJob(request, env), request, env);
       if (request.method === "POST" && url.pathname === "/v1/youtube/jobs") {
         const payload = await readJson(request, 32 * 1024);
-        return await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "YOUTUBE_TO_NOTES", payload }) }), env);
+        return withCors(await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "YOUTUBE_TO_NOTES", payload }) }), env), request, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/media/jobs") {
         const payload = await readJson(request, 32 * 1024);
-        return await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload: { ...payload, approve_media_upload: true } }) }), env);
+        return withCors(await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload: { ...payload, approve_media_upload: true } }) }), env), request, env);
       }
-      if (request.method === "POST" && url.pathname === "/v1/worker/claim") return await claimJob(env);
+      if (request.method === "POST" && url.pathname === "/v1/worker/claim") return withCors(await claimJob(env), request, env);
       const complete = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/complete$/i);
-      if (request.method === "POST" && complete) return await completeJob(request, env, complete[1]);
+      if (request.method === "POST" && complete) return withCors(await completeJob(request, env, complete[1]), request, env);
       const heartbeat = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/heartbeat$/i);
-      if (request.method === "POST" && heartbeat) return await heartbeatJob(request, env, heartbeat[1]);
+      if (request.method === "POST" && heartbeat) return withCors(await heartbeatJob(request, env, heartbeat[1]), request, env);
       const fail = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/fail$/i);
-      if (request.method === "POST" && fail) return await failJob(request, env, fail[1]);
+      if (request.method === "POST" && fail) return withCors(await failJob(request, env, fail[1]), request, env);
       const uploadDone = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]+)\/upload-complete$/i);
-      if (request.method === "POST" && uploadDone) return await finalizeUpload(env, uploadDone[1]);
+      if (request.method === "POST" && uploadDone) return withCors(await finalizeUpload(env, uploadDone[1]), request, env);
       const status = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]+)$/i);
-      if (request.method === "GET" && status) return await jobStatus(env, status[1]);
-      return json({ error: "Not found" }, 404);
+      if (request.method === "GET" && status) return withCors(await jobStatus(env, status[1]), request, env);
+      return withCors(json({ error: "Not found" }, 404), request, env);
     } catch (error) {
-      return json({ error: error instanceof Error ? error.message : "Internal error" }, 400);
+      return withCors(json({ error: error instanceof Error ? error.message : "Internal error" }, 400), request, env);
     }
   },
 };
