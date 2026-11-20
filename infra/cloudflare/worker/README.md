@@ -8,8 +8,10 @@ the agent must stay online and have the required local dependencies and ASR mode
 
 ## Resource bindings and secrets
 
-Create the D1 database `omniintel-db`, bind it as `DB`, and replace the placeholder
-`database_id` in `wrangler.toml` with the ID from `npx wrangler d1 list`.
+The configured deployment uses the existing D1 database `omniintel-db` bound as `DB`.
+The S3-compatible B2 endpoint is public configuration in `wrangler.toml` as
+`B2_S3_ENDPOINT`; it is not a secret. Confirm that it matches the region shown by the
+existing `omniintel-assets` bucket before deploying to another account.
 
 Set secrets interactively; never commit their values:
 
@@ -18,13 +20,11 @@ cd infra/cloudflare/worker
 npx wrangler secret put OMNIINTEL_API_TOKEN
 npx wrangler secret put B2_KEY_ID
 npx wrangler secret put B2_APPLICATION_KEY
-npx wrangler secret put B2_S3_ENDPOINT
 ```
 
-Use the Backblaze S3 endpoint shown for the `omniintel-assets` bucket. The B2 application key
-must be restricted to that bucket and allow object read, write, delete and list operations.
-The endpoint is typically shaped like
-`https://s3.<region>.backblazeb2.com`; do not guess the region.
+The B2 application key must be restricted to that bucket and allow object read, write, delete
+and list operations. Never put the endpoint into the secret store; keep the region-specific
+endpoint in the Worker configuration.
 
 Set `CORS_ORIGIN` in `wrangler.toml` to a comma-separated allowlist of exact Web origins
 (no wildcard). For local development, use a separate local Wrangler environment and add the
@@ -82,7 +82,8 @@ All routes except `GET /health` require `Authorization: Bearer <OMNIINTEL_API_TO
 The D1 migration includes an upload-completion gate, attempt limits and lease expiry. Jobs
 whose final lease expires are moved to FAILED rather than remaining stuck. Worker lease tokens
 are required for heartbeat, completion and failure. Artifacts use lease-specific object keys so
-a stale worker cannot overwrite the current worker's output.
+a stale worker cannot overwrite the current worker's output. The local agent isolates each
+remote job in a dedicated local queue database so it cannot consume unrelated local jobs.
 
 ## Run the local processing agent
 
@@ -141,5 +142,6 @@ existing offline reader library. Set the exact Web origin in Worker CORS and B2 
   opt-in. Generated content remains a draft requiring human review.
 - Local processing depends on the user's machine being online. Android/Termux faster-whisper
   compatibility is not assumed; a supported PC/Linux host may be needed for ASR.
-- There is no public live endpoint or deployment implied by this source change. Before deploying,
-  replace the D1 ID and CORS placeholder, configure B2 bucket CORS, and verify account quotas.
+- The Worker deployment is separate from this source repository and must be redeployed after
+  Worker code/configuration changes. Verify the live `/health` endpoint, authenticated job
+  creation, B2 upload and read-back, and end-to-end processing before production use.
