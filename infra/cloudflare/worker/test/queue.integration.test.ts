@@ -84,6 +84,59 @@ describe("Cloudflare D1 queue integration", () => {
     await runtime.DB.prepare("DELETE FROM jobs").run();
   });
 
+  async function createUploadJobRecord(state: string, inputUploaded: number): Promise<string> {
+    const jobId = crypto.randomUUID();
+    const timestamp = Math.floor(Date.now() / 1000);
+    await runtime.DB.prepare(
+      `INSERT INTO jobs
+        (id, job_type, state, payload_json, input_key, input_uploaded, created_at, updated_at)
+       VALUES (?, 'UPLOADED_MEDIA_TO_NOTES', ?, '{}', ?, ?, ?, ?)`,
+    ).bind(
+      jobId, state, `inputs/${jobId}/test-upload`, inputUploaded, timestamp, timestamp,
+    ).run();
+    return jobId;
+  }
+
+  it("does not finalize an upload after its job has failed", async () => {
+    const jobId = await createUploadJobRecord("FAILED", 0);
+    const response = await call(
+      `/v1/jobs/${jobId}/upload-complete`,
+      apiToken,
+      {},
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "Upload can no longer be finalized for this job",
+    });
+  });
+
+  it("does not reopen a completed job whose upload gate is still closed", async () => {
+    const jobId = await createUploadJobRecord("COMPLETED", 0);
+    const response = await call(
+      `/v1/jobs/${jobId}/upload-complete`,
+      apiToken,
+      {},
+    );
+
+    expect(response.status).toBe(409);
+  });
+
+  it("handles repeated upload finalization without reopening the job", async () => {
+    const jobId = await createUploadJobRecord("COMPLETED", 1);
+    const response = await call(
+      `/v1/jobs/${jobId}/upload-complete`,
+      apiToken,
+      {},
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      job_id: jobId,
+      status: "COMPLETED",
+    });
+  });
+
   it("claims a queued job and increments its attempt count", async () => {
     const jobId = await createJob();
     const claimed = await claimJob();

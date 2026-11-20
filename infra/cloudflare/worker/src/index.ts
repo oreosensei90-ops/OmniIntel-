@@ -112,6 +112,9 @@ async function finalizeUpload(env: Env, jobId: string) {
   const row = await env.DB.prepare("SELECT input_key, input_uploaded, state FROM jobs WHERE id=?").bind(jobId).first<any>();
   if (!row || !row.input_key) return json({ error: "Upload job not found" }, 404);
   if (row.input_uploaded === 1) return json({ job_id: jobId, status: row.state });
+  if (row.state !== "QUEUED") {
+    return json({ error: "Upload can no longer be finalized for this job" }, 409);
+  }
   const response = await b2(env).fetch(objectUrl(env, row.input_key), { method: "HEAD" });
   if (!response.ok) return json({ error: "Uploaded object is not available yet", storage_status: response.status }, 409);
   const size = Number(response.headers.get("content-length") || "0");
@@ -119,7 +122,21 @@ async function finalizeUpload(env: Env, jobId: string) {
     await b2(env).fetch(objectUrl(env, row.input_key), { method: "DELETE" });
     return json({ error: "Uploaded media is empty or exceeds the configured limit" }, 413);
   }
-  await env.DB.prepare("UPDATE jobs SET input_uploaded=1, updated_at=? WHERE id=? AND input_uploaded=0").bind(now(), jobId).run();
+  const updated = await env.DB.prepare(
+    "UPDATE jobs SET input_uploaded=1, updated_at=? WHERE id=? AND input_uploaded=0 AND state='QUEUED'"
+  ).bind(now(), jobId).run();
+
+  if (!updated.meta.changes) {
+    const latest = await env.DB.prepare(
+      "SELECT input_uploaded, state FROM jobs WHERE id=?"
+    ).bind(jobId).first<any>();
+
+    if (latest?.input_uploaded === 1) {
+      return json({ job_id: jobId, status: latest.state });
+    }
+    return json({ error: "Upload can no longer be finalized for this job" }, 409);
+  }
+
   return json({ job_id: jobId, status: "QUEUED", size_bytes: size });
 }
 async function claimJob(env: Env) {
