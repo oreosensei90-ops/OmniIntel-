@@ -246,7 +246,7 @@ def transcribe_youtube_audio(
         output = Path(directory) / "source.%(ext)s"
         options = {
             "quiet": True, "no_warnings": True, "noplaylist": True,
-            "format": "bestaudio/best", "outtmpl": str(output),
+            "format": "bestaudio", "outtmpl": str(output),
             "max_filesize": 250 * 1024 * 1024,
             "socket_timeout": 30, "retries": 2, "fragment_retries": 2,
             "continuedl": False, "overwrites": True,
@@ -257,6 +257,8 @@ def transcribe_youtube_audio(
         candidates = [p for p in Path(directory).glob("source.*") if p.is_file() and p.stat().st_size > 0]
         if len(candidates) != 1:
             raise RuntimeError("YouTube audio download did not produce exactly one media file")
+        if candidates[0].stat().st_size > 250 * 1024 * 1024:
+            raise ValueError("YouTube audio exceeds the 250 MiB processing limit")
         imported = import_local_file(
             database_path, asset_dir, candidates[0], title=metadata["title"],
             max_bytes=250 * 1024 * 1024,
