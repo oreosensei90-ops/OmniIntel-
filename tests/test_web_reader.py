@@ -145,7 +145,8 @@ def test_video_to_notes_requires_separate_network_and_ai_approval() -> None:
     assert 'id="approve-network"' in html
     assert 'id="approve-ai"' in html
     assert "approve_network: true" in app
-    assert "approve_ai: true" in app
+    assert 'approve_ai: $("#approve-ai").checked' in app
+    assert 'id="approve-ai" type="checkbox" required' not in html
     assert "renderBook(reader" in app
     assert 'sessionStorage.setItem("omniintel-api-token", token)' in app
 
@@ -161,7 +162,10 @@ def test_web_supports_authorized_media_upload_for_no_caption_transcription_fallb
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert 'id="online-media-form"' in html
-    assert 'id="approve-upload-ai"' in html
+    assert 'id="approve-upload" type="checkbox" required' in html
+    assert 'id="approve-upload-ai" type="checkbox"' in html
+    assert 'approve_ai: $("#approve-upload-ai").checked' in app
+    assert 'new URL(job.result_url).protocol !== "https:"' in app
     assert 'accept="audio/*,video/*"' in html
     assert '"/v1/media/jobs"' in app
     assert "filename: file.name" in app
