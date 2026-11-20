@@ -28,6 +28,7 @@ omniintel-compose-source = "omniintel.youtube_pipeline:compose_source_main"
 omniintel-study-guide = "omniintel.study_generation:main"
 omniintel-api = "omniintel.api:main"
 omniintel-worker = "omniintel.worker:main"
+omniintel-cloud-worker = "omniintel.cloud_worker_bridge:main"
 omniintel-textbook-review = "omniintel.textbook_review:main"
 
 [tool.setuptools]
