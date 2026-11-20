@@ -80,6 +80,10 @@
           <video id="local-media" controls playsinline preload="metadata" hidden></video>
           <audio id="local-audio" controls preload="metadata" hidden></audio>
           <p id="media-status" class="muted" role="status">No media attached.</p>
+          <section id="visual-timeline-panel" class="visual-timeline-panel" hidden aria-label="Visual frame timeline">
+            <div><p class="eyebrow">VISUAL TIMELINE</p><p id="visual-timeline-summary" class="muted"></p></div>
+            <div id="visual-timeline-events" class="visual-timeline-events"></div>
+          </section>
         </section>
         <div class="reading-head"><div><p class="eyebrow" id="chapter-count"></p><h1 id="chapter-title"></h1></div><div class="reading-actions"><span id="progress" class="progress"></span><button id="study-toggle" class="quiet" type="button">Study mode</button></div></div>
         <section id="study-panel" class="study-panel" hidden aria-label="Offline flashcards">

@@ -322,10 +322,76 @@ function validateReaderPayload(data) {
       }
     }
   }
+  if (data.visual_timeline !== undefined) {
+    const timeline = data.visual_timeline;
+    if (!timeline || typeof timeline !== "object" || Array.isArray(timeline) ||
+        typeof timeline.status !== "string" ||
+        (timeline.events !== undefined && (!Array.isArray(timeline.events) || timeline.events.length > 120))) {
+      throw new Error("Reader export contains an invalid visual timeline.");
+    }
+    for (const event of timeline.events || []) {
+      if (!event || typeof event !== "object" || !Number.isSafeInteger(event.timestamp_ms) ||
+          event.timestamp_ms < 0 || !Number.isSafeInteger(event.frame_index) || event.frame_index < 0 ||
+          !Array.isArray(event.transcript_alignments) || event.transcript_alignments.length > 100) {
+        throw new Error("Reader export contains an invalid visual frame event.");
+      }
+    }
+  }
   for (const source of data.sources) {
     if (!source || typeof source !== "object" || typeof source.source_id !== "string") {
       throw new Error("A course source has an invalid structure.");
     }
+  }
+}
+function renderVisualTimeline(timeline) {
+  const panel = $("#visual-timeline-panel");
+  const list = $("#visual-timeline-events");
+  if (!panel || !list) return;
+  list.replaceChildren();
+  if (!timeline || typeof timeline !== "object") {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const events = Array.isArray(timeline.events) ? timeline.events.slice(0, 120) : [];
+  const count = Number.isSafeInteger(timeline.frame_count) ? timeline.frame_count : events.length;
+  $("#visual-timeline-summary").textContent = timeline.status === "SAMPLED_NEEDS_REVIEW"
+    ? count + " sampled frames · all frame and transcript links need review. Attach the matching local video to jump."
+    : (timeline.reason || timeline.status.replaceAll("_", " ").toLowerCase());
+  if (!events.length) {
+    list.append(element("p", "muted", "No frame samples are available for this source."));
+    return;
+  }
+  for (const event of events) {
+    const row = element("div", "visual-event-row");
+    const video = $("#local-media");
+    const canSeek = Boolean(video && !video.hidden && video.src &&
+      state.mediaSourceId && state.mediaSourceId === state.book?.anchor_source_id);
+    const seek = element("button", "seek-button", "▶ " + (Number(event.timestamp_ms) / 1000).toFixed(1) + "s");
+    seek.type = "button";
+    seek.disabled = !canSeek;
+    seek.title = canSeek ? "Jump to this frame in the attached local video" : "Attach the exact source video to enable seeking";
+    seek.addEventListener("click", () => {
+      if (!video.src || state.mediaSourceId !== state.book?.anchor_source_id) return;
+      video.currentTime = Number(event.timestamp_ms) / 1000;
+      video.play().catch(() => {});
+    });
+    const links = Array.isArray(event.transcript_alignments) ? event.transcript_alignments : [];
+    row.append(seek, element("span", "visual-event-meta",
+      "FRAME " + (Number(event.frame_index) + 1) + " · " +
+      String(event.review_state || "NEEDS_REVIEW").replaceAll("_", " ") +
+      " · " + links.length + " temporal link(s)"));
+    for (const link of links) {
+      const interval = Number.isFinite(Number(link.transcript_start_ms)) &&
+        Number.isFinite(Number(link.transcript_end_ms))
+        ? " · transcript " + (Number(link.transcript_start_ms) / 1000).toFixed(1) +
+          "–" + (Number(link.transcript_end_ms) / 1000).toFixed(1) + "s"
+        : "";
+      row.append(element("p", "visual-event-link",
+        String(link.relation || "CANDIDATE") + " · " +
+        String(link.review_state || "NEEDS_REVIEW").replaceAll("_", " ") + interval));
+    }
+    list.append(row);
   }
 }
 function renderBook(data, filename) {
@@ -366,6 +432,7 @@ function renderBook(data, filename) {
   $("#clear-button").disabled = false;
   configureMediaSources();
   resetLocalMedia();
+  renderVisualTimeline(data.visual_timeline);
   renderChapter();
 }
 fileInput.addEventListener("change", async () => {
@@ -392,6 +459,7 @@ $("#media-source").addEventListener("change", (event) => {
   resetLocalMedia();
   state.mediaSourceId = event.target.value || null;
   $("#media-file").disabled = !state.mediaSourceId;
+  renderVisualTimeline(state.book?.visual_timeline);
   $("#media-status").textContent = state.mediaSourceId
     ? "Source selected. Attach only the matching local media file."
     : "Select the exact course source before attaching media.";
@@ -413,6 +481,7 @@ $("#media-file").addEventListener("change", (event) => {
   media.load();
   $("#media-status").textContent = "Attached locally: " + file.name + ". Timestamps are source-local; no cross-source offset is applied.";
   event.target.value = "";
+  renderVisualTimeline(state.book?.visual_timeline);
   renderChapter();
 });
 $("#search").addEventListener("input", (event) => {

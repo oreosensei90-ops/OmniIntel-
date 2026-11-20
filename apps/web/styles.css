@@ -22,3 +22,5 @@
 #online-status.error{color:var(--danger,#e56b6f)}
 .local-import{margin:1.25rem 0;color:var(--muted)}
 .local-import summary{cursor:pointer;font-weight:650}
+
+.visual-timeline-panel{display:grid;gap:10px;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}.visual-timeline-panel[hidden]{display:none}.visual-timeline-panel .eyebrow{margin:0}.visual-timeline-panel .muted{font-size:10px;margin:5px 0}.visual-timeline-events{display:grid;gap:6px;max-height:250px;overflow:auto}.visual-event-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)}.visual-event-meta{font-size:10px;color:var(--muted)}.visual-event-link{width:100%;margin:0 0 0 12px;font-size:10px;color:var(--muted)}
