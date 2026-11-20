@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -205,3 +206,104 @@ def test_youtube_cli_handles_http_429_without_exporting_reader(tmp_path, monkeyp
     assert "HTTP 429" in captured.err
     assert "temporarily rate-limiting" in captured.err
     assert not output.exists()
+
+
+def test_youtube_processing_falls_back_to_audio_asr_when_public_captions_are_missing(tmp_path, monkeypatch):
+    import omniintel.youtube_pipeline as pipeline
+
+    metadata = {
+        "video_id": "AbCdEf12345",
+        "url": "https://www.youtube.com/watch?v=AbCdEf12345",
+        "title": "A lecture",
+        "duration_ms": 240_000,
+        "language": "en",
+    }
+    expected_reader = {"source": {"id": "source-asr"}, "pipeline": {}}
+    monkeypatch.setattr(pipeline, "inspect_video", lambda _url: metadata)
+    monkeypatch.setattr(
+        pipeline, "fetch_public_captions",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("No public captions were available in the selected languages.")
+        ),
+    )
+    calls = {}
+    def fake_asr(database, info, *, language=None, chapter_minutes=10):
+        calls.update(
+            database=database, metadata=info, language=language,
+            chapter_minutes=chapter_minutes,
+        )
+        return expected_reader
+    monkeypatch.setattr(pipeline, "transcribe_youtube_audio", fake_asr)
+
+    result = pipeline.process_youtube_video(
+        tmp_path / "worker.db", metadata["url"],
+        user_approved_network=True, language="en",
+    )
+    assert result is expected_reader
+    assert calls["metadata"]["video_id"] == "AbCdEf12345"
+    assert calls["language"] == "en"
+    assert calls["chapter_minutes"] == 10
+    assert result["pipeline"]["transcript_origin"] == "youtube_audio_asr"
+
+
+def test_youtube_audio_asr_downloads_audio_and_preserves_video_provenance(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import omniintel.youtube_pipeline as pipeline
+    from omniintel.store import OmniIntelStore
+    from omniintel.database import connect
+
+    database = tmp_path / "youtube-asr.db"
+    source_id = OmniIntelStore(database).create_source(title="A lecture")
+    metadata = {
+        "video_id": "AbCdEf12345",
+        "url": "https://www.youtube.com/watch?v=AbCdEf12345",
+        "title": "A lecture",
+        "duration_ms": 240_000,
+        "language": "en",
+    }
+    download_options = {}
+    class FakeYDL:
+        def __init__(self, options):
+            self.options = options
+            download_options.update(options)
+        def __enter__(self):
+            return self
+        def __exit__(self, *_args):
+            return False
+        def download(self, _urls):
+            Path(self.options["outtmpl"].replace("%(ext)s", "webm")).write_bytes(b"audio")
+    class FakeYtDlp:
+        YoutubeDL = FakeYDL
+    monkeypatch.setattr(pipeline, "_yt_dlp", lambda: FakeYtDlp)
+    monkeypatch.setenv("OMNIINTEL_ASSET_DIR", str(tmp_path / "assets"))
+    monkeypatch.setenv("OMNIINTEL_ASR_MODEL_ID", "tiny")
+    monkeypatch.setenv("OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD", "1")
+    monkeypatch.setattr(
+        pipeline, "import_local_file",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            source_id=source_id, asset=SimpleNamespace(id="video-asset")
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline, "extract_audio",
+        lambda *_args, **_kwargs: SimpleNamespace(output_asset_id="wav-asset"),
+    )
+    adapter = {}
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            adapter.update(kwargs)
+    monkeypatch.setattr(pipeline, "FasterWhisperAdapter", FakeAdapter)
+    monkeypatch.setattr(pipeline, "run_wav_transcription", lambda *_args, **_kwargs: None)
+    expected_reader = {"source": {"id": source_id}}
+    monkeypatch.setattr(pipeline, "compose_registered_source", lambda *_args, **_kwargs: expected_reader)
+
+    result = pipeline.transcribe_youtube_audio(database, metadata, language="en")
+    assert result is expected_reader
+    assert adapter["model_id"] == "tiny"
+    assert adapter["allow_model_download"] is True
+    assert download_options["format"] == "bestaudio"
+    assert download_options["max_filesize"] == 250 * 1024 * 1024
+    with connect(database) as conn:
+        source = conn.execute("SELECT source_uri,metadata_json FROM sources WHERE id=?", (source_id,)).fetchone()
+    assert source["source_uri"] == metadata["url"]
+    assert json.loads(source["metadata_json"])["transcript_origin"] == "youtube_audio_asr"

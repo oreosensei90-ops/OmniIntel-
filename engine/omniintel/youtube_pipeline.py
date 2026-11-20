@@ -1,13 +1,14 @@
-"""Consent-gated YouTube caption intake and evidence-preserving textbook composition.
+"""Consent-gated YouTube captions/audio transcription and evidence-preserving reader composition.
 
-This adapter retrieves public captions only. It never downloads video/audio, bypasses
-DRM, uses cookies, or contacts an LLM. Local audio transcription remains a separate,
-explicitly selected workflow using the existing WAV/ASR pipeline.
+Public captions are preferred. If unavailable, and the user has approved media processing,
+only the audio stream is downloaded and passed through the existing local FFmpeg/ASR engine.
+No cookies, private endpoints, video-file download, DRM circumvention, or LLM calls occur.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -19,6 +20,9 @@ from .models import TranscriptImport, TranscriptSegmentInput
 from .store import OmniIntelStore
 from .textbook import BlockInput, TextbookStore
 from .reader_export import to_reader_export
+from .local_files import import_local_file
+from .audio_extract import extract_audio
+from .transcription import FasterWhisperAdapter, run_wav_transcription
 
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 _ALLOWED_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"}
@@ -219,6 +223,79 @@ def compose_transcript_textbook(
     return to_reader_export(database_path, tree, imported.source_id)
 
 
+def transcribe_youtube_audio(
+    database_path: str | Path,
+    metadata: dict,
+    *,
+    language: str | None = None,
+    chapter_minutes: int = 10,
+) -> dict:
+    """Download only the audio stream, transcribe it locally, and preserve YouTube provenance."""
+    yt_dlp = _yt_dlp()
+    asset_dir = Path(os.environ.get("OMNIINTEL_ASSET_DIR", str(Path(database_path).parent / "assets")))
+    model_path = os.environ.get("OMNIINTEL_ASR_MODEL_PATH", "")
+    model_id = model_path if model_path and Path(model_path).is_dir() else os.environ.get("OMNIINTEL_ASR_MODEL_ID", "")
+    allow_download = os.environ.get("OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD") == "1"
+    if not model_id:
+        raise RuntimeError(
+            "Public captions are unavailable and hosted ASR is not configured. "
+            "Set OMNIINTEL_ASR_MODEL_ID and OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1, "
+            "or provide OMNIINTEL_ASR_MODEL_PATH."
+        )
+    with tempfile.TemporaryDirectory(prefix="omniintel-youtube-audio-") as directory:
+        output = Path(directory) / "source.%(ext)s"
+        options = {
+            "quiet": True, "no_warnings": True, "noplaylist": True,
+            "format": "bestaudio", "outtmpl": str(output),
+            "max_filesize": 250 * 1024 * 1024,
+            "socket_timeout": 30, "retries": 2, "fragment_retries": 2,
+            "continuedl": False, "overwrites": True,
+            "http_headers": {"User-Agent": "OmniIntel-CloudWorker/1.0 (+https://omniintel.pages.dev)"},
+        }
+        with yt_dlp.YoutubeDL(options) as client:
+            client.download([metadata["url"]])
+        candidates = [p for p in Path(directory).glob("source.*") if p.is_file() and p.stat().st_size > 0]
+        if len(candidates) != 1:
+            raise RuntimeError("YouTube audio download did not produce exactly one media file")
+        if candidates[0].stat().st_size > 250 * 1024 * 1024:
+            raise ValueError("YouTube audio exceeds the 250 MiB processing limit")
+        imported = import_local_file(
+            database_path, asset_dir, candidates[0], title=metadata["title"],
+            max_bytes=250 * 1024 * 1024,
+        )
+    # The registered source is the same source used by the transcript and reader;
+    # update its provenance from the temporary downloaded filename to the video URL.
+    with connect(database_path) as conn:
+        row = conn.execute("SELECT metadata_json FROM sources WHERE id=?", (imported.source_id,)).fetchone()
+        source_metadata = json.loads(row["metadata_json"] or "{}") if row else {}
+        source_metadata.update({
+            "ingestion_method": "youtube_audio_asr",
+            "transcript_origin": "youtube_audio_asr",
+            "video_id": metadata["video_id"],
+            "uploader": metadata.get("uploader", ""),
+            "rights_status": "UNVERIFIED",
+            "audio_downloaded_for_transcription": True,
+        })
+        conn.execute(
+            "UPDATE sources SET source_uri=?, language=?, duration_ms=?, metadata_json=? WHERE id=?",
+            (metadata["url"], language or metadata.get("language"), metadata.get("duration_ms"),
+             json.dumps(source_metadata, ensure_ascii=False, sort_keys=True), imported.source_id),
+        )
+    extracted = extract_audio(database_path, asset_dir, imported.asset.id, timeout_seconds=1800)
+    adapter = FasterWhisperAdapter(
+        model_id=model_id,
+        device=os.environ.get("OMNIINTEL_ASR_DEVICE", "cpu"),
+        compute_type=os.environ.get("OMNIINTEL_ASR_COMPUTE_TYPE", "int8"),
+        cpu_threads=int(os.environ.get("OMNIINTEL_ASR_THREADS", "2")),
+        allow_model_download=allow_download,
+    )
+    run_wav_transcription(
+        database_path, asset_dir, imported.source_id, extracted.output_asset_id,
+        adapter, language=language,
+    )
+    return compose_registered_source(database_path, imported.source_id, chapter_minutes=chapter_minutes)
+
+
 def process_youtube_video(
     database_path: str | Path,
     url: str,
@@ -231,7 +308,20 @@ def process_youtube_video(
     if user_approved_network is not True:
         raise PermissionError("Explicit approval is required before contacting YouTube")
     metadata = inspect_video(url)
-    caption_text, caption_language = fetch_public_captions(metadata["url"], language=language)
+    try:
+        caption_text, caption_language = fetch_public_captions(metadata["url"], language=language)
+    except RuntimeError as error:
+        if "No public captions were available" not in str(error):
+            raise
+        reader = transcribe_youtube_audio(
+            database_path, metadata, language=language, chapter_minutes=chapter_minutes
+        )
+        reader["pipeline"]["status"] = "TRANSCRIPT_DRAFT_READY"
+        reader["pipeline"]["transcript_origin"] = "youtube_audio_asr"
+        reader["pipeline"]["composition"] = "EXTRACTIVE_SOURCE_GROUNDED"
+        reader["pipeline"]["review_required"] = True
+        reader["pipeline"]["ai_generated_explanations"] = False
+        return reader
     transcript = parse_caption_text(
         caption_text, title=metadata["title"], source_uri=metadata["url"],
         language=language or caption_language, duration_ms=metadata["duration_ms"],
@@ -314,7 +404,7 @@ def queue_main() -> None:
     parser.add_argument("queue_json", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--approve-network", action="store_true",
-                        help="Approve public metadata/caption requests for every queued video")
+                        help="Approve video processing, including audio-only fallback download when captions are unavailable")
     parser.add_argument("--language", default=None)
     parser.add_argument("--chapter-minutes", type=int, default=10)
     args = parser.parse_args()
@@ -465,7 +555,7 @@ def main() -> None:
     parser.add_argument("database", type=Path)
     parser.add_argument("url")
     parser.add_argument("--approve-network", action="store_true",
-                        help="Confirm that you are authorized to process this video's public captions")
+                        help="Approve video processing, including audio-only fallback download when captions are unavailable")
     parser.add_argument("--language", default=None, help="Caption language code, e.g. en or hi")
     parser.add_argument("--chapter-minutes", type=int, default=10)
     parser.add_argument("--output", type=Path, required=True, help="Reader JSON file to import into OmniIntel Android")

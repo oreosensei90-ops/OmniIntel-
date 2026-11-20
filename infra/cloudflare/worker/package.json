@@ -1,0 +1,21 @@
+{
+  "name": "omniintel-cloudflare-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261118.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.48.0",
+    "vitest": "^3.2.4"
+  }
+}

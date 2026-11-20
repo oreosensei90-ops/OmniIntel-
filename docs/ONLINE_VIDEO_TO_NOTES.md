@@ -1,5 +1,57 @@
 # Online video → AI study notes
 
+## Cloudflare + Backblaze deployment (current Web and Android integration)
+
+The current Web and Android online clients use the Worker contract documented in
+`infra/cloudflare/worker/README.md`:
+
+1. Cloudflare Worker authenticates requests and stores job metadata/leases in D1.
+2. YouTube jobs enter D1 after explicit public-network approval.
+3. Media jobs receive a short-lived presigned B2 upload URL. The client uploads directly to
+   the private bucket, then calls the upload-completion endpoint. D1 will not expose the job
+   to workers until B2 confirms the object exists and is within the 250 MiB limit.
+4. A user-controlled local computer/Termux agent claims the job, downloads media from B2 when
+   needed, and invokes the existing Python engine.
+5. The local agent renews the D1 lease during processing, validates the completed reader
+   document, and sends it to the Worker. The Worker stores the reader JSON in B2.
+6. Web and Android poll the authenticated job status, download the short-lived result URL,
+   and import the reader into their existing offline libraries.
+
+The processing agent requires a persistent local database, Python dependencies and (for media
+transcription) FFmpeg, ffprobe and a preinstalled faster-whisper/CTranslate2 model directory.
+The processing computer must remain online. No hosted compute service is required. The
+OpenAI provider key, if AI generation is approved, stays on the local processing host.
+
+Install and start the local agent:
+
+```bash
+python -m pip install -e '.[youtube,asr]'
+export OMNIINTEL_WORKER_API='https://<your-worker-subdomain>.workers.dev'
+export OMNIINTEL_API_TOKEN='<same-long-token-configured-as-Worker-secret>'
+export OMNIINTEL_DATABASE="$HOME/omniintel/cloud-bridge.db"
+export OMNIINTEL_UPLOAD_DIR="$HOME/omniintel/uploads"
+export OMNIINTEL_ASSET_DIR="$HOME/omniintel/assets"
+export OMNIINTEL_ASR_MODEL_PATH="$HOME/models/faster-whisper-small"
+# Only when the user approved external AI and the local engine uses OpenAI:
+export OMNIINTEL_OPENAI_API_KEY='<local-provider-key>'
+omniintel-cloud-worker --poll-seconds 5
+```
+
+Use a dedicated database path for this bridge worker. The bridge reuses the existing local
+`JobQueue` and processing handlers in that database; do not point it at a database that has
+unrelated pending local jobs. Use `--once` for a one-job smoke test. See the Worker README
+for D1 migration, B2 CORS, secrets, bucket permissions and deployment steps.
+
+This deployment is single-tenant: the bearer token is a shared API credential, not a
+per-user identity system. Do not expose it in a public multi-user product. Configure exact
+Web-origin CORS on the Worker and B2 bucket. Keep B2 private and do not commit any secret.
+
+## Existing self-hosted FastAPI deployment
+
+The Python FastAPI service and its original local SQLite queue remain available as an
+alternative self-hosted deployment. They use the older API response contract and are not
+the target for the current Worker-integrated Web/Android client code unless an adapter is added.
+
 ## Current online flow
 
 1. The Web or Android client submits a single supported YouTube URL to the authenticated OmniIntel API.

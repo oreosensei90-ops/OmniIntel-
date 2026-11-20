@@ -139,13 +139,14 @@ def test_web_reader_bounds_imported_chapter_block_and_evidence_counts() -> None:
 
 
 
-def test_video_to_notes_requires_separate_network_and_ai_approval() -> None:
+def test_video_to_notes_requires_network_and_keeps_ai_optional() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert 'id="approve-network"' in html
     assert 'id="approve-ai"' in html
     assert "approve_network: true" in app
-    assert "approve_ai: true" in app
+    assert 'approve_ai: $("#approve-ai").checked' in app
+    assert 'id="approve-ai" type="checkbox" required' not in html
     assert "renderBook(reader" in app
     assert 'sessionStorage.setItem("omniintel-api-token", token)' in app
 
@@ -161,8 +162,33 @@ def test_web_supports_authorized_media_upload_for_no_caption_transcription_fallb
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert 'id="online-media-form"' in html
-    assert 'id="approve-upload-ai"' in html
+    assert 'id="approve-upload" type="checkbox" required' in html
+    assert 'id="approve-upload-ai" type="checkbox"' in html
+    assert 'approve_ai: $("#approve-upload-ai").checked' in app
+    assert 'new URL(job.result_url).protocol !== "https:"' in app
     assert 'accept="audio/*,video/*"' in html
     assert '"/v1/media/jobs"' in app
-    assert 'form.append("file", file, file.name)' in app
+    assert "filename: file.name" in app
+    assert "fetch(created.upload_url" in app
+    assert "created.upload_complete_url" in app
     assert "250 * 1024 * 1024" in app
+
+
+def test_cloudflare_job_schema_tracks_upload_completion_gate() -> None:
+    root = Path(__file__).parents[1]
+    migrations = root / "infra" / "cloudflare" / "worker" / "migrations"
+    schema = (migrations / "0001_jobs.sql").read_text(encoding="utf-8")
+    upload_gate = (migrations / "0002_upload_gate.sql").read_text(encoding="utf-8")
+    worker = (
+        root / "infra" / "cloudflare" / "worker" / "src" / "index.ts"
+    ).read_text(encoding="utf-8")
+    assert "input_uploaded INTEGER NOT NULL DEFAULT 1" in upload_gate
+    assert "input_uploaded" not in schema
+    assert "input_uploaded = 1" in worker
+    assert "input_uploaded=0" in worker
+
+
+def test_media_download_url_requires_https_in_both_web_flows() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert app.count('new URL(job.result_url).protocol !== "https:"') == 2
+    assert '!new URL(job.result_url).protocol === "https:"' not in app

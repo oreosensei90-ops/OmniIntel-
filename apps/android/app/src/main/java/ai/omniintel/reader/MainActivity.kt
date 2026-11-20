@@ -696,11 +696,11 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = aiApproved, onCheckedChange = { aiApproved = it })
-                    Text("I authorize sending the transcript to this server's configured AI provider.", color = Muted, fontSize = 11.sp)
+                    Text("I authorize sending the transcript to the AI provider configured on my processing machine.", color = Muted, fontSize = 11.sp)
                 }
                 Button(
                     enabled = !onlineBusy && videoUrlDraft.isNotBlank() && apiBaseDraft.isNotBlank() &&
-                        apiTokenDraft.isNotBlank() && networkApproved && aiApproved,
+                        apiTokenDraft.isNotBlank() && networkApproved,
                     onClick = {
                         val parsed = parseYouTubeUrl(videoUrlDraft)
                         if (parsed == null) {
@@ -713,7 +713,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                             scope.launch {
                                 try {
                                     val created = withContext(Dispatchers.IO) {
-                                        submitRemoteVideoJob(apiBase, apiToken, parsed.url)
+                                        submitRemoteVideoJob(apiBase, apiToken, parsed.url, approveAi = aiApproved)
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
@@ -727,11 +727,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                         }
                                         when (status.optString("status")) {
                                             "COMPLETED" -> {
-                                                val result = status.optJSONObject("result")
-                                                    ?: error("The server returned no job result.")
-                                                val reader = result.optJSONObject("reader")
-                                                    ?: error("The server completed without a reader export.")
-                                                readerJson = reader.toString()
+                                                val resultUrl = status.optString("result_url")
+                                                if (!resultUrl.startsWith("https://")) error("The server completed without a reader download URL.")
+                                                readerJson = downloadRemoteReaderJson(resultUrl)
                                             }
                                             "FAILED" -> error(status.optString("error").ifBlank { "Video processing failed." })
                                             else -> {
@@ -765,7 +763,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 }
                 Button(
                     enabled = !onlineBusy && uploadUri != null && apiBaseDraft.isNotBlank() &&
-                        apiTokenDraft.isNotBlank() && uploadConsent && aiApproved,
+                        apiTokenDraft.isNotBlank() && uploadConsent,
                     onClick = {
                         val selectedUri = uploadUri
                         if (selectedUri != null) {
@@ -776,7 +774,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                             scope.launch {
                                 try {
                                     val created = withContext(Dispatchers.IO) {
-                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri)
+                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri, approveAi = aiApproved)
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
@@ -790,11 +788,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                         }
                                         when (status.optString("status")) {
                                             "COMPLETED" -> {
-                                                val result = status.optJSONObject("result")
-                                                    ?: error("The server returned no job result.")
-                                                val reader = result.optJSONObject("reader")
-                                                    ?: error("The server completed without a reader export.")
-                                                readerJson = reader.toString()
+                                                val resultUrl = status.optString("result_url")
+                                                if (!resultUrl.startsWith("https://")) error("The server completed without a reader download URL.")
+                                                readerJson = downloadRemoteReaderJson(resultUrl)
                                             }
                                             "FAILED" -> error(status.optString("error").ifBlank { "Media transcription failed." })
                                             else -> {

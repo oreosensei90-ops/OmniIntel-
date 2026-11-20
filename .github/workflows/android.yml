@@ -5,7 +5,7 @@ concurrency:
 
 on:
   push:
-    branches: [main, build/omniintel-foundation, migration/omniintel-foundation]
+    branches: [main, build/omniintel-foundation, build/d1-b2-worker-bridge, migration/omniintel-foundation]
   pull_request:
     paths:
       - "apps/android/**"

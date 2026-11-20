@@ -10,7 +10,7 @@ The Web client connects to a separately deployed OmniIntel API for consent-gated
 4. Explicitly approve public metadata/caption retrieval and sending the transcript to the server-configured AI provider.
 5. The client submits a background job, displays its progress, and opens the resulting AI-assisted reader export automatically.
 
-The API token is stored only in session storage for the current tab. The API origin is stored locally. The OpenAI key is server-side only and is never embedded in the Web app. CORS must be configured on the server for the exact Web origin.
+The API token is stored only in session storage for the current tab. The API origin is stored locally. The provider key stays on the local processing machine and is never embedded in the Web app. The current client contract targets the Cloudflare Worker + D1 + private Backblaze B2 architecture. Configure exact-origin CORS on both the Worker and B2 bucket. Media uploads use a short-lived presigned B2 URL; completed reader JSON is fetched from a short-lived result URL.
 
 ## Supported source processing
 
