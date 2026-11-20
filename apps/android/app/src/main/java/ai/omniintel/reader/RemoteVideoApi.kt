@@ -22,14 +22,10 @@ private fun remoteApiBase(raw: String): String {
 }
 
 private fun remoteApiRequest(
-    base: String,
-    token: String,
-    path: String,
-    method: String,
+    base: String, token: String, path: String, method: String,
     payload: JSONObject? = null
 ): JSONObject {
-    val endpoint = URL(remoteApiBase(base) + path)
-    val connection = endpoint.openConnection() as HttpURLConnection
+    val connection = URL(remoteApiBase(base) + path).openConnection() as HttpURLConnection
     connection.requestMethod = method
     connection.connectTimeout = 20_000
     connection.readTimeout = 120_000
@@ -48,9 +44,9 @@ private fun remoteApiRequest(
         val result = runCatching { JSONObject(raw) }.getOrElse {
             error("OmniIntel API returned an invalid response (HTTP $status).")
         }
-        if (status !in 200..299) {
-            error(result.optString("detail").ifBlank { "OmniIntel API request failed (HTTP $status)." })
-        }
+        if (status !in 200..299) error(result.optString("error").ifBlank {
+            result.optString("detail").ifBlank { "OmniIntel API request failed (HTTP $status)." }
+        })
         return result
     } finally {
         connection.disconnect()
@@ -58,10 +54,7 @@ private fun remoteApiRequest(
 }
 
 fun submitRemoteVideoJob(
-    apiBase: String,
-    token: String,
-    videoUrl: String,
-    language: String? = null
+    apiBase: String, token: String, videoUrl: String, language: String? = null
 ): JSONObject {
     require(token.isNotBlank()) { "Enter the API access token." }
     val payload = JSONObject()
@@ -80,12 +73,32 @@ fun getRemoteVideoJob(apiBase: String, token: String, statusPath: String): JSONO
     return remoteApiRequest(apiBase, token, statusPath, "GET")
 }
 
+fun downloadRemoteReaderJson(resultUrl: String): String {
+    val url = URL(resultUrl)
+    require(url.protocol == "https" && url.host.isNotBlank()) {
+        "The server returned an invalid reader download URL."
+    }
+    val connection = url.openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+    connection.connectTimeout = 20_000
+    connection.readTimeout = 120_000
+    connection.instanceFollowRedirects = false
+    try {
+        val status = connection.responseCode
+        if (status !in 200..299) error("Reader download failed (HTTP $status).")
+        val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        require(text.toByteArray(Charsets.UTF_8).size <= 20 * 1024 * 1024) {
+            "Reader export exceeds the 20 MiB download limit."
+        }
+        JSONObject(text) // fail closed before handing the export to the importer
+        return text
+    } finally {
+        connection.disconnect()
+    }
+}
 
 fun uploadRemoteMedia(
-    context: Context,
-    apiBase: String,
-    token: String,
-    uri: Uri,
+    context: Context, apiBase: String, token: String, uri: Uri,
     language: String? = null
 ): JSONObject {
     require(token.isNotBlank()) { "Enter the API access token." }
@@ -95,40 +108,44 @@ fun uploadRemoteMedia(
     }
     var displayName = "omniintel-media-upload"
     var declaredSize = -1L
-    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
-        ?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (nameIndex >= 0) displayName = cursor.getString(nameIndex) ?: displayName
-                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) declaredSize = cursor.getLong(sizeIndex)
-            }
+    context.contentResolver.query(
+        uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (nameIndex >= 0) displayName = cursor.getString(nameIndex) ?: displayName
+            if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) declaredSize = cursor.getLong(sizeIndex)
         }
+    }
     val maxBytes = 250L * 1024L * 1024L
-    require(declaredSize <= maxBytes || declaredSize < 0) { "Media upload exceeds the 250 MiB limit." }
+    require(declaredSize <= maxBytes || declaredSize < 0) {
+        "Media upload exceeds the 250 MiB limit."
+    }
     val safeName = displayName.replace("\"", "").replace("\r", "").replace("\n", "").take(180)
-    val boundary = "----OmniIntel" + UUID.randomUUID().toString().replace("-", "")
-    val connection = URL(remoteApiBase(apiBase) + "/v1/media/jobs").openConnection() as HttpURLConnection
-    connection.requestMethod = "POST"
-    connection.connectTimeout = 20_000
-    connection.readTimeout = 120_000
-    connection.instanceFollowRedirects = false
-    connection.doOutput = true
-    connection.setChunkedStreamingMode(64 * 1024)
-    connection.setRequestProperty("Authorization", "Bearer $token")
-    connection.setRequestProperty("Accept", "application/json")
-    connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+    val payload = JSONObject()
+        .put("filename", safeName)
+        .put("title", safeName)
+        .put("approve_media_upload", true)
+        .put("approve_ai", true)
+        .put("chapter_minutes", 10)
+    if (!language.isNullOrBlank()) payload.put("language", language)
+    val created = remoteApiRequest(apiBase, token, "/v1/media/jobs", "POST", payload)
+    val uploadUrl = created.optString("upload_url")
+    val completePath = created.optString("upload_complete_url")
+    require(uploadUrl.startsWith("https://") && completePath.startsWith("/v1/jobs/")) {
+        "The Worker did not return valid upload instructions."
+    }
+    val upload = URL(uploadUrl).openConnection() as HttpURLConnection
+    upload.requestMethod = "PUT"
+    upload.connectTimeout = 20_000
+    upload.readTimeout = 180_000
+    upload.instanceFollowRedirects = false
+    upload.doOutput = true
+    upload.setChunkedStreamingMode(64 * 1024)
+    upload.setRequestProperty("Content-Type", mime)
     try {
-        connection.outputStream.use { output ->
-            fun writeField(name: String, value: String) {
-                output.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
-                output.write("Content-Disposition: form-data; name=\"$name\"\r\n\r\n".toByteArray(Charsets.UTF_8))
-                output.write(value.toByteArray(Charsets.UTF_8))
-                output.write("\r\n".toByteArray(Charsets.UTF_8))
-            }
-            output.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
-            output.write("Content-Disposition: form-data; name=\"file\"; filename=\"$safeName\"\r\n".toByteArray(Charsets.UTF_8))
-            output.write("Content-Type: $mime\r\n\r\n".toByteArray(Charsets.UTF_8))
+        upload.outputStream.use { output ->
             val input = context.contentResolver.openInputStream(uri)
                 ?: error("Could not open the selected media file.")
             var total = 0L
@@ -143,24 +160,12 @@ fun uploadRemoteMedia(
                 }
             }
             require(total > 0) { "The selected media file is empty." }
-            output.write("\r\n".toByteArray(Charsets.UTF_8))
-            writeField("approve_ai", "true")
-            if (!language.isNullOrBlank()) writeField("language", language)
-            writeField("title", safeName)
-            output.write("--$boundary--\r\n".toByteArray(Charsets.UTF_8))
-            output.flush()
         }
-        val status = connection.responseCode
-        val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-        val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-        val result = runCatching { JSONObject(raw) }.getOrElse {
-            error("OmniIntel API returned an invalid response (HTTP $status).")
-        }
-        if (status !in 200..299) {
-            error(result.optString("detail").ifBlank { "Media upload failed (HTTP $status)." })
-        }
-        return result
+        val status = upload.responseCode
+        if (status !in 200..299) error("Backblaze upload failed (HTTP $status).")
     } finally {
-        connection.disconnect()
+        upload.disconnect()
     }
+    remoteApiRequest(apiBase, token, completePath, "POST", JSONObject())
+    return created
 }
