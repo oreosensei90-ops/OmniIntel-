@@ -38,9 +38,9 @@
         <label for="video-language">Preferred caption language (optional)</label>
         <input id="video-language" type="text" placeholder="en, hi, fr…" maxlength="16">
         <label class="consent-line"><input id="approve-network" type="checkbox" required> I am authorized to process this video, and approve retrieving its public metadata and captions.</label>
-        <label class="consent-line"><input id="approve-ai" type="checkbox" required> I approve sending the retrieved transcript to the AI provider configured on my processing machine to generate study notes.</label>
+        <label class="consent-line"><input id="approve-ai" type="checkbox"> I approve sending the retrieved transcript to the AI provider configured on my processing machine to generate study notes.</label>
         <button id="online-submit" class="primary-button" type="submit">Generate video notes</button>
-        <p id="online-status" class="hint" role="status" aria-live="polite">Requires a deployed OmniIntel API and configured AI provider. Your token is kept in this tab only.</p>
+        <p id="online-status" class="hint" role="status" aria-live="polite">Requires a deployed OmniIntel API. AI-generated study notes are optional and require separate consent. Your token is kept in this tab only.</p>
       </form>
       <form id="online-media-form" class="online-panel">
         <p class="eyebrow">NO CAPTIONS? · TRANSCRIBE YOUR MEDIA</p>
@@ -48,7 +48,7 @@
         <input id="media-upload-file" type="file" accept="audio/*,video/*" required>
         <label for="upload-language">Spoken language (optional)</label>
         <input id="upload-language" type="text" placeholder="en, hi, fr…" maxlength="16">
-        <label class="consent-line"><input id="approve-upload-ai" type="checkbox" required> I own or am authorized to process this media, and approve sending its transcript to the AI provider configured on my processing machine.</label>
+        <label class="consent-line"><input id="approve-upload" type="checkbox" required> I own or am authorized to upload and process this media. </label>\n        <label class="consent-line"><input id="approve-upload-ai" type="checkbox"> I separately approve sending its transcript to the AI provider configured on my processing machine for AI-generated study notes.</label>
         <button id="media-upload-submit" class="primary-button" type="submit">Upload and generate notes</button>
         <p id="media-upload-status" class="hint" role="status" aria-live="polite">Requires a server with FFmpeg, ffprobe and a local faster-whisper model configured. The media is uploaded to that server for transcription.</p>
       </form>
