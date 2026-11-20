@@ -9,6 +9,8 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "0,30 * * * *"
 permissions:
   contents: read
 jobs:
@@ -38,9 +40,9 @@ jobs:
     env:
       OMNIINTEL_WORKER_API: https://omniintel-api.scrbaba502.workers.dev
       OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
-      OMNIINTEL_DATABASE: ${{ runner.temp }}/omniintel/worker.sqlite3
-      OMNIINTEL_UPLOAD_DIR: ${{ runner.temp }}/omniintel/uploads
-      OMNIINTEL_ASSET_DIR: ${{ runner.temp }}/omniintel/assets
+      OMNIINTEL_DATABASE: .omniintel/worker.sqlite3
+      OMNIINTEL_UPLOAD_DIR: .omniintel/uploads
+      OMNIINTEL_ASSET_DIR: .omniintel/assets
     steps:
       - name: Check whether the API secret is configured
         id: guard
