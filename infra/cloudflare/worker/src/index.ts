@@ -131,7 +131,7 @@ async function completeJob(request: Request, env: Env, jobId: string) {
   }
   const bytes = new TextEncoder().encode(JSON.stringify(body.reader));
   if (bytes.byteLength > max(env.MAX_ARTIFACT_BYTES, 20 * 1024 * 1024)) return json({ error: "Reader artifact exceeds size limit" }, 413);
-  const key = `readers/${jobId}/reader.json`;
+  const key = `readers/${jobId}/${body.lease_token}/reader.json`;
   const response = await b2(env).fetch(objectUrl(env, key), {
     method: "PUT", headers: { "content-type": "application/json", "x-amz-meta-job-id": jobId }, body: bytes,
   });
@@ -142,7 +142,18 @@ async function completeJob(request: Request, env: Env, jobId: string) {
   if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
   return json({ job_id: jobId, status: "COMPLETED", result_key: key });
 }
-async function failJob(request: Request, env: Env, jobId: string) {
+
+async function heartbeatJob(request: Request, env: Env, jobId: string) {
+  const body = await readJson(request, 8 * 1024);
+  if (typeof body.lease_token !== "string" || !body.lease_token) return json({ error: "lease_token is required" }, 400);
+  const expires = now() + 900;
+  const result = await env.DB.prepare(
+    "UPDATE jobs SET lease_expires_at=?, updated_at=? WHERE id=? AND state='RUNNING' AND lease_token=?"
+  ).bind(expires, now(), jobId, body.lease_token).run();
+  if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
+  return json({ job_id: jobId, lease_expires_at: expires });
+}
+\nasync function failJob(request: Request, env: Env, jobId: string) {
   const body = await readJson(request, 16 * 1024);
   if (typeof body.lease_token !== "string" || typeof body.error !== "string") return json({ error: "lease_token and error are required" }, 400);
   const error = body.error.slice(0, 2000);
