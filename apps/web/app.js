@@ -807,7 +807,7 @@ if (onlineForm) {
           await new Promise(resolve => setTimeout(resolve, 2000));
           const job = await apiRequest(base, token, created.status_url);
           if (job.status === "COMPLETED") {
-            if (!job.result_url || !job.result_url.startsWith("https://")) throw new Error("The server completed without a reader download URL.");
+            if (!job.result_url || !new URL(job.result_url).protocol === "https:") throw new Error("The server completed without a reader download URL.");
             const readerResponse = await fetch(job.result_url);
             if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
             const reader = await readerResponse.json();
