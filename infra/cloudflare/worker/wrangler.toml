@@ -11,6 +11,7 @@ migrations_dir = "migrations"
 
 [vars]
 B2_BUCKET_NAME = "omniintel-assets"
+B2_S3_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
 MAX_ARTIFACT_BYTES = "20971520"
 MAX_UPLOAD_BYTES = "262144000"
 CORS_ORIGIN = "http://localhost:4173"
