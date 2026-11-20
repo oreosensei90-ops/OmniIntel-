@@ -146,6 +146,10 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             study_reader["pipeline"]["network_access"] = (
                 "loopback-only" if provider == "ollama" else "external-user-approved"
             )
+            # AI generation composes a new reader object; carry forward the
+            # separately consented visual timeline instead of silently dropping it.
+            if "visual_timeline" in transcript_reader:
+                study_reader["visual_timeline"] = transcript_reader["visual_timeline"]
             result["reader"] = study_reader
             result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
         queue.complete(job["id"], job["lease_token"], result)
