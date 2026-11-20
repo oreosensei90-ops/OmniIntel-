@@ -63,6 +63,7 @@ fun submitRemoteVideoJob(
         .put("url", videoUrl)
         .put("approve_network", true)
         .put("approve_ai", approveAi)
+        .put("approve_visual", approveVisual)
         .put("chapter_minutes", 10)
     if (!language.isNullOrBlank()) payload.put("language", language)
     return remoteApiRequest(apiBase, token, "/v1/youtube/jobs", "POST", payload)
@@ -101,7 +102,8 @@ fun downloadRemoteReaderJson(resultUrl: String): String {
 
 fun uploadRemoteMedia(
     context: Context, apiBase: String, token: String, uri: Uri,
-    language: String? = null, approveAi: Boolean = false
+    language: String? = null, approveAi: Boolean = false,
+    approveVisual: Boolean = false
 ): JSONObject {
     require(token.isNotBlank()) { "Enter the API access token." }
     val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
