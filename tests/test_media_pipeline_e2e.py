@@ -70,7 +70,9 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
         name = "e2e-fixture-asr"
         version = "1"
         model_id = "deterministic-test-model"
-        configuration = {"deterministic": True, "network": False}
+        @property
+        def configuration(self) -> dict[str, bool]:
+            return {"deterministic": True, "network": False}
 
         def transcribe_chunk(self, wav_path: Path, *, language: str | None):
             with wave.open(str(wav_path), "rb") as audio:
