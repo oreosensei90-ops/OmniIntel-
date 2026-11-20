@@ -219,7 +219,7 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/v1/media/jobs") {
         const payload = await readJson(request, 32 * 1024);
-        return withCors(await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload }) }), env), request, env);
+        return withCors(await createJob(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": request.headers.get("authorization") || "" }, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload }) }), env), request, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/worker/claim") return withCors(await claimJob(env), request, env);
       const complete = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/complete$/i);
