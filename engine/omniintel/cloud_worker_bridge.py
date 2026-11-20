@@ -162,6 +162,7 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
             if not _MEDIA_SUFFIX.search(filename):
                 raise BridgeError("Unsupported uploaded media file extension.")
             media_path = upload_dir / (job_id + suffix)
+            media_path.unlink(missing_ok=True)
             _download_input(str(job.get("download_url") or ""), media_path)
         local_payload = _local_payload(job, media_path)
         os.environ["OMNIINTEL_UPLOAD_DIR"] = str(upload_dir.resolve())
