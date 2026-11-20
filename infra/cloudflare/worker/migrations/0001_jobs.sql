@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS jobs (
   state TEXT NOT NULL CHECK (state IN ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED')),
   payload_json TEXT NOT NULL,
   input_key TEXT,
-  input_uploaded INTEGER NOT NULL DEFAULT 1 CHECK (input_uploaded IN (0, 1)),
   result_key TEXT,
   attempt_count INTEGER NOT NULL DEFAULT 0,
   max_attempts INTEGER NOT NULL DEFAULT 2,
