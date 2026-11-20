@@ -1,0 +1,15 @@
+name = "omniintel-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-20"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "omniintel-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+B2_BUCKET_NAME = "omniintel-assets"
+MAX_ARTIFACT_BYTES = "20971520"
+MAX_UPLOAD_BYTES = "262144000"
