@@ -6,11 +6,11 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "omniintel-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "ac4e2978-6253-4fb1-b451-4800a9a149ef"
 migrations_dir = "migrations"
 
 [vars]
 B2_BUCKET_NAME = "omniintel-assets"
 MAX_ARTIFACT_BYTES = "20971520"
 MAX_UPLOAD_BYTES = "262144000"
-CORS_ORIGIN = "https://REPLACE-WITH-YOUR-WEB-ORIGIN.example"
+CORS_ORIGIN = "http://localhost:4173"
