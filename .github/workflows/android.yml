@@ -5,7 +5,7 @@ concurrency:
 
 on:
   push:
-    branches: [main, build/omniintel-foundation, build/d1-b2-worker-bridge, migration/omniintel-foundation]
+    branches: [main, build/omniintel-foundation, build/d1-b2-worker-bridge, migration/omniintel-foundation, "milestone/**"]
   pull_request:
     paths:
       - "apps/android/**"
@@ -64,7 +64,7 @@ jobs:
         run: ls -lh apps/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish APK as GitHub prerelease
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/heads/milestone/')
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
