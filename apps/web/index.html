@@ -48,7 +48,7 @@
         <input id="media-upload-file" type="file" accept="audio/*,video/*" required>
         <label for="upload-language">Spoken language (optional)</label>
         <input id="upload-language" type="text" placeholder="en, hi, fr…" maxlength="16">
-        <label class="consent-line"><input id="approve-upload-ai" type="checkbox" required> I own or am authorized to process this media, and approve sending its transcript to the AI provider configured by this server.</label>
+        <label class="consent-line"><input id="approve-upload-ai" type="checkbox" required> I own or am authorized to process this media, and approve sending its transcript to the AI provider configured on my processing machine.</label>
         <button id="media-upload-submit" class="primary-button" type="submit">Upload and generate notes</button>
         <p id="media-upload-status" class="hint" role="status" aria-live="polite">Requires a server with FFmpeg, ffprobe and a local faster-whisper model configured. The media is uploaded to that server for transcription.</p>
       </form>
