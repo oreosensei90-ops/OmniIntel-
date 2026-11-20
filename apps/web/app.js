@@ -714,7 +714,6 @@ if (onlineForm) {
       const token = $("#api-token").value.trim();
       if (!token) throw new Error("Enter the API access token supplied by your OmniIntel server.");
       if (!$("#approve-network").checked) throw new Error("Confirm permission to retrieve public video metadata and captions.");
-      if (!$("#approve-ai").checked) throw new Error("Confirm that the transcript may be sent to the configured AI provider to generate study notes.");
       localStorage.setItem("omniintel-api-base-url", base);
       sessionStorage.setItem("omniintel-api-token", token);
       setOnlineStatus("Submitting video…");
@@ -724,7 +723,7 @@ if (onlineForm) {
         body: JSON.stringify({
           url: $("#video-url").value.trim(),
           approve_network: true,
-          approve_ai: true,
+          approve_ai: $("#approve-ai").checked,
           language: $("#video-language").value.trim() || null,
           chapter_minutes: 10
         })
@@ -771,9 +770,7 @@ if (onlineForm) {
         if (!file.type.startsWith("audio/") && !file.type.startsWith("video/")) {
           throw new Error("Choose a supported audio or video file.");
         }
-        if (!$("#approve-upload-ai").checked) {
-          throw new Error("Approve sending the generated transcript to the AI provider configured on your processing machine.");
-        }
+        if (!$("#approve-upload").checked) throw new Error("Confirm that you own or are authorized to upload and process this media.");
         sessionStorage.setItem("omniintel-api-token", token);
         localStorage.setItem("omniintel-api-base-url", base);
         uploadStatus.textContent = "Uploading media securely…";
@@ -784,7 +781,7 @@ if (onlineForm) {
             filename: file.name,
             title: file.name,
             approve_media_upload: true,
-            approve_ai: true,
+            approve_ai: $("#approve-upload-ai").checked,
             language: $("#upload-language").value.trim() || null,
             chapter_minutes: 10
           })
@@ -807,7 +804,7 @@ if (onlineForm) {
           await new Promise(resolve => setTimeout(resolve, 2000));
           const job = await apiRequest(base, token, created.status_url);
           if (job.status === "COMPLETED") {
-            if (!job.result_url || !new URL(job.result_url).protocol === "https:") throw new Error("The server completed without a reader download URL.");
+            if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
             const readerResponse = await fetch(job.result_url);
             if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
             const reader = await readerResponse.json();
