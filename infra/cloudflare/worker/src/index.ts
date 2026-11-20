@@ -66,10 +66,36 @@ async function authorized(
   return difference === 0;
 }
 async function readJson(request: Request, limit = 1024 * 1024): Promise<any> {
-  const length = Number(request.headers.get("content-length") || "0");
-  if (length > limit) throw new Error("Request body is too large.");
-  const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > limit) throw new Error("Request body is too large.");
+  const header = request.headers.get("content-length");
+  const length = header === null ? null : Number(header);
+  if (length !== null && (!Number.isSafeInteger(length) || length < 0 || length > limit)) {
+    throw new Error("Request body is too large or has an invalid Content-Length.");
+  }
+  if (!request.body) throw new Error("A JSON request body is required.");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new Error("Request body is too large.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   return JSON.parse(text);
 }
 function validatePayload(type: JobType, payload: any) {
