@@ -5,7 +5,7 @@
 OmniIntel is a modular monorepo with native Android and web clients, shared versioned contracts, and a replaceable processing engine. Each platform owns its local database and files; contracts and import/export formats are shared rather than sharing a live SQLite database.
 
 ```text
-Android (Compose / Room / WorkManager)      Web (React / TypeScript / IndexedDB)
+Android (Compose / Room)                 Web (vanilla JS / IndexedDB / Service Worker)
                     \                         /
                      Shared domain + event contracts
                                   |
@@ -26,7 +26,7 @@ Do not collapse these layers into one summary field.
 
 ## Initial Python slice
 
-The foundation now includes stable identifiers, typed transcript inputs, SQLite persistence, immutable migration checksums, transcript and PDF-page evidence, local OCR, deterministic PDF layout extraction, source-linked knowledge candidates and evidence-gated textbook composition. It still does not claim to perform speech recognition, semantic claim extraction, visual understanding or AI reasoning.
+The implemented engine includes local-file registration, FFmpeg audio extraction, optional Faster-Whisper transcription, public-caption YouTube intake, bounded PDF text/OCR/layout extraction, source-linked knowledge candidates, review-gated textbook composition, optional local vision adapters and audited PDF/DOCX/HTML/Markdown publishing. Uploaded-media processing and visual timeline sampling are connected through the leased worker path. Model-generated study content remains a review-required draft; semantic correctness and completeness are not inferred from structurally valid citations.
 
 ## Planned processing flow
 
