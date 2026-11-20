@@ -188,7 +188,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/worker/claim") return await claimJob(env);
       const complete = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/complete$/i);
       if (request.method === "POST" && complete) return await completeJob(request, env, complete[1]);
-      const fail = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/fail$/i);
+      const heartbeat = url.pathname.match(/^\\/v1\\/worker\\/jobs\\/([0-9a-f-]+)\\/heartbeat$/i);\n      if (request.method === "POST" && heartbeat) return await heartbeatJob(request, env, heartbeat[1]);\n      const fail = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/fail$/i);
       if (request.method === "POST" && fail) return await failJob(request, env, fail[1]);
       const status = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]+)$/i);
       if (request.method === "GET" && status) return await jobStatus(env, status[1]);
