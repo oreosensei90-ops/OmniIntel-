@@ -94,11 +94,65 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
         "omniintel.worker.FasterWhisperAdapter",
         lambda **_kwargs: DeterministicAsr(),
     )
+
+    def deterministic_study_generator(_model: str, prompt: str):
+        context = json.loads(prompt[prompt.index("{"):])
+        evidence_ids = [item["evidence_id"] for item in context["evidence"]]
+        return {
+            "chapter_summary": (
+                "The source defines acceleration as a change in velocity and describes "
+                "velocity using both speed and direction."
+            ),
+            "summary_evidence_ids": evidence_ids[:3],
+            "concepts": [
+                {
+                    "title": "Acceleration",
+                    "body": "Acceleration is the rate of change of velocity.",
+                    "evidence_ids": [evidence_ids[0]],
+                },
+                {
+                    "title": "Velocity",
+                    "body": "Velocity describes both speed and direction of motion.",
+                    "evidence_ids": [evidence_ids[1]],
+                },
+                {
+                    "title": "Velocity changes",
+                    "body": "A change in velocity can involve speed, direction, or both.",
+                    "evidence_ids": [evidence_ids[2]],
+                },
+            ],
+            "glossary": [],
+            "worked_examples": [],
+            "questions": [
+                {
+                    "title": "Acceleration recall",
+                    "body": "How does the source define acceleration?",
+                    "evidence_ids": [evidence_ids[0]],
+                },
+                {
+                    "title": "Velocity recall",
+                    "body": "Which two aspects describe velocity in the source?",
+                    "evidence_ids": [evidence_ids[1]],
+                },
+                {
+                    "title": "Velocity change recall",
+                    "body": "What kinds of changes can occur in velocity?",
+                    "evidence_ids": [evidence_ids[2]],
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        "omniintel.worker.resolve_study_generator",
+        lambda _provider: deterministic_study_generator,
+    )
     monkeypatch.setenv("OMNIINTEL_UPLOAD_DIR", str(upload_root))
     monkeypatch.setenv("OMNIINTEL_ASSET_DIR", str(asset_root))
     model_path = tmp_path / "asr-model"
     model_path.mkdir()
     monkeypatch.setenv("OMNIINTEL_ASR_MODEL_PATH", str(model_path))
+    monkeypatch.setenv("OMNIINTEL_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("OMNIINTEL_AI_MODEL", "deterministic-test-model")
 
     queue = JobQueue(database)
     job_id = queue.enqueue(
@@ -109,7 +163,7 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
             "title": "Physics lecture",
             "language": "en",
             "chapter_minutes": 10,
-            "approve_ai": False,
+            "approve_ai": True,
         },
         max_attempts=1,
     )
@@ -120,7 +174,10 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
     assert completed["state"] == "COMPLETED", completed.get("last_error")
     reader = completed["result"]["reader"]
     assert reader["source"]["title"] == "Physics lecture"
-    assert reader["pipeline"]["status"] == "TRANSCRIPT_DRAFT_READY"
+    assert reader["pipeline"]["status"] == "AI_STUDY_DRAFT_READY"
+    assert reader["pipeline"]["human_review_required"] is True
+    assert reader["pipeline"]["all_evidence_links"] == "PENDING"
+    assert reader["pipeline"]["provider"] == "ollama"
     blocks = [
         block
         for chapter in reader["chapters"]
