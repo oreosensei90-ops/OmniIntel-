@@ -79,6 +79,36 @@ describe("OmniIntel Worker API authentication", () => {
     expect(response.status).toBe(401);
   });
 
+  it("bounds streamed JSON bodies even when Content-Length is absent", async () => {
+    const payload = JSON.stringify({
+      url: "https://www.youtube.com/watch?v=abcdefghijk",
+      approve_network: true,
+      padding: "x".repeat(40 * 1024),
+    });
+    const bytes = new TextEncoder().encode(payload);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    const request = new Request("https://omniintel.example/v1/youtube/jobs", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer public-api-test-secret",
+        "Content-Type": "application/json",
+      },
+      body,
+      duplex: "half" as never,
+    });
+    expect(request.headers.has("content-length")).toBe(false);
+    const response = await worker.fetch(request, env);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: "Request body is too large.",
+    });
+  });
+
   it("answers preflight only for configured exact origins", async () => {
     const request = new Request("https://omniintel.example/v1/jobs", {
       method: "OPTIONS",
