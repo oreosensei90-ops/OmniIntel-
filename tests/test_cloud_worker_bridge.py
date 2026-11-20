@@ -46,3 +46,82 @@ def test_reader_validator_accepts_engine_reader_shape():
 def test_reader_validator_rejects_invalid_reader(reader):
     with pytest.raises(BridgeError):
         _validate_reader(reader)
+
+def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_path, monkeypatch):
+    import omniintel.cloud_worker_bridge as bridge
+
+    calls = {}
+    reader = {
+        "version": {"id": "version-1"},
+        "sources": [{"source_id": "source-1"}],
+        "chapters": [{"chapter": {"id": "chapter-1"}, "blocks": [{
+            "content": {"text": "grounded"}, "evidence": []
+        }]}],
+    }
+
+    class FakeQueue:
+        def __init__(self, _database):
+            pass
+
+        def enqueue(self, job_type, payload, **kwargs):
+            calls["job_type"] = job_type
+            calls["payload"] = payload
+            return "local-job"
+
+        def get(self, _job_id):
+            return {"state": "COMPLETED", "result": {"reader": reader}}
+
+    def fake_complete(origin, token, path, **kwargs):
+        calls["complete_path"] = path
+        calls["complete_body"] = kwargs["body"]
+        return {"status": "COMPLETED"}
+
+    monkeypatch.setattr(bridge, "JobQueue", FakeQueue)
+    monkeypatch.setattr(bridge, "run_local_once", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(bridge, "_request_json", fake_complete)
+    job = {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "job_type": "YOUTUBE_TO_NOTES",
+        "lease_token": "lease-1",
+        "payload": {"url": "https://www.youtube.com/watch?v=abcdef12345",
+                    "approve_network": True, "approve_ai": False},
+    }
+    response = bridge.process_claimed_job(
+        job, database=tmp_path / "bridge.db", origin="https://worker.example",
+        token="secret", upload_dir=tmp_path / "uploads", asset_dir=tmp_path / "assets",
+    )
+    assert response["status"] == "COMPLETED"
+    assert calls["job_type"] == "YOUTUBE_TO_NOTES"
+    assert calls["payload"]["approve_network"] is True
+    assert calls["complete_path"].endswith("/complete")
+    assert calls["complete_body"]["reader"] == reader
+
+
+def test_process_claimed_job_rejects_bad_reader_before_remote_completion(tmp_path, monkeypatch):
+    import omniintel.cloud_worker_bridge as bridge
+
+    class FakeQueue:
+        def __init__(self, _database):
+            pass
+
+        def enqueue(self, *_args, **_kwargs):
+            return "local-job"
+
+        def get(self, _job_id):
+            return {"state": "COMPLETED", "result": {"reader": {"version": {}}}}
+
+    monkeypatch.setattr(bridge, "JobQueue", FakeQueue)
+    monkeypatch.setattr(bridge, "run_local_once", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(bridge, "_request_json", lambda *_args, **_kwargs: pytest.fail("must not post invalid reader"))
+    job = {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "job_type": "YOUTUBE_TO_NOTES",
+        "lease_token": "lease-1",
+        "payload": {"url": "https://www.youtube.com/watch?v=abcdef12345",
+                    "approve_network": True},
+    }
+    with pytest.raises(BridgeError, match="source catalog"):
+        bridge.process_claimed_job(
+            job, database=tmp_path / "bridge.db", origin="https://worker.example",
+            token="secret", upload_dir=tmp_path / "uploads", asset_dir=tmp_path / "assets",
+        )
