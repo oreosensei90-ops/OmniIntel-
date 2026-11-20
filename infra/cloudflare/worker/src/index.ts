@@ -153,7 +153,7 @@ async function heartbeatJob(request: Request, env: Env, jobId: string) {
   if (!result.meta.changes) return json({ error: "Lease lost or job is no longer running" }, 409);
   return json({ job_id: jobId, lease_expires_at: expires });
 }
-\nasync function failJob(request: Request, env: Env, jobId: string) {
+async function failJob(request: Request, env: Env, jobId: string) {
   const body = await readJson(request, 16 * 1024);
   if (typeof body.lease_token !== "string" || typeof body.error !== "string") return json({ error: "lease_token and error are required" }, 400);
   const error = body.error.slice(0, 2000);
