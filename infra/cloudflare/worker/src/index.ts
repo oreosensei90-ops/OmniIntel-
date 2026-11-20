@@ -90,8 +90,8 @@ async function createJob(request: Request, env: Env) {
   let inputKey: string | null = null;
   if (type === "UPLOADED_MEDIA_TO_NOTES") inputKey = `inputs/${jobId}/${crypto.randomUUID()}`;
   await env.DB.prepare(
-    "INSERT INTO jobs (id, job_type, state, payload_json, input_key, created_at, updated_at) VALUES (?, ?, 'QUEUED', ?, ?, ?, ?)"
-  ).bind(jobId, type, JSON.stringify(body.payload), inputKey, timestamp, timestamp).run();
+    "INSERT INTO jobs (id, job_type, state, payload_json, input_key, input_uploaded, created_at, updated_at) VALUES (?, ?, 'QUEUED', ?, ?, ?, ?, ?)"
+  ).bind(jobId, type, JSON.stringify(body.payload), inputKey, inputKey ? 0 : 1, timestamp, timestamp).run();
   let uploadUrl: string | undefined;
   if (inputKey) {
     const client = b2(env);
@@ -99,7 +99,21 @@ async function createJob(request: Request, env: Env) {
     const signed = await client.sign(url, { method: "PUT", aws: { signQuery: true } });
     uploadUrl = signed.url;
   }
-  return json({ job_id: jobId, job_type: type, status: "QUEUED", upload_url: uploadUrl, upload_method: uploadUrl ? "PUT" : undefined }, 202);
+  return json({ job_id: jobId, job_type: type, status: inputKey ? "AWAITING_UPLOAD" : "QUEUED", status_url: "/v1/jobs/" + jobId, upload_url: uploadUrl, upload_method: uploadUrl ? "PUT" : undefined, upload_complete_url: inputKey ? "/v1/jobs/" + jobId + "/upload-complete" : undefined }, 202);
+}
+async function finalizeUpload(env: Env, jobId: string) {
+  const row = await env.DB.prepare("SELECT input_key, input_uploaded, state FROM jobs WHERE id=?").bind(jobId).first<any>();
+  if (!row || !row.input_key) return json({ error: "Upload job not found" }, 404);
+  if (row.input_uploaded === 1) return json({ job_id: jobId, status: row.state });
+  const response = await b2(env).fetch(objectUrl(env, row.input_key), { method: "HEAD" });
+  if (!response.ok) return json({ error: "Uploaded object is not available yet", storage_status: response.status }, 409);
+  const size = Number(response.headers.get("content-length") || "0");
+  if (!size || size > max(env.MAX_UPLOAD_BYTES, 250 * 1024 * 1024)) {
+    await b2(env).fetch(objectUrl(env, row.input_key), { method: "DELETE" });
+    return json({ error: "Uploaded media is empty or exceeds the configured limit" }, 413);
+  }
+  await env.DB.prepare("UPDATE jobs SET input_uploaded=1, updated_at=? WHERE id=? AND input_uploaded=0").bind(now(), jobId).run();
+  return json({ job_id: jobId, status: "QUEUED", size_bytes: size });
 }
 async function claimJob(env: Env) {
   const timestamp = now();
@@ -111,7 +125,7 @@ async function claimJob(env: Env) {
     WHERE id = (
       SELECT id FROM jobs
       WHERE (state = 'QUEUED' OR (state = 'RUNNING' AND lease_expires_at < ?))
-        AND attempt_count < max_attempts
+        AND attempt_count < max_attempts AND input_uploaded = 1
       ORDER BY created_at ASC LIMIT 1
     )
     RETURNING id, job_type, payload_json, input_key, attempt_count, lease_expires_at
@@ -175,6 +189,7 @@ async function jobStatus(env: Env, jobId: string) {
     job_id: row.id, job_type: row.job_type, status: row.state, attempt: row.attempt_count,
     error: row.last_error, created_at: row.created_at, updated_at: row.updated_at,
     result_url: row.result_key ? await signedDownload(env, row.result_key) : undefined,
+    status_url: "/v1/jobs/" + jobId,
   });
 }
 export default {
@@ -185,6 +200,14 @@ export default {
     if (!(await requireAuth(request, env))) return json({ error: "A valid bearer token is required" }, 401);
     try {
       if (request.method === "POST" && url.pathname === "/v1/jobs") return await createJob(request, env);
+      if (request.method === "POST" && url.pathname === "/v1/youtube/jobs") {
+        const payload = await readJson(request, 32 * 1024);
+        return await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "YOUTUBE_TO_NOTES", payload }) }), env);
+      }
+      if (request.method === "POST" && url.pathname === "/v1/media/jobs") {
+        const payload = await readJson(request, 32 * 1024);
+        return await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload: { ...payload, approve_media_upload: true } }) }), env);
+      }
       if (request.method === "POST" && url.pathname === "/v1/worker/claim") return await claimJob(env);
       const complete = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/complete$/i);
       if (request.method === "POST" && complete) return await completeJob(request, env, complete[1]);
@@ -192,6 +215,8 @@ export default {
       if (request.method === "POST" && heartbeat) return await heartbeatJob(request, env, heartbeat[1]);
       const fail = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/fail$/i);
       if (request.method === "POST" && fail) return await failJob(request, env, fail[1]);
+      const uploadDone = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]+)\/upload-complete$/i);
+      if (request.method === "POST" && uploadDone) return await finalizeUpload(env, uploadDone[1]);
       const status = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]+)$/i);
       if (request.method === "GET" && status) return await jobStatus(env, status[1]);
       return json({ error: "Not found" }, 404);
