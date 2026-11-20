@@ -470,10 +470,31 @@ def main() -> None:
     parser.add_argument("--chapter-minutes", type=int, default=10)
     parser.add_argument("--output", type=Path, required=True, help="Reader JSON file to import into OmniIntel Android")
     args = parser.parse_args()
-    tree = process_youtube_video(
-        args.database, args.url, user_approved_network=args.approve_network,
-        language=args.language, chapter_minutes=args.chapter_minutes,
-    )
+    try:
+        tree = process_youtube_video(
+            args.database, args.url, user_approved_network=args.approve_network,
+            language=args.language, chapter_minutes=args.chapter_minutes,
+        )
+    except Exception as error:
+        message = str(error)
+        try:
+            yt_dlp_error = isinstance(error, _yt_dlp().utils.DownloadError)
+        except RuntimeError:
+            yt_dlp_error = False
+
+        if yt_dlp_error and ("429" in message or "too many requests" in message.lower()):
+            parser.exit(
+                2,
+                "ERROR: YouTube is temporarily rate-limiting caption or metadata "
+                "requests (HTTP 429). Wait before trying again. No video/audio "
+                "was downloaded and no reader export was created.\n",
+            )
+
+        if yt_dlp_error or isinstance(error, (RuntimeError, ValueError, PermissionError)):
+            parser.exit(2, f"ERROR: {message}\n")
+
+        raise
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"status": tree["pipeline"]["status"], "title": tree["version"]["title"],

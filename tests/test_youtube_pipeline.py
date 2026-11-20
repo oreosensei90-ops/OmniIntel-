@@ -168,3 +168,40 @@ def test_android_queue_handoff_requires_approval_and_rejects_duplicate_ids(tmp_p
             tmp_path / "engine.db", queue, tmp_path / "out",
             user_approved_network=True,
         )
+
+
+def test_youtube_cli_handles_http_429_without_exporting_reader(tmp_path, monkeypatch, capsys):
+    import sys
+    from types import SimpleNamespace
+    import omniintel.youtube_pipeline as pipeline
+
+    class FakeDownloadError(Exception):
+        pass
+
+    class FakeYouTubeError:
+        utils = SimpleNamespace(DownloadError=FakeDownloadError)
+
+    output = tmp_path / "reader.json"
+
+    def fail_with_429(*args, **kwargs):
+        raise FakeDownloadError("HTTP Error 429: Too Many Requests")
+
+    monkeypatch.setattr(pipeline, "_yt_dlp", lambda: FakeYouTubeError)
+    monkeypatch.setattr(pipeline, "process_youtube_video", fail_with_429)
+    monkeypatch.setattr(sys, "argv", [
+        "omniintel-youtube",
+        str(tmp_path / "test.db"),
+        "https://youtu.be/AbCdEf12345",
+        "--approve-network",
+        "--output",
+        str(output),
+    ])
+
+    with pytest.raises(SystemExit) as error:
+        pipeline.main()
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "HTTP 429" in captured.err
+    assert "temporarily rate-limiting" in captured.err
+    assert not output.exists()
