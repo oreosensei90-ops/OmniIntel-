@@ -132,6 +132,7 @@ fun uploadRemoteMedia(
         .put("title", safeName)
         .put("approve_media_upload", true)
         .put("approve_ai", approveAi)
+        .put("approve_visual", approveVisual)
         .put("chapter_minutes", 10)
     if (!language.isNullOrBlank()) payload.put("language", language)
     val created = remoteApiRequest(apiBase, token, "/v1/media/jobs", "POST", payload)
