@@ -82,3 +82,54 @@ def test_uploaded_media_worker_runs_local_asr_then_composes_reader(tmp_path, mon
     assert job["result"]["reader"] == reader
     assert job["result"]["video_id"] == "lecture.mp4"
     assert not upload.exists()
+
+def test_uploaded_media_worker_allows_explicit_hosted_model_download(tmp_path, monkeypatch):
+    database = tmp_path / "worker.db"
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir()
+    upload = upload_root / "lecture.mp4"
+    upload.write_bytes(b"test media fixture")
+    monkeypatch.setenv("OMNIINTEL_UPLOAD_DIR", str(upload_root))
+    monkeypatch.setenv("OMNIINTEL_ASSET_DIR", str(tmp_path / "assets"))
+    monkeypatch.delenv("OMNIINTEL_ASR_MODEL_PATH", raising=False)
+    monkeypatch.setenv("OMNIINTEL_ASR_MODEL_ID", "tiny")
+    monkeypatch.setenv("OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD", "1")
+
+    reader = {
+        "source": {"id": "source-upload", "title": "Uploaded lecture"},
+        "version": {"id": "version-upload"},
+        "chapters": [],
+    }
+    queue = JobQueue(database)
+    job_id = queue.enqueue(
+        "UPLOADED_MEDIA_TO_NOTES",
+        {
+            "upload_path": str(upload.resolve()),
+            "original_name": "lecture.mp4",
+            "title": "Uploaded lecture",
+            "language": "en",
+            "chapter_minutes": 10,
+            "approve_ai": False,
+        },
+        max_attempts=1,
+    )
+    imported = SimpleNamespace(source_id="source-upload", asset=SimpleNamespace(id="video-asset"))
+    extracted = SimpleNamespace(output_asset_id="audio-asset")
+    adapter_options = {}
+    monkeypatch.setattr("omniintel.worker.import_local_file", lambda *args, **kwargs: imported)
+    monkeypatch.setattr("omniintel.worker.extract_audio", lambda *args, **kwargs: extracted)
+
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            adapter_options.update(kwargs)
+
+    monkeypatch.setattr("omniintel.worker.FasterWhisperAdapter", FakeAdapter)
+    monkeypatch.setattr("omniintel.worker.run_wav_transcription", lambda *args, **kwargs: None)
+    monkeypatch.setattr("omniintel.worker.compose_registered_source", lambda *args, **kwargs: reader)
+
+    assert run_once(database, worker_id="hosted-asr-test") is True
+    assert adapter_options["model_id"] == "tiny"
+    assert adapter_options["allow_model_download"] is True
+    assert queue.get(job_id)["state"] == "COMPLETED"
+    assert not upload.exists()
+
