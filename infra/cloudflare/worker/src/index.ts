@@ -89,9 +89,6 @@ async function createJob(request: Request, env: Env) {
   const timestamp = now();
   let inputKey: string | null = null;
   if (type === "UPLOADED_MEDIA_TO_NOTES") inputKey = `inputs/${jobId}/${crypto.randomUUID()}`;
-  await env.DB.prepare(
-    "INSERT INTO jobs (id, job_type, state, payload_json, input_key, input_uploaded, created_at, updated_at) VALUES (?, ?, 'QUEUED', ?, ?, ?, ?, ?)"
-  ).bind(jobId, type, JSON.stringify(body.payload), inputKey, inputKey ? 0 : 1, timestamp, timestamp).run();
   let uploadUrl: string | undefined;
   if (inputKey) {
     const client = b2(env);
@@ -99,6 +96,11 @@ async function createJob(request: Request, env: Env) {
     const signed = await client.sign(url, { method: "PUT", aws: { signQuery: true } });
     uploadUrl = signed.url;
   }
+  // Sign storage access before creating the D1 row. If B2 configuration is invalid,
+  // return an error without leaving an unuploadable job permanently awaiting input.
+  await env.DB.prepare(
+    "INSERT INTO jobs (id, job_type, state, payload_json, input_key, input_uploaded, created_at, updated_at) VALUES (?, ?, 'QUEUED', ?, ?, ?, ?, ?)"
+  ).bind(jobId, type, JSON.stringify(body.payload), inputKey, inputKey ? 0 : 1, timestamp, timestamp).run();
   return json({ job_id: jobId, job_type: type, status: inputKey ? "AWAITING_UPLOAD" : "QUEUED", status_url: "/v1/jobs/" + jobId, upload_url: uploadUrl, upload_method: uploadUrl ? "PUT" : undefined, upload_complete_url: inputKey ? "/v1/jobs/" + jobId + "/upload-complete" : undefined }, 202);
 }
 async function finalizeUpload(env: Env, jobId: string) {
