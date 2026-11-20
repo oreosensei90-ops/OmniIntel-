@@ -9,7 +9,6 @@ import argparse
 import json
 import os
 import re
-import tempfile
 import threading
 import time
 import urllib.error
