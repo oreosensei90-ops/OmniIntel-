@@ -1,8 +1,8 @@
-"""Consent-gated YouTube caption intake and evidence-preserving textbook composition.
+"""Consent-gated YouTube captions/audio transcription and evidence-preserving reader composition.
 
-This adapter retrieves public captions only. It never downloads video/audio, bypasses
-DRM, uses cookies, or contacts an LLM. Local audio transcription remains a separate,
-explicitly selected workflow using the existing WAV/ASR pipeline.
+Public captions are preferred. If unavailable, and the user has approved media processing,
+only the audio stream is downloaded and passed through the existing local FFmpeg/ASR engine.
+No cookies, private endpoints, video-file download, DRM circumvention, or LLM calls occur.
 """
 from __future__ import annotations
 
@@ -404,7 +404,7 @@ def queue_main() -> None:
     parser.add_argument("queue_json", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--approve-network", action="store_true",
-                        help="Approve public metadata/caption requests for every queued video")
+                        help="Approve video processing, including audio-only fallback download when captions are unavailable")
     parser.add_argument("--language", default=None)
     parser.add_argument("--chapter-minutes", type=int, default=10)
     args = parser.parse_args()
@@ -555,7 +555,7 @@ def main() -> None:
     parser.add_argument("database", type=Path)
     parser.add_argument("url")
     parser.add_argument("--approve-network", action="store_true",
-                        help="Confirm authorization to process this video; audio is downloaded only if captions are unavailable")
+                        help="Approve video processing, including audio-only fallback download when captions are unavailable")
     parser.add_argument("--language", default=None, help="Caption language code, e.g. en or hi")
     parser.add_argument("--chapter-minutes", type=int, default=10)
     parser.add_argument("--output", type=Path, required=True, help="Reader JSON file to import into OmniIntel Android")
