@@ -782,6 +782,7 @@ if (onlineForm) {
             title: file.name,
             approve_media_upload: true,
             approve_ai: $("#approve-upload-ai").checked,
+            approve_visual: $("#approve-upload-visual").checked,
             language: $("#upload-language").value.trim() || null,
             chapter_minutes: 10
           })

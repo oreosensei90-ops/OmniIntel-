@@ -185,3 +185,19 @@ def test_late_heartbeat_failure_does_not_override_successful_job_completion(tmp_
         asset_dir=tmp_path / "assets",
     ) is True
     assert calls == ["/v1/worker/claim"]
+
+
+
+def test_local_payload_preserves_explicit_visual_analysis_consent(tmp_path):
+    job = {
+        "job_type": "UPLOADED_MEDIA_TO_NOTES",
+        "payload": {
+            "filename": "lecture.mp4",
+            "approve_media_upload": True,
+            "approve_ai": False,
+            "approve_visual": True,
+        },
+    }
+    local = _local_payload(job, tmp_path / "lecture.mp4")
+    assert local["approve_visual"] is True
+    assert local["approve_ai"] is False

@@ -84,6 +84,7 @@ function validatePayload(type: JobType, payload: any) {
     if (!/\.(mp3|m4a|wav|aac|flac|ogg|opus|mp4|m4v|mov|mkv|webm)$/i.test(payload.filename)) throw new Error("Unsupported media file extension.");
   }
   if (payload.approve_ai !== undefined && typeof payload.approve_ai !== "boolean") throw new Error("approve_ai must be boolean");
+  if (payload.approve_visual !== undefined && typeof payload.approve_visual !== "boolean") throw new Error("approve_visual must be boolean");
 }
 async function createJob(request: Request, env: Env) {
   const body = await readJson(request, 32 * 1024);

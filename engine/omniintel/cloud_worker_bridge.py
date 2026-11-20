@@ -140,6 +140,7 @@ def _local_payload(job: dict[str, Any], media_path: Path | None) -> dict[str, An
         "language": payload.get("language"),
         "chapter_minutes": int(payload.get("chapter_minutes", 10)),
         "approve_ai": payload.get("approve_ai") is True,
+        "approve_visual": payload.get("approve_visual") is True,
     }
 
 
