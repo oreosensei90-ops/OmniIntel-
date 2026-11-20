@@ -228,6 +228,7 @@ def transcribe_youtube_audio(
     metadata: dict,
     *,
     language: str | None = None,
+    chapter_minutes: int = 10,
 ) -> dict:
     """Download only the audio stream, transcribe it locally, and preserve YouTube provenance."""
     yt_dlp = _yt_dlp()
@@ -290,7 +291,7 @@ def transcribe_youtube_audio(
         database_path, asset_dir, imported.source_id, extracted.output_asset_id,
         adapter, language=language,
     )
-    return compose_registered_source(database_path, imported.source_id)
+    return compose_registered_source(database_path, imported.source_id, chapter_minutes=chapter_minutes)
 
 
 def process_youtube_video(
@@ -310,7 +311,9 @@ def process_youtube_video(
     except RuntimeError as error:
         if "No public captions were available" not in str(error):
             raise
-        reader = transcribe_youtube_audio(database_path, metadata, language=language)
+        reader = transcribe_youtube_audio(
+            database_path, metadata, language=language, chapter_minutes=chapter_minutes
+        )
         reader["pipeline"]["status"] = "TRANSCRIPT_DRAFT_READY"
         reader["pipeline"]["transcript_origin"] = "youtube_audio_asr"
         reader["pipeline"]["composition"] = "EXTRACTIVE_SOURCE_GROUNDED"
