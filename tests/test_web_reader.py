@@ -172,3 +172,18 @@ def test_web_supports_authorized_media_upload_for_no_caption_transcription_fallb
     assert "fetch(created.upload_url" in app
     assert "created.upload_complete_url" in app
     assert "250 * 1024 * 1024" in app
+
+
+def test_cloudflare_job_schema_tracks_upload_completion_gate() -> None:
+    root = Path(__file__).parents[1]
+    migration = (root / "infra" / "cloudflare" / "worker" / "migrations" / "0001_jobs.sql").read_text(encoding="utf-8")
+    worker = (root / "infra" / "cloudflare" / "worker" / "src" / "index.ts").read_text(encoding="utf-8")
+    assert "input_uploaded INTEGER NOT NULL DEFAULT 1" in migration
+    assert "input_uploaded = 1" in worker
+    assert "input_uploaded=0" in worker
+
+
+def test_media_download_url_requires_https_in_both_web_flows() -> None:
+    app = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert app.count('new URL(job.result_url).protocol !== "https:"') == 2
+    assert '!new URL(job.result_url).protocol === "https:"' not in app
