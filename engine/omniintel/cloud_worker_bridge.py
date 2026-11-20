@@ -229,14 +229,18 @@ def run_bridge_once(*, api_base: str, api_token: str, database: Path,
         if heartbeat_errors:
             raise BridgeError(f"Remote job lease heartbeat failed: {heartbeat_errors[0]}")
     except Exception as error:  # noqa: BLE001 - persist bounded job failure
+        failure = f"{type(error).__name__}: {error}"[:1900]
         try:
             _request_json(
                 origin, api_token, f"/v1/worker/jobs/{job['job_id']}/fail",
                 method="POST", body={"lease_token": job["lease_token"],
-                                     "error": f"{type(error).__name__}: {error}"[:1900]},
+                                     "error": failure},
             )
-        except BridgeError:
-            pass
+        except Exception as report_error:  # noqa: BLE001
+            raise BridgeError(
+                f"Job {job_id} failed: {failure}; reporting failure also failed: {report_error}"
+            ) from error
+        raise BridgeError(f"Job {job_id} failed: {failure}") from error
     finally:
         stop.set()
         thread.join(timeout=2)
