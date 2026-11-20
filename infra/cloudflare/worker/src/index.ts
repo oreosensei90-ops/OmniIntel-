@@ -117,6 +117,7 @@ async function finalizeUpload(env: Env, jobId: string) {
 }
 async function claimJob(env: Env) {
   const timestamp = now();
+  await env.DB.prepare("UPDATE jobs SET state='FAILED', last_error=COALESCE(last_error,'Worker lease expired after final attempt'), lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE state='RUNNING' AND lease_expires_at < ? AND attempt_count >= max_attempts").bind(timestamp, timestamp).run();
   const leaseToken = id();
   const row = await env.DB.prepare(`
     UPDATE jobs
@@ -218,7 +219,7 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/v1/media/jobs") {
         const payload = await readJson(request, 32 * 1024);
-        return withCors(await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload: { ...payload, approve_media_upload: true } }) }), env), request, env);
+        return withCors(await createJob(new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ job_type: "UPLOADED_MEDIA_TO_NOTES", payload }) }), env), request, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/worker/claim") return withCors(await claimJob(env), request, env);
       const complete = url.pathname.match(/^\/v1\/worker\/jobs\/([0-9a-f-]+)\/complete$/i);
