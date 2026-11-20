@@ -206,7 +206,9 @@ def test_android_online_video_client_requires_https_and_explicit_consent_control
     assert 'url.protocol == "https"' in remote
     assert 'connection.instanceFollowRedirects = false' in remote
     assert 'approve_network' in remote and 'approve_ai' in remote
-    assert "networkApproved && aiApproved" in activity
+    assert "apiTokenDraft.isNotBlank() && networkApproved" in activity
+    assert "approveAi = aiApproved" in activity
+    assert "networkApproved && aiApproved" not in activity
     assert "getRemoteVideoJob" in activity
     assert "loadBook(Uri.fromFile(cached))" in activity
 
@@ -216,7 +218,9 @@ def test_android_supports_consent_gated_media_upload_as_asr_fallback() -> None:
     activity = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt").read_text(encoding="utf-8")
     client = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "RemoteVideoApi.kt").read_text(encoding="utf-8")
     assert "uploadRemoteMedia(context" in activity
-    assert "uploadConsent && aiApproved" in activity
+    assert "apiTokenDraft.isNotBlank() && uploadConsent" in activity
+    assert "approveAi = aiApproved" in activity
+    assert "uploadConsent && aiApproved" not in activity
     assert 'uploadPicker.launch(arrayOf("video/*", "audio/*"))' in activity
     assert '"/v1/media/jobs"' in client
     assert "250L * 1024L * 1024L" in client
