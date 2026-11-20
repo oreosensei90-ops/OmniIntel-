@@ -82,6 +82,8 @@ fun StudyPracticeDialog(
     }
     val current = dueCards.getOrNull(index)
 
+    var pendingReview by remember { mutableStateOf<StudyProgressEntity?>(null) }
+
     fun review(rating: String) {
         val card = current ?: return
         if (saving) return
@@ -128,14 +130,11 @@ fun StudyPracticeDialog(
             dueAtEpochMs = reviewedAt + (nextInterval * 86_400_000.0).toLong(),
             lastReviewedAtEpochMs = reviewedAt
         )
-        kotlinx.coroutines.GlobalScope
-        // Persist the rating off the UI thread; the next card is shown only after the write succeeds.
-        // The composable scope is supplied by the caller's composition through LaunchedEffect below.
+        // Persist the rating off the UI thread; advance only after the write succeeds.
         message = "Saving review…"
         pendingReview = updated
     }
 
-    var pendingReview by remember { mutableStateOf<StudyProgressEntity?>(null) }
     LaunchedEffect(pendingReview) {
         val item = pendingReview ?: return@LaunchedEffect
         runCatching {
