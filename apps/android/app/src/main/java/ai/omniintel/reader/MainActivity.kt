@@ -700,7 +700,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 }
                 Button(
                     enabled = !onlineBusy && videoUrlDraft.isNotBlank() && apiBaseDraft.isNotBlank() &&
-                        apiTokenDraft.isNotBlank() && networkApproved && aiApproved,
+                        apiTokenDraft.isNotBlank() && networkApproved,
                     onClick = {
                         val parsed = parseYouTubeUrl(videoUrlDraft)
                         if (parsed == null) {
@@ -713,7 +713,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                             scope.launch {
                                 try {
                                     val created = withContext(Dispatchers.IO) {
-                                        submitRemoteVideoJob(apiBase, apiToken, parsed.url)
+                                        submitRemoteVideoJob(apiBase, apiToken, parsed.url, approveAi = aiApproved)
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
@@ -763,7 +763,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 }
                 Button(
                     enabled = !onlineBusy && uploadUri != null && apiBaseDraft.isNotBlank() &&
-                        apiTokenDraft.isNotBlank() && uploadConsent && aiApproved,
+                        apiTokenDraft.isNotBlank() && uploadConsent,
                     onClick = {
                         val selectedUri = uploadUri
                         if (selectedUri != null) {
@@ -774,7 +774,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                             scope.launch {
                                 try {
                                     val created = withContext(Dispatchers.IO) {
-                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri)
+                                        uploadRemoteMedia(context, apiBase, apiToken, selectedUri, approveAi = aiApproved)
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
