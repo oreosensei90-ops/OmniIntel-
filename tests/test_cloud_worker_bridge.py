@@ -78,7 +78,10 @@ def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_pa
         return {"status": "COMPLETED"}
 
     monkeypatch.setattr(bridge, "JobQueue", FakeQueue)
-    monkeypatch.setattr(bridge, "run_local_once", lambda *_args, **_kwargs: True)
+    def fake_run_once(database, **_kwargs):
+        calls["worker_database"] = database
+        return True
+    monkeypatch.setattr(bridge, "run_local_once", fake_run_once)
     monkeypatch.setattr(bridge, "_request_json", fake_complete)
     job = {
         "job_id": "11111111-1111-4111-8111-111111111111",
@@ -95,6 +98,10 @@ def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_pa
     assert calls["job_type"] == "YOUTUBE_TO_NOTES"
     assert calls["payload"]["approve_network"] is True
     assert calls["idempotency_key"] == "cloudflare:11111111-1111-4111-8111-111111111111:1"
+    assert str(calls["worker_database"]).endswith(
+        "cloud-worker-jobs/11111111-1111-4111-8111-111111111111.sqlite3"
+    )
+    assert calls["worker_database"] != tmp_path / "bridge.db"
     assert calls["complete_path"].endswith("/complete")
     assert calls["complete_body"]["reader"] == reader
 
