@@ -696,7 +696,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = aiApproved, onCheckedChange = { aiApproved = it })
-                    Text("I authorize sending the transcript to this server's configured AI provider.", color = Muted, fontSize = 11.sp)
+                    Text("I authorize sending the transcript to the AI provider configured on my processing machine.", color = Muted, fontSize = 11.sp)
                 }
                 Button(
                     enabled = !onlineBusy && videoUrlDraft.isNotBlank() && apiBaseDraft.isNotBlank() &&
