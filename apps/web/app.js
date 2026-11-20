@@ -734,10 +734,12 @@ if (onlineForm) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         const job = await apiRequest(base, token, created.status_url);
         if (job.status === "COMPLETED") {
-          const reader = job.result?.reader;
-          if (!reader) throw new Error("Processing completed without a reader export.");
-          setOnlineStatus("Notes generated · opening " + (job.result.title || "your video") + "…");
-          renderBook(reader, (job.result.title || "OmniIntel video notes") + ".json");
+          if (!job.result_url || !job.result_url.startsWith("https://")) throw new Error("The server completed without a reader download URL.");
+          const readerResponse = await fetch(job.result_url);
+          if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
+          const reader = await readerResponse.json();
+          setOnlineStatus("Notes generated · opening " + (reader.source?.title || "your video") + "…");
+          renderBook(reader, (reader.source?.title || "OmniIntel video notes") + ".json");
           return;
         }
         if (job.status === "FAILED") throw new Error(job.error || "Video processing failed.");
@@ -775,24 +777,42 @@ if (onlineForm) {
         sessionStorage.setItem("omniintel-api-token", token);
         localStorage.setItem("omniintel-api-base-url", base);
         uploadStatus.textContent = "Uploading media securely…";
-        const form = new FormData();
-        form.append("file", file, file.name);
-        form.append("approve_ai", "true");
-        form.append("language", $("#upload-language").value.trim());
-        form.append("title", file.name);
         const created = await apiRequest(base, token, "/v1/media/jobs", {
           method: "POST",
-          body: form
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            title: file.name,
+            approve_media_upload: true,
+            approve_ai: true,
+            language: $("#upload-language").value.trim() || null,
+            chapter_minutes: 10
+          })
         });
-        uploadStatus.textContent = "Upload accepted · transcription job " + created.job_id;
+        if (!created.upload_url || !created.upload_complete_url) throw new Error("The server did not return a B2 upload URL.");
+        uploadStatus.textContent = "Uploading media to private storage…";
+        const uploaded = await fetch(created.upload_url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file
+        });
+        if (!uploaded.ok) throw new Error("Backblaze upload failed: HTTP " + uploaded.status);
+        await apiRequest(base, token, created.upload_complete_url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        });
+        uploadStatus.textContent = "Upload verified · transcription job " + created.job_id;
         for (let attempt = 0; attempt < 1800; attempt++) {
           await new Promise(resolve => setTimeout(resolve, 2000));
           const job = await apiRequest(base, token, created.status_url);
           if (job.status === "COMPLETED") {
-            const reader = job.result?.reader;
-            if (!reader) throw new Error("Processing completed without a reader export.");
+            if (!job.result_url || !job.result_url.startsWith("https://")) throw new Error("The server completed without a reader download URL.");
+            const readerResponse = await fetch(job.result_url);
+            if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
+            const reader = await readerResponse.json();
             uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
-            renderBook(reader, (job.result.title || file.name) + ".json");
+            renderBook(reader, (reader.source?.title || file.name) + ".json");
             return;
           }
           if (job.status === "FAILED") throw new Error(job.error || "Media processing failed.");
