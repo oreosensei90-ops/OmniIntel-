@@ -67,12 +67,12 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Web Reader with consent-gated online YouTube caption processing, authorized media upload/ASR fallback, AI study-note generation, local reader-library persistence and offline reading (hosted API/worker deployment remains operator-configured): local reader JSON import, cross-chapter evidence-aware search, source-specific local audio/video attachment and seeking, PDF page structure review, local IndexedDB notes/bookmarks, local progress and cached static shell (full Web platform and large-library indexing pending).
 - [x] Native Kotlin + Jetpack Compose Android reader with Storage Access Framework import, bounded strict JSON parsing, source/evidence referential integrity, evidence rendering, local source-scoped audio/video playback and timestamp jumps.
 - [x] Android YouTube queue JSON export and explicit local-engine batch caption handoff (manual file transfer; no in-app network access).
-- [x] Room v3 offline Android library with normalized textbook sources, chapters, blocks and evidence; transactional re-import and cascading content cleanup.
+- [x] Room v4 offline Android library with normalized textbook sources, chapters, blocks and evidence; transactional re-import and cascading content cleanup.
 - [x] One-time, transactional migration of existing DataStore notes, bookmarks and chapter positions into Room; all subsequent annotation writes use Room.
 - [x] Per-textbook paragraph-level resume using the last visible block, with automatic position restoration.
 - [x] Library-wide on-device search across book/chapter titles, block text, evidence excerpts and private notes, opening the matching chapter and paragraph.
 - [x] Portable JSON export/restore for Android Room notes and bookmarks with bounded validation, referential checks and timestamp-aware merge.
-- [ ] Background media controls, full-text indexed search at large-library scale and full native study features.
+- [ ] Background media controls and full-text indexed search at large-library scale.
 - [x] Initial CLI synchronized course reader with source-local seek targets, accepted-clock mapping and durable local resume positions.
 - [x] Reader API resolves transcript excerpts and page-native PDF text/positioned elements without inventing cross-modal timestamps.
 - [x] First interactive Web and Android reader UIs with chapter navigation and search; Web also has local source playback, notes and bookmarks, while Android supports source-specific local media playback and evidence jumps.
@@ -80,7 +80,7 @@ This roadmap is a plan, not a claim that every item exists.
 - [x] Normalize textbook chapters/blocks and annotations into Room; add database migrations, paragraph-level resume and library-wide on-device search (background media controls, full-text indexing at scale and optional cross-device sync remain pending).
 - [x] Web offline active-recall cards from existing definitions, exercises and flashcard blocks, with reveal/self-rating and browser-local progress.
 - [x] Web JSON backup/restore for local notes, bookmarks, study ratings and reading positions with bounded validation and timestamp-aware merge.
-- [ ] Native Android flashcards, adaptive practice scheduling and study planning.
+- [x] Native Android flashcards with Room-persisted adaptive review intervals and due-card sessions (full study planning and cross-device study sync pending).
 
 ## Intelligence and operations
 - [x] Separate course-textbook Markdown/HTML/PDF/DOCX exporters behind a course publication audit gate (full native math and visual editing remain pending).
