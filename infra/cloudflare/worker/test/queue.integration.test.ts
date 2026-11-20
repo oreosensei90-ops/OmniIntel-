@@ -123,7 +123,7 @@ describe("Cloudflare D1 queue integration", () => {
     expect(row!.available_at).toBeLessThanOrEqual(timestamp + 65);
 
     const nextClaim = await call("/v1/worker/claim", workerToken, {});
-    expect((await nextClaim.json()).job).toBeNull();
+    expect(((await nextClaim.json()) as { job: unknown }).job).toBeNull();
   });
 
   it("marks a job FAILED after its final permitted attempt", async () => {
@@ -168,7 +168,7 @@ describe("Cloudflare D1 queue integration", () => {
     ).bind(jobId).run();
 
     const response = await call("/v1/worker/claim", workerToken, {});
-    expect((await response.json()).job).toBeNull();
+    expect(((await response.json()) as { job: unknown }).job).toBeNull();
 
     const row = await readJob(jobId);
     expect(row?.state).toBe("QUEUED");
