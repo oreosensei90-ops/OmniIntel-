@@ -176,9 +176,12 @@ def test_web_supports_authorized_media_upload_for_no_caption_transcription_fallb
 
 def test_cloudflare_job_schema_tracks_upload_completion_gate() -> None:
     root = Path(__file__).parents[1]
-    migration = (root / "infra" / "cloudflare" / "worker" / "migrations" / "0001_jobs.sql").read_text(encoding="utf-8")
+    migrations = root / "infra" / "cloudflare" / "worker" / "migrations"
+    schema = (migrations / "0001_jobs.sql").read_text(encoding="utf-8")
+    upload_gate = (migrations / "0002_upload_gate.sql").read_text(encoding="utf-8")
     worker = (root / "infra" / "cloudflare" / "worker" / "src" / "index.ts").read_text(encoding="utf-8")
-    assert "input_uploaded INTEGER NOT NULL DEFAULT 1" in migration
+    assert "input_uploaded INTEGER NOT NULL DEFAULT 1" in upload_gate
+    assert "input_uploaded" not in schema
     assert "input_uploaded = 1" in worker
     assert "input_uploaded=0" in worker
 
