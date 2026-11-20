@@ -84,6 +84,18 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
                     TranscriptSegmentInput(
                         text="Acceleration is the rate of change of velocity.",
                         start_ms=500,
+                        end_ms=min(2_500, end_ms),
+                        language=language or "en",
+                    ),
+                    TranscriptSegmentInput(
+                        text="Velocity describes both speed and direction of motion.",
+                        start_ms=3_000,
+                        end_ms=min(5_000, end_ms),
+                        language=language or "en",
+                    ),
+                    TranscriptSegmentInput(
+                        text="A change in velocity can involve speed, direction, or both.",
+                        start_ms=5_500,
                         end_ms=end_ms,
                         language=language or "en",
                     ),
