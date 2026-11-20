@@ -193,3 +193,68 @@ These appeared relevant in the supplied GitHub topic scans. They are leads only 
 - Implemented a read-only plan-first local input planner. It classifies selected local files, emits modality/action/resource/network metadata, and blocks readiness until speech language and caption-to-media association are confirmed where applicable. It does not perform ingestion or processing.
 - Implemented ordered source collections/courses with typed membership roles. Sources remain independent and can belong to multiple collections; membership does not imply shared clocks or semantic relationships.
 - These foundations are exposed through CLI commands and documented in INPUT_PLANNING.md and COLLECTIONS.md. Approved plan execution, multi-source textbook composition and cross-source alignment remain pending.
+
+
+## AI provider, gateway, agent and multimodal research batches (2026-11-20)
+
+These entries extend the video-learning research register. They are leads and architecture references, not approved dependencies. Review depth varies; see `docs/research/` for per-entry status and implementation mapping.
+
+### Batch A — local AI, gateways, coding agents and computer-use agents
+- https://github.com/utfcmac/local-ai
+- https://github.com/kunalkcube/verloc
+- https://github.com/lapoart/Kimi-K3-Code-Free-Desktop
+- https://github.com/FurqanAhmadKhan/Chatgpt-Reverse-API
+- https://github.com/alishahryar1/free-claude-code
+- https://github.com/claudeanthropic-free/Claude-Code-Free
+- https://github.com/ClaudeCodeAnthropic/ClaudeCode-Sonnet-5.5-Free-Desktop
+- https://github.com/claude-duet-free/Claude-Duet-Free
+- https://github.com/anthropics-org/Claude-Opus-5.5-Free-Desktop
+- https://github.com/irhamkaraman/prime-gate-proxy-antigravity-lik
+- https://github.com/wallquailrespect/claude-ai-ultimate
+- https://github.com/suitedaces/computer-agent
+- https://github.com/Corporationakht/LocalCodeCli
+- https://github.com/CombineProsecutor/free-ai-api-proxy
+
+### Batch B — provider catalogues, free-access claims, proxies and multimodal services
+- https://github.com/Zhao73/free-astra
+- https://github.com/liuda30201/AI-Coding
+- https://github.com/Caplet1989/Brokies-AI-Foundry
+- https://github.com/yawumi/free-gpt-api
+- https://github.com/terzigolu/warp-lite
+- https://github.com/Joe-Huber/AI-For-Brokies
+- https://github.com/technamooz/technamooz-free-Ai
+- https://github.com/c0m4r/kurczak
+- https://github.com/oblongfusari/leonardo-ai-free-2026
+- https://github.com/peppery-bearing6441/hailuo-ai-free-2026
+- https://github.com/ripemilitary/kaiber-ai-free-2026
+- https://github.com/quixoticcater/captions-ai-free-2026
+- https://github.com/powersealboil/ai-reverse-proxy-gpt
+- https://github.com/zebbern/no-cost-ai
+- https://github.com/velugus9365/ai-reverse-proxy-free-gpt-access
+- https://github.com/obedientthump/otter-ai-free-2026
+- https://github.com/potableteneme/groq-api-free-2026
+- https://github.com/Mr-Yash-01/VoiceAssistant
+- https://github.com/ornatesaddle/fliki-ai-free-2026
+- https://github.com/grokfree/Grokfree
+- https://github.com/bigsk1/xai-api
+- https://github.com/DuskBotAI/duskbot
+- https://github.com/crazyrob425/BlacklistedAIProxy
+- https://github.com/CursorGrok-4-6/Cursor-Grok-4.6-Free
+- https://github.com/topics/grok-bot-alternative
+
+### Batch C — model routing and hosted chat products
+- https://github.com/decolua/9router
+- https://github.com/hassanmsthf11/unlimited-claude-AI
+- https://github.com/codeaashu/free-claude-code
+- https://hix.ai/claude
+- https://chataibot.pro/app/free-chat?lang=en
+
+### Consolidated guardrails
+
+- Do not integrate reverse-engineered consumer-session APIs, browser-cookie bridges, undocumented endpoints, account pools, TLS fingerprint tricks or quota circumvention.
+- Never treat a free/unlimited claim as verified API entitlement. Record provider, account requirement, quota, retention, terms and date checked.
+- Provider adapters are explicit and privacy/cost visible. No silent local-to-cloud fallback, especially after streaming begins.
+- Credentials stay server-side, encrypted if persisted, scoped and redacted from logs.
+- Computer-use/browser automation, microphone, screen recording, accessibility and shell are separate high-risk capabilities requiring approval, visible actions and stop control.
+- Hosted product privacy policies and terms govern user-content transfer; obtain informed consent before sending private material.
+- No third-party source code was copied into OmniIntel in these research batches.
