@@ -14,6 +14,8 @@ from .transcription import FasterWhisperAdapter, run_wav_transcription
 from .generation_providers import resolve_study_generator
 from .study_generation import generate_study_guide
 from .youtube_pipeline import compose_registered_source, process_youtube_video
+from .video_frames import extract_video_frames
+from .visual_timeline import build_visual_timeline, list_visual_timeline
 
 
 def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool:
@@ -68,6 +70,46 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 ))
             transcript_reader = compose_registered_source(database_path, imported.source_id,
                 chapter_minutes=int(payload.get("chapter_minutes", 10)))
+            if payload.get("approve_visual") is True:
+                if not str(getattr(imported.asset, "media_type", "")).startswith("video/"):
+                    result_visual = {"status": "NOT_APPLICABLE", "reason": "NO_VIDEO_STREAM"}
+                else:
+                    extraction = extract_video_frames(
+                        database_path, asset_dir, imported.asset.id,
+                        min_interval_ms=15_000, max_frames=120,
+                        max_total_bytes=128 * 1024 * 1024,
+                        max_total_pixels=60_000_000,
+                    )
+                    timeline = build_visual_timeline(database_path, extraction.id)
+                    timeline_rows = list_visual_timeline(database_path, imported.source_id)
+                    events = {}
+                    for row in timeline_rows:
+                        event = events.setdefault(row["visual_event_id"], {
+                            "event_id": row["visual_event_id"],
+                            "timestamp_ms": row["timestamp_ms"],
+                            "frame_index": row["frame_index"],
+                            "review_state": row["review_state"],
+                            "transcript_alignments": [],
+                        })
+                        if row["alignment_id"] is not None:
+                            event["transcript_alignments"].append({
+                                "transcript_segment_id": row["transcript_segment_id"],
+                                "transcript_start_ms": row["transcript_start_ms"],
+                                "transcript_end_ms": row["transcript_end_ms"],
+                                "relation": row["relation"],
+                                "delta_ms": row["delta_ms"],
+                                "review_state": row["alignment_review_state"],
+                            })
+                    result_visual = {
+                        "status": "SAMPLED_NEEDS_REVIEW",
+                        "frame_count": extraction.frame_count,
+                        "sample_interval_ms": extraction.sample_interval_ms,
+                        "events_created": timeline.events_created,
+                        "alignments_created": timeline.alignments_created,
+                        "events": list(events.values()),
+                        "automatic_acceptance": False,
+                    }
+                    transcript_reader["visual_timeline"] = result_visual
         else:
             raise ValueError("Unsupported job type: " + str(job["job_type"]))
         result = {
@@ -76,6 +118,8 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             "reader": transcript_reader,
             "ai_generation": "NOT_REQUESTED",
         }
+        if payload.get("approve_visual") is True:
+            result["visual_analysis"] = result_visual
         if payload.get("approve_ai") is True:
             provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "openai").strip().lower()
             default_model = (
