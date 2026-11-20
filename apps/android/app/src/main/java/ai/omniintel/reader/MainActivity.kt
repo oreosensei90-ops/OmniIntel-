@@ -107,7 +107,15 @@ private suspend fun migrateLegacyReaderPreferences(context: Context, database: R
 
 data class ReaderSource(val id: String, val title: String)
 data class Evidence(val sourceId: String, val source: String, val locator: String, val startMs: Long?, val excerpt: String)
-data class Block(val id: String, val type: String, val text: String, val provenance: String, val evidence: List<Evidence>)
+data class Block(
+    val id: String,
+    val type: String,
+    val text: String,
+    val provenance: String,
+    val evidence: List<Evidence>,
+    val studyFront: String = "",
+    val studyBack: String = ""
+)
 data class Book(val title: String, val versionId: String, val sources: List<ReaderSource>, val chapters: List<ReaderChapter>)
 data class ReaderChapter(val title: String, val blocks: List<Block>)
 
@@ -224,12 +232,34 @@ class MainActivity : ComponentActivity() {
                 while (!seenBlockIds.add(stableId)) {
                     stableId = "${requestedId}@${i}-${j}-${suffix++}"
                 }
+                val studyFront = when (blockType.uppercase()) {
+                    "DEFINITION" -> content.optString("term").ifBlank { content.optString("title") }
+                    "EXERCISE" -> content.optString("prompt").ifBlank {
+                        content.optString("question").ifBlank { content.optString("text").ifBlank { content.optString("body") } }
+                    }
+                    "FLASHCARD", "QUESTION" -> content.optString("front").ifBlank {
+                        content.optString("question").ifBlank { content.optString("prompt").ifBlank { content.optString("term") } }
+                    }
+                    else -> ""
+                }
+                val studyBack = when (blockType.uppercase()) {
+                    "DEFINITION" -> content.optString("definition").ifBlank { content.optString("text").ifBlank { content.optString("body") } }
+                    "EXERCISE" -> content.optString("answer").ifBlank {
+                        content.optString("solution").ifBlank { content.optString("expected_answer") }
+                    }
+                    "FLASHCARD", "QUESTION" -> content.optString("back").ifBlank {
+                        content.optString("answer").ifBlank { content.optString("definition").ifBlank { content.optString("solution") } }
+                    }
+                    else -> ""
+                }
                 Block(
                     stableId,
                     blockType,
                     text,
                     block.optString("provenance", "UNSPECIFIED"),
-                    evidence
+                    evidence,
+                    studyFront,
+                    studyBack
                 )
             }
             ReaderChapter(chapter.optString("title", "Chapter ${i + 1}"), blocks)
@@ -265,6 +295,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var uploadConsent by remember { mutableStateOf(false) }
     var visualApproved by remember { mutableStateOf(false) }
     var annotationBackupMessage by remember { mutableStateOf<String?>(null) }
+    var showStudy by remember { mutableStateOf(false) }
     var chapterIndex by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var showBookmarksOnly by remember { mutableStateOf(false) }
@@ -350,7 +381,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                 dao.insertChapters(loadedBook.chapters.mapIndexed { index, ch -> TextbookChapterEntity(loadedBook.versionId, index, ch.title) })
                                 dao.insertBlocks(loadedBook.chapters.flatMapIndexed { ci, ch ->
                                     ch.blocks.mapIndexed { bi, block ->
-                                        TextbookBlockEntity(loadedBook.versionId, block.id, ci, bi, block.type, block.text, block.provenance)
+                                        TextbookBlockEntity(loadedBook.versionId, block.id, ci, bi, block.type, block.text, block.provenance, block.studyFront, block.studyBack)
                                     }
                                 })
                                 dao.insertEvidence(loadedBook.chapters.flatMap { ch ->
@@ -387,7 +418,8 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                         chapters.map { chapter ->
                             ReaderChapter(chapter.title, blocks.filter { it.chapterIndex == chapter.chapterIndex }.map { block ->
                                 Block(block.blockId, block.blockType, block.text, block.provenance,
-                                    evidence[block.blockId].orEmpty().map { ev -> Evidence(ev.sourceId, ev.sourceTitle, ev.locator, ev.startMs, ev.excerpt) })
+                                    evidence[block.blockId].orEmpty().map { ev -> Evidence(ev.sourceId, ev.sourceTitle, ev.locator, ev.startMs, ev.excerpt) },
+                                    block.studyFront, block.studyBack)
                             })
                         })
                     Triple(loaded, libraryDatabase.progress().find(versionId), libraryDatabase.annotations().forVersion(versionId))
@@ -587,6 +619,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (book != null) {
+                    TextButton(onClick = { showStudy = true }) { Text("Study", color = Gold) }
                     TextButton(onClick = {
                         audioPlayer?.release(); audioPlayer = null
                         videoView?.stopPlayback(); videoView = null
@@ -1114,6 +1147,15 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     }
                 }
                 if (blocks.isEmpty()) item { Text(if (showBookmarksOnly) "No bookmarked blocks match this view." else "No matching blocks in this textbook.", color = Muted) }
+            }
+        }
+        if (showStudy) {
+            current?.let { activeBook ->
+                StudyPracticeDialog(
+                    book = activeBook,
+                    database = libraryDatabase,
+                    onDismiss = { showStudy = false }
+                )
             }
         }
         editingBlockId?.let { blockId ->
