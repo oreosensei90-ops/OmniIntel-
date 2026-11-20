@@ -167,12 +167,18 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
         local_payload = _local_payload(job, media_path)
         os.environ["OMNIINTEL_UPLOAD_DIR"] = str(upload_dir.resolve())
         os.environ["OMNIINTEL_ASSET_DIR"] = str(asset_dir.resolve())
-        local_queue = JobQueue(database)
+        # Isolate each remote job in its own local queue database. The ordinary
+        # run_once worker claims the oldest eligible job, so sharing the user's
+        # everyday queue could accidentally process an unrelated local task here.
+        isolated_dir = database.parent / "cloud-worker-jobs"
+        isolated_dir.mkdir(parents=True, exist_ok=True)
+        isolated_database = isolated_dir / (job_id + ".sqlite3")
+        local_queue = JobQueue(isolated_database)
         local_id = local_queue.enqueue(
             str(job["job_type"]), local_payload,
             idempotency_key="cloudflare:" + job_id + ":" + str(job.get("attempt", 1)), max_attempts=1,
         )
-        run_local_once(database, worker_id="cloudflare-" + job_id)
+        run_local_once(isolated_database, worker_id="cloudflare-" + job_id)
         completed = local_queue.get(local_id)
         if not completed or completed["state"] != "COMPLETED":
             detail = (completed or {}).get("last_error") or "Local engine did not complete the job."
