@@ -1,0 +1,62 @@
+name: OmniIntel Hosted Cloud Worker
+
+on:
+  # Check for queued work twice an hour. A run claims at most one job and exits.
+  # This is a bounded, best-effort runner, not an always-on server.
+  schedule:
+    - cron: "0,30 * * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "engine/**"
+      - "pyproject.toml"
+      - ".github/workflows/hosted-cloud-worker.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omniintel-hosted-cloud-worker
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the engine and public-caption adapter
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-deps -e .
+          python -m pip install "yt-dlp>=2025.1.15"
+      - name: Verify hosted worker entry point
+        run: omniintel-cloud-worker --help
+
+  process-one-job:
+    if: github.event_name != 'pull_request' && secrets.OMNIINTEL_API_TOKEN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OMNIINTEL_WORKER_API: https://omniintel-api.scrbaba502.workers.dev
+      OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
+      OMNIINTEL_DATABASE: ${{ runner.temp }}/omniintel/worker.sqlite3
+      OMNIINTEL_UPLOAD_DIR: ${{ runner.temp }}/omniintel/uploads
+      OMNIINTEL_ASSET_DIR: ${{ runner.temp }}/omniintel/assets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the engine and YouTube caption adapter
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-deps -e .
+          python -m pip install "yt-dlp>=2025.1.15"
+      - name: Process at most one queued job
+        run: |
+          mkdir -p "$RUNNER_TEMP/omniintel/uploads" "$RUNNER_TEMP/omniintel/assets"
+          omniintel-cloud-worker --once
