@@ -143,7 +143,9 @@ fun StudyPracticeDialog(
             }
         }.onSuccess {
             progress = progress + (item.blockId to item)
-            index = (index + 1).coerceAtMost(dueCards.size)
+            // In due-only mode the just-reviewed card leaves the queue, so keep the
+            // same index; in all-cards mode advance to the next card.
+            if (showAll) index = (index + 1).coerceAtMost(dueCards.size)
             revealed = false
             message = null
         }.onFailure {
