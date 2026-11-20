@@ -92,15 +92,16 @@ describe("OmniIntel Worker API authentication", () => {
         controller.close();
       },
     });
-    const request = new Request("https://omniintel.example/v1/youtube/jobs", {
+    const init = {
       method: "POST",
       headers: {
         Authorization: "Bearer public-api-test-secret",
         "Content-Type": "application/json",
       },
       body,
-      duplex: "half" as never,
-    });
+      duplex: "half",
+    };
+    const request = new Request("https://omniintel.example/v1/youtube/jobs", init as RequestInit);
     expect(request.headers.has("content-length")).toBe(false);
     const response = await worker.fetch(request, env);
     expect(response.status).toBe(400);
