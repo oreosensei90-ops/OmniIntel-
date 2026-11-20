@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -22,7 +23,6 @@ from .reader_export import to_reader_export
 from .local_files import import_local_file
 from .audio_extract import extract_audio
 from .transcription import FasterWhisperAdapter, run_wav_transcription
-import os
 
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 _ALLOWED_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"}
@@ -320,7 +320,6 @@ def process_youtube_video(
     transcript = parse_caption_text(
         caption_text, title=metadata["title"], source_uri=metadata["url"],
         language=language or caption_language, duration_ms=metadata["duration_ms"],
-        metadata={"transcript_origin": "caption"},
     )
     return compose_transcript_textbook(
         database_path, transcript, source_metadata=metadata, chapter_minutes=chapter_minutes,
@@ -551,7 +550,7 @@ def main() -> None:
     parser.add_argument("database", type=Path)
     parser.add_argument("url")
     parser.add_argument("--approve-network", action="store_true",
-                        help="Confirm that you are authorized to process this video's public captions")
+                        help="Confirm authorization to process this video; audio is downloaded only if captions are unavailable")
     parser.add_argument("--language", default=None, help="Caption language code, e.g. en or hi")
     parser.add_argument("--chapter-minutes", type=int, default=10)
     parser.add_argument("--output", type=Path, required=True, help="Reader JSON file to import into OmniIntel Android")
