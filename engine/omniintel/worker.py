@@ -43,12 +43,22 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 max_bytes=250 * 1024 * 1024)
             extracted = extract_audio(database_path, asset_dir, imported.asset.id, timeout_seconds=1800)
             model_path = os.environ.get("OMNIINTEL_ASR_MODEL_PATH", "")
-            if not model_path or not Path(model_path).is_dir():
-                raise RuntimeError("Hosted ASR is not configured; set OMNIINTEL_ASR_MODEL_PATH to a local CTranslate2 model directory.")
-            adapter = FasterWhisperAdapter(model_id=model_path,
+            model_id = model_path if model_path and Path(model_path).is_dir() else os.environ.get(
+                "OMNIINTEL_ASR_MODEL_ID", ""
+            )
+            allow_model_download = os.environ.get("OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD") == "1"
+            if not model_id:
+                raise RuntimeError(
+                    "ASR is not configured; set OMNIINTEL_ASR_MODEL_PATH to a local model "
+                    "or explicitly set OMNIINTEL_ASR_MODEL_ID and OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1."
+                )
+            adapter = FasterWhisperAdapter(
+                model_id=model_id,
                 device=os.environ.get("OMNIINTEL_ASR_DEVICE", "cpu"),
                 compute_type=os.environ.get("OMNIINTEL_ASR_COMPUTE_TYPE", "int8"),
-                cpu_threads=int(os.environ.get("OMNIINTEL_ASR_THREADS", "4")))
+                cpu_threads=int(os.environ.get("OMNIINTEL_ASR_THREADS", "4")),
+                allow_model_download=allow_model_download,
+            )
             run_wav_transcription(database_path, asset_dir, imported.source_id, extracted.output_asset_id,
                 adapter,
                 language=payload.get("language"),
