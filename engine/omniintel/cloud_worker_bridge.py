@@ -22,7 +22,7 @@ from .worker import run_once as run_local_once
 
 _MAX_UPLOAD = 250 * 1024 * 1024
 _MAX_READER = 20 * 1024 * 1024
-_MEDIA_SUFFIX = re.compile(r"\.(mp3|m4a|wav|aac|flac|ogg|opus|mp4|m4v|mov|mkv|webm)$", re.I)
+_MEDIA_SUFFIX = re.compile(r"\.(mp3|m4a|wav|aac|flac|ogg|opus|mp4|m4v|mov|mkv|webm)$", re.IGNORECASE)
 
 
 class BridgeError(RuntimeError):
@@ -140,7 +140,7 @@ def _heartbeat_loop(origin: str, token: str, job_id: str, lease_token: str,
         try:
             _request_json(origin, token, f"/v1/worker/jobs/{job_id}/heartbeat",
                           method="POST", body={"lease_token": lease_token}, timeout=30)
-        except BaseException as error:  # heartbeat failure means remote ownership may be lost
+        except Exception as error:  # noqa: BLE001 - heartbeat failure means remote ownership may be lost
             errors.append(error)
             stop.set()
             return
@@ -221,14 +221,14 @@ def run_bridge_once(*, api_base: str, api_token: str, database: Path,
                             upload_dir=upload_dir, asset_dir=asset_dir)
         if heartbeat_errors:
             raise BridgeError(f"Remote job lease heartbeat failed: {heartbeat_errors[0]}")
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - persist bounded job failure
         try:
             _request_json(
                 origin, api_token, f"/v1/worker/jobs/{job['job_id']}/fail",
                 method="POST", body={"lease_token": job["lease_token"],
                                      "error": f"{type(error).__name__}: {error}"[:1900]},
             )
-        except Exception:
+        except BridgeError:
             pass
     finally:
         stop.set()
