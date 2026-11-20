@@ -50,9 +50,11 @@ function authorized(request: Request, env: Env) {
     crypto.subtle.digest("SHA-256", new TextEncoder().encode(supplied.slice(7)))
       .then(async (digest) => {
         const expected = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(env.OMNIINTEL_API_TOKEN));
-        return crypto.subtle.timingSafeEqual
-          ? crypto.subtle.timingSafeEqual(digest, expected)
-          : Array.from(new Uint8Array(digest)).every((v, i) => v === new Uint8Array(expected)[i]);
+        const left = new Uint8Array(digest);
+        const right = new Uint8Array(expected);
+        let difference = 0;
+        for (let i = 0; i < left.length; i++) difference |= left[i] ^ right[i];
+        return difference === 0;
       });
 }
 async function requireAuth(request: Request, env: Env) {
