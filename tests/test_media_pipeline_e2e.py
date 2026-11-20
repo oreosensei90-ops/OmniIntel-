@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import wave
 from pathlib import Path
+from types import SimpleNamespace
 
 from omniintel.database import connect
 from omniintel.jobs import JobQueue
@@ -158,6 +159,37 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
         "omniintel.worker.resolve_study_generator",
         lambda _provider: deterministic_study_generator,
     )
+    monkeypatch.setattr(
+        "omniintel.worker.extract_video_frames",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            id="fixture-frame-extraction", frame_count=2, sample_interval_ms=15_000
+        ),
+    )
+    monkeypatch.setattr(
+        "omniintel.worker.build_visual_timeline",
+        lambda *_args, **_kwargs: SimpleNamespace(events_created=2, alignments_created=1),
+    )
+    monkeypatch.setattr(
+        "omniintel.worker.list_visual_timeline",
+        lambda *_args, **_kwargs: [
+            {
+                "visual_event_id": "visual-event-1", "timestamp_ms": 0,
+                "frame_index": 0, "review_state": "NEEDS_REVIEW",
+                "alignment_id": "alignment-1", "transcript_segment_id": "segment-1",
+                "transcript_start_ms": 500, "transcript_end_ms": 2500,
+                "relation": "NEAREST", "delta_ms": 500,
+                "alignment_review_state": "NEEDS_REVIEW",
+            },
+            {
+                "visual_event_id": "visual-event-2", "timestamp_ms": 15000,
+                "frame_index": 1, "review_state": "NEEDS_REVIEW",
+                "alignment_id": None, "transcript_segment_id": None,
+                "transcript_start_ms": None, "transcript_end_ms": None,
+                "relation": None, "delta_ms": None,
+                "alignment_review_state": None,
+            },
+        ],
+    )
     monkeypatch.setenv("OMNIINTEL_UPLOAD_DIR", str(upload_root))
     monkeypatch.setenv("OMNIINTEL_ASSET_DIR", str(asset_root))
     model_path = tmp_path / "asr-model"
@@ -176,6 +208,7 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
             "language": "en",
             "chapter_minutes": 10,
             "approve_ai": True,
+            "approve_visual": True,
         },
         max_attempts=1,
     )
@@ -190,6 +223,14 @@ def test_uploaded_video_reaches_evidence_grounded_reader_through_real_worker(tmp
     assert reader["pipeline"]["human_review_required"] is True
     assert reader["pipeline"]["all_evidence_links"] == "PENDING"
     assert reader["pipeline"]["provider"] == "ollama"
+    assert reader["visual_timeline"]["status"] == "SAMPLED_NEEDS_REVIEW"
+    assert reader["visual_timeline"]["frame_count"] == 2
+    assert reader["visual_timeline"]["automatic_acceptance"] is False
+    assert all(
+        event["review_state"] == "NEEDS_REVIEW"
+        for event in reader["visual_timeline"]["events"]
+    )
+    assert completed["result"]["visual_analysis"]["status"] == "SAMPLED_NEEDS_REVIEW"
     blocks = [
         block
         for chapter in reader["chapters"]
