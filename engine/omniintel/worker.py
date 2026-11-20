@@ -25,6 +25,7 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
         return False
     upload_path: Path | None = None
     cleanup_upload = False
+    result_visual: dict[str, object] | None = None
     try:
         payload = job["payload"]
         if job["job_type"] == "YOUTUBE_TO_NOTES":
@@ -119,7 +120,10 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             "ai_generation": "NOT_REQUESTED",
         }
         if payload.get("approve_visual") is True:
-            result["visual_analysis"] = result_visual
+            result["visual_analysis"] = result_visual or {
+                "status": "NOT_AVAILABLE",
+                "reason": "VISUAL_SAMPLING_REQUIRES_UPLOADED_VIDEO",
+            }
         if payload.get("approve_ai") is True:
             provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "openai").strip().lower()
             default_model = (
