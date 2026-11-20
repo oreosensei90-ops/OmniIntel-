@@ -220,4 +220,5 @@ def test_android_supports_consent_gated_media_upload_as_asr_fallback() -> None:
     assert 'uploadPicker.launch(arrayOf("video/*", "audio/*"))' in activity
     assert '"/v1/media/jobs"' in client
     assert "250L * 1024L * 1024L" in client
-    assert "setChunkedStreamingMode" in client
+    assert "setFixedLengthStreamingMode(staged.length())" in client
+    assert "staged.inputStream().use" in client
