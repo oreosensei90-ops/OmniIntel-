@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
-import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -51,17 +50,15 @@ def generate_gemini_study_json(model: str, prompt: str) -> dict[str, Any]:
             "responseSchema": _gemini_schema(schema),
         },
     }
-    query = urllib.parse.urlencode({"key": api_key})
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        + urllib.parse.quote(selected_model, safe="")
-        + ":generateContent?"
-        + query
+        + selected_model
+        + ":generateContent"
     )
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
         method="POST",
     )
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
