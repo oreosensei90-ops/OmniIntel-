@@ -3,22 +3,8 @@ name: Cloud worker image
 on:
   push:
     branches: [main, "milestone/**", "fix/**"]
-    paths:
-      - "Dockerfile.cloud-worker"
-      - ".dockerignore"
-      - "pyproject.toml"
-      - "engine/**"
-      - "deploy/start-cloud-worker.sh"
-      - ".github/workflows/publish-worker-image.yml"
   pull_request:
     branches: [main, "milestone/**"]
-    paths:
-      - "Dockerfile.cloud-worker"
-      - ".dockerignore"
-      - "pyproject.toml"
-      - "engine/**"
-      - "deploy/start-cloud-worker.sh"
-      - ".github/workflows/publish-worker-image.yml"
   workflow_dispatch:
 
 permissions:
