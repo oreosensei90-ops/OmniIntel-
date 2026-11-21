@@ -312,21 +312,45 @@ def main() -> None:
     parser.add_argument("--asset-dir", type=Path, default=Path(os.environ.get("OMNIINTEL_ASSET_DIR", "omniintel-assets")))
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--once", action="store_true")
+    parser.add_argument(
+        "--max-seconds", type=float, default=0,
+        help="Stop claiming new jobs after this many seconds (0 = no limit). A job already "
+             "claimed is always finished, so scheduled runners exit cleanly instead of being killed.",
+    )
     args = parser.parse_args()
     if not args.api:
         parser.error("Provide --api or set OMNIINTEL_WORKER_API.")
     if not 0.5 <= args.poll_seconds <= 60:
         parser.error("--poll-seconds must be between 0.5 and 60.")
+    if args.max_seconds < 0:
+        parser.error("--max-seconds must not be negative.")
     token = os.environ.get("OMNIINTEL_WORKER_TOKEN", "")
     if not token:
         parser.error("Set OMNIINTEL_WORKER_TOKEN in the environment.")
+    deadline = time.monotonic() + args.max_seconds if args.max_seconds else None
+    failures = 0
     while True:
-        worked = run_bridge_once(api_base=args.api, worker_token=token, database=args.database,
-                                 upload_dir=args.upload_dir, asset_dir=args.asset_dir)
+        try:
+            worked = run_bridge_once(api_base=args.api, worker_token=token, database=args.database,
+                                     upload_dir=args.upload_dir, asset_dir=args.asset_dir)
+        except BridgeError as error:
+            # One poisoned job (already reported to the API) must not stop the queue.
+            # --once keeps the strict behaviour: a failed job is a non-zero exit.
+            print(f"omniintel-cloud-worker: {error}", flush=True)
+            if args.once:
+                raise SystemExit(1) from error
+            failures += 1
+            worked = True
         if args.once:
             break
+        if deadline is not None and time.monotonic() >= deadline:
+            break
         if not worked:
+            if deadline is not None and time.monotonic() + args.poll_seconds >= deadline:
+                break
             time.sleep(args.poll_seconds)
+    if failures:
+        print(f"omniintel-cloud-worker: {failures} job(s) failed during this run", flush=True)
 
 
 if __name__ == "__main__":
