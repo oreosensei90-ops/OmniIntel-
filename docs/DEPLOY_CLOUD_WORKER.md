@@ -71,3 +71,35 @@ a replacement for D1 or B2.
 5. Verify AI generation only when explicitly selected and configured.
 6. Restart the container and verify the persistent volume preserves its model cache and
    local recovery state.
+
+## Zero-cost GitHub Actions processing
+
+For a public repository, the `.github/workflows/hosted-worker.yml` workflow can run the
+same bridge on GitHub-hosted Linux runners instead of a permanent VM. This is a
+best-effort, burst-style option, not an always-on server:
+
+- It checks the queue every 15 minutes and claims at most one job per run.
+- Each run has a 45-minute processing-step limit and a 50-minute job limit.
+- It uses the smaller `tiny` Faster-Whisper model to reduce cold-start time and caches
+  the model between eligible runs.
+- Runner files are ephemeral. D1 remains the job-state source of truth and B2 remains
+  the durable media/artifact store; never rely on the runner filesystem surviving.
+- A job interrupted by runner shutdown is recovered through the API's lease expiry and
+  retry policy. The concurrency group prevents two hosted runs from claiming jobs at
+  the same time.
+
+The hosted workflow needs the existing `OMNIINTEL_WORKER_TOKEN` repository secret.
+It can be run manually from the Actions tab on the milestone branch. GitHub scheduled
+events run only from the repository's default branch, so automatic 15-minute polling
+starts after this workflow reaches that branch. Do not merge the milestone PR merely
+to enable scheduling without reviewing the full PR first.
+
+AI generation is separately consent-gated. If a job requests AI generation, configure
+a provider key such as `GEMINI_API_KEY` as a GitHub Actions repository secret. A free
+Google AI Studio key can be used; no paid hosting is needed. Without a provider key,
+AI-approved jobs fail closed rather than silently switching to an unapproved provider.
+Do not put provider keys in source files, app bundles, or job payloads.
+
+This hosted option is intended for development and low-volume testing. GitHub queue
+delays, scheduled-run delays, free-tier policies, model download time and job limits
+mean it does not provide continuous processing or production uptime guarantees.
