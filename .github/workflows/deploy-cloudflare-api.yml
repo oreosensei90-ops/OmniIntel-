@@ -1,4 +1,5 @@
 name: Deploy OmniIntel Cloudflare API
+# Worker API/B2 deployment is intentionally independent of Cloudflare Pages permissions.
 
 on:
   workflow_dispatch:
