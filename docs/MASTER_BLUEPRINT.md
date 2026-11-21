@@ -199,6 +199,12 @@ Contract rules:
 - Docker then exited code 125 with `docker: invalid reference format`.
 - The workflow's shell script contains doubled backslashes (`\\`) at the end of each continued `docker run` line. Replace them with one shell continuation backslash (`\`) or use a YAML folded scalar/array-safe command, run shellcheck, and prove the container starts. This failure occurred before any job was claimed; it does not explain later pipeline behavior yet.
 
+### P0 — Worker image publication race
+- The next runner attempt after the shell-continuation fix checked out source commit `07aa2f7c7cb9b9d147d4362548d30b067edcdd8f`, derived its immutable image tag, and failed because that GHCR tag did not yet exist (`manifest ... not found`).
+- This happened while a newer branch push was concurrently building/publishing the worker image. The hosted-worker workflow can start before the image-publisher workflow finishes.
+- Fix the dependency deterministically: either make the worker workflow wait for and verify the exact matching image digest/tag, trigger it only after successful image publication, or build/publish and run the same immutable image in one coordinated workflow. Never fall back silently to `latest`.
+- Acceptance: for a given source SHA, GHCR contains the exact `sha-<full-SHA>` image before the runner attempts `docker pull`; then the container starts and reports a successful API connection/claim. Add a regression check for missing tags and clear retry behavior.
+
 ### P1 — B2 browser CORS deployment still requires live confirmation
 - The previous workflow failed because B2 returned `NoSuchCorsConfiguration` (case-sensitive spelling differed from the workflow matcher).
 - Follow-up failed because verification assumed a CORS rule ID was returned.
