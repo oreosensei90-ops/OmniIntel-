@@ -829,6 +829,7 @@ if (onlineForm) {
       event.preventDefault();
       if (!mediaUploadForm.reportValidity()) return;
       uploadButton.disabled = true;
+      let uploadStage = "validating the form";
       try {
         const base = apiBase();
         const token = $("#api-token").value.trim();
@@ -842,7 +843,8 @@ if (onlineForm) {
         if (!$("#approve-upload").checked) throw new Error("Confirm that you own or are authorized to upload and process this media.");
         sessionStorage.setItem("omniintel-api-token", token);
         localStorage.setItem("omniintel-api-base-url", base);
-        uploadStatus.textContent = "Uploading media securely…";
+        uploadStage = "requesting a secure upload URL from OmniIntel";
+        uploadStatus.textContent = "Preparing secure upload…";
         const created = await apiRequest(base, token, "/v1/media/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -857,18 +859,29 @@ if (onlineForm) {
           })
         });
         if (!created.upload_url || !created.upload_complete_url) throw new Error("The server did not return a B2 upload URL.");
+        uploadStage = "uploading the file to Backblaze B2";
         uploadStatus.textContent = "Uploading media to private storage…";
-        const uploaded = await fetch(created.upload_url, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file
-        });
+        let uploaded;
+        try {
+          uploaded = await fetch(created.upload_url, {
+            method: "PUT",
+            mode: "cors",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file
+          });
+        } catch (cause) {
+          const error = new Error("The secure upload URL was created, but the browser could not upload to Backblaze B2. This usually means the B2 bucket is missing a CORS rule for this website (PUT + Content-Type), or the network blocked the storage request. The API address and token are not the cause.");
+          error.cause = cause;
+          throw error;
+        }
         if (!uploaded.ok) throw new Error("Backblaze upload failed: HTTP " + uploaded.status);
+        uploadStage = "confirming the uploaded file with OmniIntel";
         await apiRequest(base, token, created.upload_complete_url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: "{}"
         });
+        uploadStage = "waiting for transcription and note generation";
         uploadStatus.textContent = "Upload verified · transcription job " + created.job_id;
         for (let attempt = 0; attempt < 1800; attempt++) {
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -887,7 +900,7 @@ if (onlineForm) {
         }
         throw new Error("The job is still running. Check its status with the server later.");
       } catch (error) {
-        uploadStatus.textContent = error.message || "Media processing failed.";
+        uploadStatus.textContent = error.message || ("Failed while " + uploadStage + ".");
         uploadStatus.classList.add("error");
       } finally {
         uploadButton.disabled = false;
