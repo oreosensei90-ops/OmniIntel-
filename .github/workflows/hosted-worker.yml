@@ -128,7 +128,6 @@ jobs:
             --env OMNIINTEL_ASR_THREADS=2 \
             --env OMNIINTEL_AI_PROVIDER=gemini \
             --env OMNIINTEL_GEMINI_MODEL=gemini-2.5-flash \
-            --env OMNIINTEL_AI_MODEL=chat:fast \
             --env GEMINI_API_KEY="$GEMINI_API_KEY" \
             --env HF_HOME=/var/lib/omniintel/huggingface \
             --env HOME=/var/lib/omniintel \
