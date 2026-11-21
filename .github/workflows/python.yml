@@ -16,6 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,6 +36,12 @@ jobs:
 
       - name: Check deployment entrypoint shell syntax
         run: bash -n deploy/start-service.sh deploy/start-cloud-worker.sh
+
+      - name: Build production Cloudflare bridge worker image
+        run: docker build --pull --file Dockerfile.cloud-worker --tag omniintel-cloud-worker:ci .
+
+      - name: Smoke-test worker CLI inside production image
+        run: docker run --rm --entrypoint omniintel-cloud-worker omniintel-cloud-worker:ci --help
 
 
   hosted-worker:
