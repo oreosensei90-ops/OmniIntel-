@@ -851,6 +851,19 @@ if (onlineForm) {
       setOnlineStatus("A saved job record was invalid and has been cleared.", true);
       return;
     }
+    let storedOrigin;
+    try {
+      const parsed = new URL(pending.api_base);
+      const local = ["localhost", "127.0.0.1"].includes(parsed.hostname);
+      if ((parsed.protocol !== "https:" && !(local && parsed.protocol === "http:")) ||
+          parsed.origin !== pending.api_base || parsed.username || parsed.password) {
+        throw new Error("invalid API origin");
+      }
+      storedOrigin = parsed.origin;
+    } catch {
+      setOnlineStatus("The saved job has an invalid API address. Correct the API address before resuming.", true);
+      return;
+    }
     const token = $("#api-token").value.trim() || sessionStorage.getItem("omniintel-api-token") || "";
     if (!token) {
       setOnlineStatus("Job " + pending.job_id + " is saved. Enter your API token and resume; do not submit the video again.");
@@ -860,7 +873,7 @@ if (onlineForm) {
     onlineButton.disabled = true;
     try {
       setOnlineStatus("Resuming saved job " + pending.job_id + "…");
-      await pollRemoteJob(pending.api_base, token, pending, setOnlineStatus);
+      await pollRemoteJob(storedOrigin, token, pending, setOnlineStatus);
     } catch (error) {
       setOnlineStatus(error.message || "Could not resume the saved job.", true);
     } finally {
