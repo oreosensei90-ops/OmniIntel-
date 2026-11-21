@@ -72,26 +72,26 @@ jobs:
           set -eu
           mkdir -p "$RUNNER_TEMP/omniintel/huggingface"
           docker pull "$IMAGE"
-          docker run --rm --init \\
-            --user "$(id -u):$(id -g)" \\
-            --cpus=2 --memory=12g --pids-limit=512 \\
-            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=512m \\
-            --cap-drop ALL --security-opt no-new-privileges:true \\
-            --volume "$RUNNER_TEMP/omniintel:/var/lib/omniintel" \\
-            --env OMNIINTEL_WORKER_API=https://omniintel-api.scrbaba502.workers.dev \\
-            --env OMNIINTEL_WORKER_TOKEN="$WORKER_TOKEN" \\
-            --env OMNIINTEL_DATABASE=/var/lib/omniintel/worker.sqlite3 \\
-            --env OMNIINTEL_UPLOAD_DIR=/var/lib/omniintel/uploads \\
-            --env OMNIINTEL_ASSET_DIR=/var/lib/omniintel/assets \\
-            --env OMNIINTEL_ASR_MODEL_ID=tiny \\
-            --env OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1 \\
-            --env OMNIINTEL_ASR_DEVICE=cpu \\
-            --env OMNIINTEL_ASR_COMPUTE_TYPE=int8 \\
-            --env OMNIINTEL_ASR_THREADS=2 \\
-            --env OMNIINTEL_AI_PROVIDER=freelm \\
-            --env OMNIINTEL_AI_MODEL=chat:fast \\
-            --env GEMINI_API_KEY="$GEMINI_API_KEY" \\
-            --env HF_HOME=/var/lib/omniintel/huggingface \\
-            --env HOME=/var/lib/omniintel \\
-            --env XDG_CACHE_HOME=/var/lib/omniintel/cache \\
+          docker run --rm --init \
+            --user "$(id -u):$(id -g)" \
+            --cpus=2 --memory=12g --pids-limit=512 \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=512m \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --volume "$RUNNER_TEMP/omniintel:/var/lib/omniintel" \
+            --env OMNIINTEL_WORKER_API=https://omniintel-api.scrbaba502.workers.dev \
+            --env OMNIINTEL_WORKER_TOKEN="$WORKER_TOKEN" \
+            --env OMNIINTEL_DATABASE=/var/lib/omniintel/worker.sqlite3 \
+            --env OMNIINTEL_UPLOAD_DIR=/var/lib/omniintel/uploads \
+            --env OMNIINTEL_ASSET_DIR=/var/lib/omniintel/assets \
+            --env OMNIINTEL_ASR_MODEL_ID=tiny \
+            --env OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1 \
+            --env OMNIINTEL_ASR_DEVICE=cpu \
+            --env OMNIINTEL_ASR_COMPUTE_TYPE=int8 \
+            --env OMNIINTEL_ASR_THREADS=2 \
+            --env OMNIINTEL_AI_PROVIDER=freelm \
+            --env OMNIINTEL_AI_MODEL=chat:fast \
+            --env GEMINI_API_KEY="$GEMINI_API_KEY" \
+            --env HF_HOME=/var/lib/omniintel/huggingface \
+            --env HOME=/var/lib/omniintel \
+            --env XDG_CACHE_HOME=/var/lib/omniintel/cache \
             "$IMAGE" --poll-seconds 5
