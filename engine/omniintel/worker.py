@@ -134,24 +134,32 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 else os.environ.get("OMNIINTEL_OPENAI_MODEL", "gpt-4.1-mini")
             )
             model = os.environ.get("OMNIINTEL_AI_MODEL", default_model)
-            generator = resolve_study_generator(provider)
-            study_reader = generate_study_guide(
-                database_path,
-                transcript_reader["source"]["id"],
-                model=model,
-                approve_local_model=True,
-                generator=generator,
-            )
-            study_reader["pipeline"]["provider"] = provider
-            study_reader["pipeline"]["network_access"] = (
-                "loopback-only" if provider == "ollama" else "external-user-approved"
-            )
-            # AI generation composes a new reader object; carry forward the
-            # separately consented visual timeline instead of silently dropping it.
-            if "visual_timeline" in transcript_reader:
-                study_reader["visual_timeline"] = transcript_reader["visual_timeline"]
-            result["reader"] = study_reader
-            result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
+            try:
+                generator = resolve_study_generator(provider)
+                study_reader = generate_study_guide(
+                    database_path,
+                    transcript_reader["source"]["id"],
+                    model=model,
+                    approve_local_model=True,
+                    generator=generator,
+                )
+            except Exception as ai_error:  # noqa: BLE001 - keep the source-grounded transcript reader
+                # The extractive reader is already complete and evidence-linked. An optional AI
+                # provider outage must not discard it; the failure is recorded for the client.
+                result["ai_generation"] = "FAILED_EXTRACTIVE_READER_RETURNED"
+                result["ai_error"] = f"{type(ai_error).__name__}: {ai_error}"[:500]
+                transcript_reader.setdefault("pipeline", {})["ai_error"] = result["ai_error"]
+            else:
+                study_reader["pipeline"]["provider"] = provider
+                study_reader["pipeline"]["network_access"] = (
+                    "loopback-only" if provider == "ollama" else "external-user-approved"
+                )
+                # AI generation composes a new reader object; carry forward the
+                # separately consented visual timeline instead of silently dropping it.
+                if "visual_timeline" in transcript_reader:
+                    study_reader["visual_timeline"] = transcript_reader["visual_timeline"]
+                result["reader"] = study_reader
+                result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
         queue.complete(job["id"], job["lease_token"], result)
         cleanup_upload = True
     except Exception as error:  # noqa: BLE001 - persist bounded failure for client recovery
