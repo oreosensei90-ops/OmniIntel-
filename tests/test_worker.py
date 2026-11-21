@@ -325,7 +325,8 @@ def test_approved_ai_job_routes_to_configured_gemini_and_returns_review_gated_gu
     completed = queue.get(job_id)
     assert completed["state"] == "COMPLETED"
     assert completed["result"]["ai_generation"] == "DRAFT_READY_REVIEW_REQUIRED"
-    assert completed["result"]["reader"] is study_reader
+    assert completed["result"]["reader"]["version"]["id"] == "version-ai-study"
+    assert completed["result"]["reader"]["chapters"][0]["blocks"][0]["text"] == "A structured study summary."
     assert study_reader["pipeline"]["provider"] == "gemini"
     assert study_reader["pipeline"]["network_access"] == "external-user-approved"
     assert calls == {
