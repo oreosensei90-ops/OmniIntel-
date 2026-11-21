@@ -298,3 +298,5 @@ jobs:
           }
           console.log("PASS: live website HTML and app.js are reachable and contain the expected API client");
           NODE
+
+# [deploy-api] Apply the retained B2 CORS rules and redeploy the validated Worker.
