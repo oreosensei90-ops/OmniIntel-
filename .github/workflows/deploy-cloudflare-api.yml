@@ -12,6 +12,10 @@ on:
   push:
     branches:
       - milestone/end-to-end-reliability-2026-11-21
+    paths:
+      - '.github/workflows/deploy-cloudflare-api.yml'
+      - 'infra/cloudflare/worker/**'
+      - 'migrations/**'
 
 permissions:
   contents: read
@@ -22,7 +26,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[deploy-api]')
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-api]') }}
     name: Validate, migrate and deploy Worker
     runs-on: ubuntu-latest
     environment: production
