@@ -86,6 +86,33 @@ data class VideoImportEntity(
     val status: String
 )
 
+@Entity(
+    tableName = "remote_cloud_jobs",
+    indices = [Index(value = ["status", "createdAtEpochMs"])]
+)
+data class RemoteCloudJobEntity(
+    @PrimaryKey val jobId: String,
+    val statusUrl: String,
+    val apiBase: String,
+    val sourceLabel: String,
+    val jobType: String,
+    val status: String,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long
+)
+
+@Dao
+interface RemoteCloudJobDao {
+    @Query("SELECT * FROM remote_cloud_jobs WHERE status NOT IN ('FAILED', 'COMPLETED') ORDER BY createdAtEpochMs DESC LIMIT 1")
+    suspend fun latestPending(): RemoteCloudJobEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: RemoteCloudJobEntity)
+
+    @Query("DELETE FROM remote_cloud_jobs WHERE jobId = :jobId")
+    suspend fun delete(jobId: String)
+}
+
 @Dao
 interface VideoImportDao {
     @Query("SELECT * FROM video_imports ORDER BY createdAtEpochMs DESC")
@@ -260,17 +287,19 @@ interface StudyProgressDao {
 
 @Database(
     entities = [
-        LibraryBookEntity::class, VideoImportEntity::class, TextbookSourceEntity::class,
-        TextbookChapterEntity::class, TextbookBlockEntity::class, TextbookEvidenceEntity::class,
+        LibraryBookEntity::class, VideoImportEntity::class, RemoteCloudJobEntity::class,
+        TextbookSourceEntity::class, TextbookChapterEntity::class, TextbookBlockEntity::class,
+        TextbookEvidenceEntity::class,
         ReaderAnnotationEntity::class, ReaderProgressEntity::class, ReaderMigrationEntity::class,
         StudyProgressEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class ReaderDatabase : RoomDatabase() {
     abstract fun libraryBooks(): LibraryBookDao
     abstract fun videoImports(): VideoImportDao
+    abstract fun remoteCloudJobs(): RemoteCloudJobDao
     abstract fun readerContent(): ReaderContentDao
     abstract fun annotations(): ReaderAnnotationDao
     abstract fun progress(): ReaderProgressDao
@@ -333,6 +362,16 @@ abstract class ReaderDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""CREATE TABLE IF NOT EXISTS remote_cloud_jobs (
+                    jobId TEXT NOT NULL PRIMARY KEY, statusUrl TEXT NOT NULL, apiBase TEXT NOT NULL,
+                    sourceLabel TEXT NOT NULL, jobType TEXT NOT NULL, status TEXT NOT NULL,
+                    createdAtEpochMs INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL)""")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_remote_cloud_jobs_status_createdAtEpochMs ON remote_cloud_jobs(status, createdAtEpochMs)")
+            }
+        }
+
         @Volatile private var instance: ReaderDatabase? = null
 
         fun get(context: Context): ReaderDatabase =
@@ -341,7 +380,7 @@ abstract class ReaderDatabase : RoomDatabase() {
                     context.applicationContext,
                     ReaderDatabase::class.java,
                     "omniintel_reader.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build().also { instance = it }
             }
     }
