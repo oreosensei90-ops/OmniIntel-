@@ -93,6 +93,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           AWS_DEFAULT_REGION: us-east-005
+          # Backblaze's S3 API rejects the AWS CLI's default CRC checksum headers.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
           B2_BUCKET_NAME: omniintel-vault-2026
           B2_ENDPOINT: https://s3.us-east-005.backblazeb2.com
           WEB_ORIGINS: ${{ env.WEB_ORIGINS }}
@@ -134,7 +137,7 @@ jobs:
              Array.isArray(x.AllowedMethods) && x.AllowedMethods.includes("PUT"));
           const retained = rules.filter(x => !isOurs(x));
           retained.push(rule);
-          fs.writeFileSync(output, JSON.stringify({ CORSRules: rules }));
+          fs.writeFileSync(output, JSON.stringify({ CORSRules: retained }));
           NODE
           aws s3api put-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" --cors-configuration "file://$merged"
           aws s3api get-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" > "$current"
