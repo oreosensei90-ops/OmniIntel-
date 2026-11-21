@@ -274,3 +274,62 @@ def test_uploaded_video_worker_runs_opt_in_visual_sampling_and_keeps_review_gate
     assert visual["events"][0]["transcript_alignments"][0]["review_state"] == "NEEDS_REVIEW"
     assert completed["result"]["reader"]["visual_timeline"] == visual
     assert not upload.exists()
+
+def test_approved_ai_job_routes_to_configured_gemini_and_returns_review_gated_guide(
+    tmp_path, monkeypatch
+):
+    database = tmp_path / "worker-ai.db"
+    source_reader = {
+        "source": {"id": "source-ai", "title": "Lecture"},
+        "version": {"id": "version-ai"},
+        "chapters": [{"blocks": [{"block_type": "PARAGRAPH", "text": "Evidence-backed transcript."}]}],
+    }
+    study_reader = {
+        "source": source_reader["source"],
+        "version": {"id": "version-ai-study"},
+        "chapters": [{"blocks": [{"block_type": "SUMMARY", "text": "A structured study summary."}]}],
+        "pipeline": {"status": "AI_STUDY_DRAFT_READY", "human_review_required": True},
+    }
+    monkeypatch.setenv("OMNIINTEL_AI_PROVIDER", "gemini")
+    monkeypatch.setenv("OMNIINTEL_GEMINI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    queue = JobQueue(database)
+    job_id = queue.enqueue(
+        "YOUTUBE_TO_NOTES",
+        {
+            "url": "https://www.youtube.com/watch?v=abcdefghijk",
+            "video_id": "abcdefghijk",
+            "approve_network": True,
+            "approve_ai": True,
+            "chapter_minutes": 10,
+        },
+        max_attempts=1,
+    )
+    monkeypatch.setattr("omniintel.worker.process_youtube_video",
+        lambda *args, **kwargs: source_reader)
+    generator_marker = object()
+    monkeypatch.setattr("omniintel.worker.resolve_study_generator",
+        lambda provider: generator_marker if provider == "gemini" else None)
+    calls = {}
+
+    def fake_generate(db_path, source_id, *, model, approve_local_model, generator):
+        calls.update({
+            "database": db_path, "source_id": source_id, "model": model,
+            "approved": approve_local_model, "generator": generator,
+        })
+        return study_reader
+
+    monkeypatch.setattr("omniintel.worker.generate_study_guide", fake_generate)
+
+    assert run_once(database, worker_id="gemini-worker") is True
+    completed = queue.get(job_id)
+    assert completed["state"] == "COMPLETED"
+    assert completed["result"]["ai_generation"] == "DRAFT_READY_REVIEW_REQUIRED"
+    assert completed["result"]["reader"] is study_reader
+    assert study_reader["pipeline"]["provider"] == "gemini"
+    assert study_reader["pipeline"]["network_access"] == "external-user-approved"
+    assert calls == {
+        "database": database, "source_id": "source-ai",
+        "model": "gemini-2.5-flash", "approved": True,
+        "generator": generator_marker,
+    }
