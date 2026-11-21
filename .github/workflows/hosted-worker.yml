@@ -134,5 +134,4 @@ jobs:
             --env HOME=/var/lib/omniintel \
             --env XDG_CACHE_HOME=/var/lib/omniintel/cache \
             "$IMAGE" --poll-seconds 5 --max-seconds 600
-
 # Trigger worker against the latest production API and immutable processing image.
