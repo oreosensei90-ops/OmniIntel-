@@ -59,4 +59,5 @@ def test_gemini_adapter_sends_schema_and_parses_json_without_leaking_key(monkeyp
     assert calls["timeout"] == 180
     assert calls["body"]["generationConfig"]["responseMimeType"] == "application/json"
     assert calls["body"]["generationConfig"]["responseSchema"]["required"]
+    assert "additionalProperties" not in str(calls["body"]["generationConfig"]["responseSchema"])
     assert "source evidence" in calls["body"]["contents"][0]["parts"][0]["text"]
