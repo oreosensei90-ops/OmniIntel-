@@ -47,6 +47,7 @@ def test_gemini_adapter_sends_schema_and_parses_json_without_leaking_key(monkeyp
     class FakeOpener:
         def open(self, request, timeout):
             calls["url"] = request.full_url
+            calls["headers"] = dict(request.header_items())
             calls["body"] = json.loads(request.data)
             calls["timeout"] = timeout
             return FakeResponse()
@@ -55,7 +56,8 @@ def test_gemini_adapter_sends_schema_and_parses_json_without_leaking_key(monkeyp
     monkeypatch.setattr("omniintel.gemini_generation.urllib.request.build_opener", lambda *_args: FakeOpener())
     result = generate_gemini_study_json("gemini-2.5-flash", "source evidence")
     assert result == {"ok": True}
-    assert "test-secret-key" in calls["url"]
+    assert "test-secret-key" not in calls["url"]
+    assert calls["headers"]["X-goog-api-key"] == "test-secret-key"
     assert calls["timeout"] == 180
     assert calls["body"]["generationConfig"]["responseMimeType"] == "application/json"
     assert calls["body"]["generationConfig"]["responseSchema"]["required"]
