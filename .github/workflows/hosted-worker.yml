@@ -1,0 +1,17 @@
+name: OmniIntel hosted processing worker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  select-milestone:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain the worker branch
+        run: |
+          echo "This default-branch entry exists to expose GitHub's Run workflow button."
+          echo "For actual processing, select branch milestone/end-to-end-reliability-2026-11-21 in the Run workflow branch selector."
+          echo "Do not run this default-branch stub for media processing."
