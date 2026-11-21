@@ -129,6 +129,8 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             default_model = (
                 os.environ.get("OMNIINTEL_OLLAMA_MODEL", "llama3.1")
                 if provider == "ollama"
+                else os.environ.get("OMNIINTEL_GEMINI_MODEL", "gemini-2.5-flash")
+                if provider == "gemini"
                 else os.environ.get("OMNIINTEL_FREE_LLM_MODEL", "chat:fast")
                 if provider == "freelm"
                 else os.environ.get("OMNIINTEL_OPENAI_MODEL", "gpt-4.1-mini")
