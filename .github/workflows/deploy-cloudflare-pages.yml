@@ -62,3 +62,5 @@ jobs:
           }
           console.log("PASS: production Pages HTML, app.js recovery/API route, and service-worker v8 verified");
           NODE
+
+# Deployment trigger: keep this workflow push-enabled for the milestone branch.
