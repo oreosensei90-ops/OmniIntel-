@@ -1,0 +1,77 @@
+name: OmniIntel hosted processing worker
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Only one worker may hold a remote job lease at a time. Do not cancel a
+# running job: its heartbeat and final completion must be allowed to finish.
+concurrency:
+  group: omniintel-hosted-worker
+  cancel-in-progress: false
+
+jobs:
+  process-one-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      OMNIINTEL_WORKER_API: https://omniintel-api.scrbaba502.workers.dev
+      OMNIINTEL_WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
+      OMNIINTEL_DATABASE: ${{ runner.temp }}/omniintel/worker.sqlite3
+      OMNIINTEL_UPLOAD_DIR: ${{ runner.temp }}/omniintel/uploads
+      OMNIINTEL_ASSET_DIR: ${{ runner.temp }}/omniintel/assets
+      OMNIINTEL_ASR_MODEL_ID: tiny
+      OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD: "1"
+      OMNIINTEL_ASR_DEVICE: cpu
+      OMNIINTEL_ASR_COMPUTE_TYPE: int8
+      OMNIINTEL_ASR_THREADS: "2"
+      OMNIINTEL_AI_PROVIDER: freelm
+      OMNIINTEL_AI_MODEL: chat:fast
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Check whether the worker token is configured
+        id: guard
+        env:
+          WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
+        run: |
+          if [ -n "$WORKER_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Hosted processing is paused. Configure the OMNIINTEL_WORKER_TOKEN repository secret."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.enabled == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.enabled == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install FFmpeg
+        if: steps.guard.outputs.enabled == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Restore the tiny transcription model cache
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: omniintel-faster-whisper-tiny-v2-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            omniintel-faster-whisper-tiny-v2-${{ runner.os }}-
+      - name: Install the processing engine and free-tier adapters
+        if: steps.guard.outputs.enabled == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[youtube,asr,ai]'
+      - name: Process one queued job
+        if: steps.guard.outputs.enabled == 'true'
+        timeout-minutes: 45
+        run: |
+          mkdir -p "$OMNIINTEL_UPLOAD_DIR" "$OMNIINTEL_ASSET_DIR"
+          omniintel-cloud-worker --once
