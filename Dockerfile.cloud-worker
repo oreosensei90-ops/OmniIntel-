@@ -13,7 +13,7 @@ COPY pyproject.toml README.md /app/
 COPY engine /app/engine
 COPY deploy/start-cloud-worker.sh /usr/local/bin/start-cloud-worker
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir '.[youtube,asr]' \
+    && python -m pip install --no-cache-dir '.[youtube,asr,ai]' \
     && useradd --system --uid 10001 --create-home omniintel \
     && mkdir -p /var/lib/omniintel/uploads /var/lib/omniintel/assets \
     && chown -R omniintel:omniintel /var/lib/omniintel \

@@ -15,4 +15,5 @@ exec omniintel-cloud-worker \
   --database "$OMNIINTEL_DATABASE" \
   --upload-dir "$OMNIINTEL_UPLOAD_DIR" \
   --asset-dir "$OMNIINTEL_ASSET_DIR" \
-  --poll-seconds "${OMNIINTEL_POLL_SECONDS:-5}"
+  --poll-seconds "${OMNIINTEL_POLL_SECONDS:-5}" \
+  "$@"

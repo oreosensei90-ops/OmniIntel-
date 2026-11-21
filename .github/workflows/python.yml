@@ -40,5 +40,8 @@ jobs:
           docker compose --file deploy/cloud-worker.compose.yml config --quiet
       - name: Build production Cloudflare bridge worker image
         run: docker build --pull --file Dockerfile.cloud-worker --tag omniintel-cloud-worker:ci .
-      - name: Smoke-test worker CLI inside production image
-        run: docker run --rm --entrypoint omniintel-cloud-worker omniintel-cloud-worker:ci --help
+      - name: Smoke-test worker entrypoint and argument forwarding
+        env:
+          OMNIINTEL_WORKER_API: https://example.invalid
+          OMNIINTEL_WORKER_TOKEN: ci-smoke-test-token
+        run: docker run --rm -e OMNIINTEL_WORKER_API -e OMNIINTEL_WORKER_TOKEN omniintel-cloud-worker:ci --help

@@ -7,6 +7,7 @@ reader documents to the Cloudflare API.
 ## Deployment bundle
 
 - Docker image: `Dockerfile.cloud-worker`.
+- Published image: `ghcr.io/oreosensei90-ops/omniintel-cloud-worker:sha-<commit>`.
 - Compose definition: `deploy/cloud-worker.compose.yml`.
 - Safe configuration template: `deploy/cloud-worker.env.example`.
 - Runtime: one Docker background worker; it exposes no inbound HTTP port and polls
@@ -92,8 +93,14 @@ best-effort, burst-style option, not an always-on server:
   retry policy. The concurrency group prevents two hosted runs from claiming jobs at
   the same time.
 
+The `Cloud worker image` workflow builds and publishes an immutable commit-tagged image
+to GitHub Container Registry (GHCR). It attaches source metadata, SBOM and build provenance.
+The hosted workflow authenticates with the repository `GITHUB_TOKEN` and pulls the image
+for the exact workflow commit, avoiding a fresh FFmpeg/Python/dependency installation on
+every 15-minute run. No registry password or extra user secret is needed.
+
 The hosted workflow needs the existing `OMNIINTEL_WORKER_TOKEN` repository secret.
-It can be run manually from the Actions tab on the milestone branch. GitHub scheduled
+It can be run manually from a branch after that commit image build has completed. GitHub scheduled
 events run only from the repository's default branch, so automatic 15-minute polling
 starts after this workflow reaches that branch. Do not merge the milestone PR merely
 to enable scheduling without reviewing the full PR first.
