@@ -103,7 +103,7 @@ jobs:
           merged="$(mktemp)"
           trap 'rm -f "$current" "$merged"' EXIT
           if ! aws s3api get-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" > "$current" 2>cors-read.err; then
-            if grep -q 'NoSuchCORSConfiguration' cors-read.err; then
+            if grep -qiE 'NoSuchCorsConfiguration|NoSuchCORSConfiguration' cors-read.err; then
               printf '{"CORSRules":[]}' > "$current"
             else
               cat cors-read.err
