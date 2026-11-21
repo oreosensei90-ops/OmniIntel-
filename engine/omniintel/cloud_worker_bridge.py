@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import urllib.error
@@ -161,12 +162,32 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
                         upload_dir: Path, asset_dir: Path) -> dict[str, Any]:
     job_id = str(job["job_id"])
     lease_token = str(job["lease_token"])
+    if not _JOB_ID.fullmatch(job_id):
+        raise BridgeError("Worker supplied an invalid job identifier.")
+    try:
+        attempt = int(job.get("attempt", 1))
+    except (TypeError, ValueError) as error:
+        raise BridgeError("Worker supplied an invalid attempt number.") from error
+    if not 1 <= attempt <= 999_999:
+        raise BridgeError("Worker supplied an invalid attempt number.")
     media_path: Path | None = None
+    workspace: Path | None = None
     old_upload = os.environ.get("OMNIINTEL_UPLOAD_DIR")
     old_asset = os.environ.get("OMNIINTEL_ASSET_DIR")
     upload_dir.mkdir(parents=True, exist_ok=True)
-    asset_dir.mkdir(parents=True, exist_ok=True)
+    asset_dir.parent.mkdir(parents=True, exist_ok=True)
     try:
+        # Every remote attempt gets a fresh database and asset namespace. The
+        # B2 input and D1 job row are durable; local FFmpeg/ASR intermediates
+        # are disposable and must not accumulate on persistent worker hosts.
+        workspace_root = asset_dir.parent / "cloud-worker-jobs"
+        workspace_root.mkdir(parents=True, exist_ok=True)
+        _prune_stale_workspaces(workspace_root)
+        workspace = workspace_root / f"{job_id}-attempt-{attempt}"
+        workspace.mkdir(mode=0o700, exist_ok=False)
+        job_asset_dir = workspace / "assets"
+        job_asset_dir.mkdir(mode=0o700)
+        isolated_database = workspace / "worker.sqlite3"
         if job.get("job_type") == "UPLOADED_MEDIA_TO_NOTES":
             filename = Path(str((job.get("payload") or {}).get("filename") or "upload.bin")).name
             suffix = Path(filename).suffix.lower()
@@ -177,13 +198,9 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
             _download_input(str(job.get("download_url") or ""), media_path)
         local_payload = _local_payload(job, media_path)
         os.environ["OMNIINTEL_UPLOAD_DIR"] = str(upload_dir.resolve())
-        os.environ["OMNIINTEL_ASSET_DIR"] = str(asset_dir.resolve())
-        # Isolate each remote job in its own local queue database. The ordinary
-        # run_once worker claims the oldest eligible job, so sharing the user's
-        # everyday queue could accidentally process an unrelated local task here.
-        isolated_dir = database.parent / "cloud-worker-jobs"
-        isolated_dir.mkdir(parents=True, exist_ok=True)
-        isolated_database = isolated_dir / (job_id + ".sqlite3")
+        os.environ["OMNIINTEL_ASSET_DIR"] = str(job_asset_dir.resolve())
+        # The ordinary run_once worker claims the oldest eligible job, so the
+        # isolated database prevents it from processing an unrelated local task.
         local_queue = JobQueue(isolated_database)
         local_id = local_queue.enqueue(
             str(job["job_type"]), local_payload,
@@ -205,6 +222,8 @@ def process_claimed_job(job: dict[str, Any], *, database: Path, origin: str, tok
     finally:
         if media_path is not None:
             media_path.unlink(missing_ok=True)
+        if workspace is not None:
+            shutil.rmtree(workspace, ignore_errors=True)
         if old_upload is None:
             os.environ.pop("OMNIINTEL_UPLOAD_DIR", None)
         else:

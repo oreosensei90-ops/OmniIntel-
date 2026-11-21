@@ -80,6 +80,8 @@ def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_pa
     monkeypatch.setattr(bridge, "JobQueue", FakeQueue)
     def fake_run_once(database, **_kwargs):
         calls["worker_database"] = database
+        calls["asset_dir"] = Path(__import__("os").environ["OMNIINTEL_ASSET_DIR"])
+        assert calls["asset_dir"].is_dir()
         return True
     monkeypatch.setattr(bridge, "run_local_once", fake_run_once)
     monkeypatch.setattr(bridge, "_request_json", fake_complete)
@@ -99,9 +101,10 @@ def test_process_claimed_youtube_job_reuses_local_engine_and_posts_reader(tmp_pa
     assert calls["payload"]["approve_network"] is True
     assert calls["idempotency_key"] == "cloudflare:11111111-1111-4111-8111-111111111111:1"
     assert str(calls["worker_database"]).endswith(
-        "cloud-worker-jobs/11111111-1111-4111-8111-111111111111.sqlite3"
+        "cloud-worker-jobs/11111111-1111-4111-8111-111111111111-attempt-1/worker.sqlite3"
     )
     assert calls["worker_database"] != tmp_path / "bridge.db"
+    assert not calls["worker_database"].parent.exists(), "completed attempt workspace must be removed"
     assert calls["complete_path"].endswith("/complete")
     assert calls["complete_body"]["reader"] == reader
 
@@ -201,3 +204,38 @@ def test_local_payload_preserves_explicit_visual_analysis_consent(tmp_path):
     local = _local_payload(job, tmp_path / "lecture.mp4")
     assert local["approve_visual"] is True
     assert local["approve_ai"] is False
+
+
+
+def test_worker_workspace_pruning_is_age_and_name_bounded(tmp_path):
+    import os
+    import time
+    from omniintel.cloud_worker_bridge import _prune_stale_workspaces
+
+    root = tmp_path / "cloud-worker-jobs"
+    stale = root / "11111111-1111-4111-8111-111111111111-attempt-1"
+    recent = root / "22222222-2222-4222-8222-222222222222-attempt-2"
+    unrelated = root / "keep-this-directory"
+    for directory in (stale, recent, unrelated):
+        directory.mkdir(parents=True)
+        (directory / "marker").write_text("keep")
+    old_time = time.time() - (8 * 24 * 60 * 60)
+    os.utime(stale, (old_time, old_time))
+
+    assert _prune_stale_workspaces(root) == 1
+    assert not stale.exists()
+    assert recent.exists()
+    assert unrelated.exists()
+
+
+def test_process_claimed_job_rejects_invalid_job_identifier_before_workspace_creation(tmp_path):
+    import omniintel.cloud_worker_bridge as bridge
+
+    with pytest.raises(BridgeError, match="invalid job identifier"):
+        bridge.process_claimed_job(
+            {"job_id": "../outside", "lease_token": "lease-1", "job_type": "YOUTUBE_TO_NOTES",
+             "payload": {"approve_network": True}},
+            database=tmp_path / "bridge.db", origin="https://worker.example",
+            token="secret", upload_dir=tmp_path / "uploads", asset_dir=tmp_path / "assets",
+        )
+    assert not (tmp_path / "cloud-worker-jobs").exists()

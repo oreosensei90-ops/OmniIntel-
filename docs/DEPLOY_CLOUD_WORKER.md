@@ -59,8 +59,12 @@ host only if that provider is selected and AI generation is desired. The key is
 The Cloudflare API stores job state in D1 and uploaded input in the private Backblaze B2
 bucket. The processor downloads inputs through short-lived signed URLs, processes them
 locally, sends the bounded reader result to the API, and removes temporary upload files.
-The persistent Docker volume is for the processor's local queue/model cache; it is not
-a replacement for D1 or B2.
+Each remote attempt uses a fresh, private workspace containing its own SQLite database
+and content-addressed asset directory. The workspace is removed after success or failure;
+a seven-day age-bounded scavenger removes abandoned workspaces after an abrupt host stop.
+The durable input remains in B2 and job state remains in D1, so retries do not depend on
+local intermediate files. The persistent Docker volume is for the processor's model cache
+and transient working data; it is not a replacement for D1 or B2.
 
 ## Production acceptance checks
 
