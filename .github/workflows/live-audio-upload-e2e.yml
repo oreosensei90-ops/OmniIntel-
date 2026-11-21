@@ -1,0 +1,70 @@
+name: OmniIntel live audio upload to reader E2E
+
+on:
+  push:
+    branches: [milestone/end-to-end-reliability-2026-11-21]
+
+permissions:
+  contents: read
+
+jobs:
+  live-audio-to-reader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Generate a short synthetic spoken MP3 fixture
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq espeak-ng ffmpeg
+          espeak-ng -v en-us -s 135 -w "$RUNNER_TEMP/omniintel-e2e.wav" \
+            "OmniIntel live audio processing acceptance test. This sentence verifies speech recognition and timestamped reader generation."
+          ffmpeg -hide_banner -loglevel error -y -i "$RUNNER_TEMP/omniintel-e2e.wav" -codec:a libmp3lame -b:a 96k "$RUNNER_TEMP/omniintel-e2e.mp3"
+          test -s "$RUNNER_TEMP/omniintel-e2e.mp3"
+          echo "Generated synthetic MP3 fixture: $(stat -c%s "$RUNNER_TEMP/omniintel-e2e.mp3") bytes"
+
+      - name: Upload audio and finalize the real B2-backed job
+        id: submit
+        env:
+          API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
+          API_BASE: https://omniintel-api.scrbaba502.workers.dev
+        run: |
+          set -euo pipefail
+          test -n "$API_TOKEN" || { echo "::error::OMNIINTEL_API_TOKEN is not configured"; exit 1; }
+          payload='{"filename":"omniintel-live-e2e.mp3","title":"OmniIntel live audio processing acceptance test","approve_media_upload":true,"approve_ai":false,"approve_visual":false,"language":"en","chapter_minutes":2}'
+          created="$(curl --fail --silent --show-error -X POST "$API_BASE/v1/media/jobs" \
+            -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" --data "$payload")"
+          job_id="$(printf '%s' "$created" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const j=JSON.parse(s);if(!j.job_id||!j.upload_url||!j.upload_complete_url||!j.status_url)throw Error("API did not return complete upload intent");process.stdout.write(j.job_id)})')"
+          upload_url="$(printf '%s' "$created" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).upload_url))')"
+          complete_path="$(printf '%s' "$created" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).upload_complete_url))')"
+          curl --fail --silent --show-error -X PUT "$upload_url" -H "Content-Type: audio/mpeg" --data-binary "@$RUNNER_TEMP/omniintel-e2e.mp3" -o /dev/null
+          curl --fail --silent --show-error -X POST "$API_BASE$complete_path" \
+            -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" --data '{}' -o /dev/null
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "Real B2 upload finalized for job: $job_id"
+
+      - name: Wait for transcription and validate the reader artifact
+        env:
+          API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
+          API_BASE: https://omniintel-api.scrbaba502.workers.dev
+          JOB_ID: ${{ steps.submit.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            response="$(curl --fail --silent --show-error "$API_BASE/v1/jobs/$JOB_ID" -H "Authorization: Bearer $API_TOKEN")"
+            status="$(printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).status||"UNKNOWN"))')"
+            echo "Attempt $attempt: $status"
+            if [ "$status" = "COMPLETED" ]; then
+              result_url="$(printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const j=JSON.parse(s);if(!j.result_url)throw Error("Completed job has no result URL");process.stdout.write(j.result_url)})')"
+              curl --fail --silent --show-error "$result_url" -o "$RUNNER_TEMP/reader.json"
+              node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!Array.isArray(r.chapters)||!r.chapters.length)throw Error("Reader has no chapters");const blocks=r.chapters.reduce((n,c)=>n+(Array.isArray(c.blocks)?c.blocks.length:0),0);if(!blocks)throw Error("Reader has no content blocks");const data=JSON.stringify(r).toLowerCase();if(!data.includes("omniintel")&&!data.includes("speech recognition"))throw Error("Reader lacks the synthetic speech transcript");console.log("PASS: MP3 uploaded to B2, transcribed, and reader downloaded; chapters="+r.chapters.length+"; blocks="+blocks)' "$RUNNER_TEMP/reader.json"
+              exit 0
+            fi
+            if [ "$status" = "FAILED" ]; then
+              printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const j=JSON.parse(s);console.error("Job failed: "+(j.error||"no error detail"))})'
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::Audio job did not complete within 30 minutes"
+          exit 1
