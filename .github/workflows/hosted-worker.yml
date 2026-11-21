@@ -1,17 +1,34 @@
 name: OmniIntel hosted processing worker
 
 on:
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
 
+concurrency:
+  group: omniintel-hosted-worker-dispatch
+  cancel-in-progress: false
+
 jobs:
-  select-milestone:
+  dispatch-processor:
     runs-on: ubuntu-latest
     steps:
-      - name: Explain the worker branch
-        run: |
-          echo "This default-branch entry exists to expose GitHub's Run workflow button."
-          echo "For actual processing, select branch milestone/end-to-end-reliability-2026-11-21 in the Run workflow branch selector."
-          echo "Do not run this default-branch stub for media processing."
+      - name: Dispatch the implementation-branch processor
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workflow_id = "hosted-worker.yml";
+            const ref = "milestone/end-to-end-reliability-2026-11-21";
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id,
+              ref
+            });
+            core.notice("Dispatched the OmniIntel processor on " + ref);
