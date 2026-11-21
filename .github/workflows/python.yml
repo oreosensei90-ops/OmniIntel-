@@ -34,7 +34,7 @@ jobs:
         run: npm install --no-audit --no-fund && npm test && npm run typecheck
 
       - name: Check deployment entrypoint shell syntax
-        run: bash -n deploy/start-service.sh
+        run: bash -n deploy/start-service.sh deploy/start-cloud-worker.sh
 
 
   hosted-worker:
