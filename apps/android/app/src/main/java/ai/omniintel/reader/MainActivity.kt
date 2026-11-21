@@ -293,6 +293,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var networkApproved by remember { mutableStateOf(false) }
     var aiApproved by remember { mutableStateOf(false) }
     var onlineBusy by remember { mutableStateOf(false) }
+    var pendingRemoteJob by remember { mutableStateOf<RemoteCloudJobEntity?>(null) }
     var uploadUri by remember { mutableStateOf<Uri?>(null) }
     var uploadConsent by remember { mutableStateOf(false) }
     var visualApproved by remember { mutableStateOf(false) }
@@ -338,6 +339,14 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
             withContext(Dispatchers.IO) { libraryDatabase.videoImports().getAll() }
         }.getOrDefault(emptyList())
     }
+    LaunchedEffect(Unit) {
+        pendingRemoteJob = runCatching {
+            withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().latestPending() }
+        }.getOrNull()
+        pendingRemoteJob?.let {
+            videoImportMessage = "Saved cloud job ${it.jobId} · ${it.status.lowercase()} · enter your API token and resume."
+        }
+    }
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
             videoUrlDraft = sharedUrl
@@ -361,7 +370,7 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
         mediaStatus = "Select the exact course source, then attach only the matching local media file."
     }
 
-    fun loadBook(uri: Uri) {
+    fun loadBook(uri: Uri, onImported: (() -> Unit)? = null) {
         open(uri) { result ->
             result.onSuccess { loadedBook ->
                 scope.launch {
@@ -401,9 +410,71 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                         libraryBooks = saved.third
                         displayLoadedBook(loadedBook, saved.first, saved.second,
                             if (hasGrant) null else "Imported into the on-device library. The original file permission is temporary, but the stored textbook remains available offline.")
+                        onImported?.invoke()
                     }.onFailure { error = "Could not save the textbook safely to the on-device library: " + (it.message ?: "storage error") }
                 }
             }.onFailure { error = it.message ?: "Could not open reader export." }
+        }
+    }
+
+    suspend fun resumeRemoteCloudJob(job: RemoteCloudJobEntity, token: String) {
+        require(token.isNotBlank()) { "Enter the API token to resume this saved job." }
+        require(Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE).matches(job.jobId)) {
+            "The saved job identifier is invalid."
+        }
+        onlineBusy = true
+        try {
+            var attempts = 0
+            var readerJson: String? = null
+            while (attempts < 1800 && readerJson == null) {
+                delay(2_000)
+                val status = withContext(Dispatchers.IO) {
+                    getRemoteVideoJob(job.apiBase, token, job.statusUrl)
+                }
+                when (status.optString("status")) {
+                    "COMPLETED" -> {
+                        val resultUrl = status.optString("result_url")
+                        if (!resultUrl.startsWith("https://")) error("The server completed without a secure reader download URL.")
+                        readerJson = withContext(Dispatchers.IO) { downloadRemoteReaderJson(resultUrl) }
+                    }
+                    "FAILED" -> {
+                        withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().delete(job.jobId) }
+                        pendingRemoteJob = null
+                        videoImportMessage = status.optString("error").ifBlank { "Video processing failed." }
+                        return
+                    }
+                    else -> {
+                        val updated = job.copy(
+                            status = status.optString("status").ifBlank { "RUNNING" },
+                            updatedAtEpochMs = System.currentTimeMillis()
+                        )
+                        withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().upsert(updated) }
+                        pendingRemoteJob = updated
+                        videoImportMessage = "Processing · ${updated.status.lowercase()} · job ${job.jobId}"
+                    }
+                }
+                attempts++
+            }
+            val json = readerJson ?: error("The job is still processing. Its status is saved; resume it later without submitting again.")
+            val durable = File(context.filesDir, "omniintel-${job.jobId}.json")
+            withContext(Dispatchers.IO) { durable.writeText(json, Charsets.UTF_8) }
+            videoImportMessage = "Notes generated · importing into your on-device library…"
+            loadBook(Uri.fromFile(durable)) {
+                scope.launch {
+                    withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().delete(job.jobId) }
+                    pendingRemoteJob = null
+                    videoImportMessage = "Notes generated and saved in your on-device library."
+                }
+            }
+        } catch (failure: Throwable) {
+            val interrupted = job.copy(status = "INTERRUPTED", updatedAtEpochMs = System.currentTimeMillis())
+            runCatching {
+                withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().upsert(interrupted) }
+            }
+            pendingRemoteJob = interrupted
+            videoImportMessage = failure.message ?: "Online processing paused. Resume this saved job later."
+        } finally {
+            onlineBusy = false
         }
     }
 
@@ -754,33 +825,15 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
-                                    videoImportMessage = "Job $jobId queued · fetching captions and generating notes…"
-                                    var attempts = 0
-                                    var readerJson: String? = null
-                                    while (attempts < 1800 && readerJson == null) {
-                                        delay(2_000)
-                                        val status = withContext(Dispatchers.IO) {
-                                            getRemoteVideoJob(apiBase, apiToken, statusPath)
-                                        }
-                                        when (status.optString("status")) {
-                                            "COMPLETED" -> {
-                                                val resultUrl = status.optString("result_url")
-                                                if (!resultUrl.startsWith("https://")) error("The server completed without a reader download URL.")
-                                                readerJson = downloadRemoteReaderJson(resultUrl)
-                                            }
-                                            "FAILED" -> error(status.optString("error").ifBlank { "Video processing failed." })
-                                            else -> {
-                                                val statusText = status.optString("status")
-                                                videoImportMessage = "Processing video · $statusText · job $jobId"
-                                            }
-                                        }
-                                        attempts++
-                                    }
-                                    val json = readerJson ?: error("The job is still processing. Check again later.")
-                                    val cached = File(context.cacheDir, "omniintel-$jobId.json")
-                                    withContext(Dispatchers.IO) { cached.writeText(json, Charsets.UTF_8) }
-                                    loadBook(Uri.fromFile(cached))
-                                    videoImportMessage = "Notes generated. Importing into your on-device library…"
+                                    val now = System.currentTimeMillis()
+                                    val pending = RemoteCloudJobEntity(
+                                        jobId = jobId, statusUrl = statusPath, apiBase = apiBase.trim().trimEnd('/'),
+                                        sourceLabel = parsed.url, jobType = "YOUTUBE_TO_NOTES",
+                                        status = "QUEUED", createdAtEpochMs = now, updatedAtEpochMs = now
+                                    )
+                                    withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().upsert(pending) }
+                                    pendingRemoteJob = pending
+                                    resumeRemoteCloudJob(pending, apiToken)
                                 } catch (failure: Throwable) {
                                     videoImportMessage = failure.message ?: "Online video processing failed."
                                 } finally {
@@ -821,36 +874,19 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                                     }
                                     val statusPath = created.getString("status_url")
                                     val jobId = created.getString("job_id")
-                                    videoImportMessage = "Upload accepted · transcribing media · job $jobId"
-                                    var attempts = 0
-                                    var readerJson: String? = null
-                                    while (attempts < 1800 && readerJson == null) {
-                                        delay(2_000)
-                                        val status = withContext(Dispatchers.IO) {
-                                            getRemoteVideoJob(apiBase, apiToken, statusPath)
-                                        }
-                                        when (status.optString("status")) {
-                                            "COMPLETED" -> {
-                                                val resultUrl = status.optString("result_url")
-                                                if (!resultUrl.startsWith("https://")) error("The server completed without a reader download URL.")
-                                                readerJson = downloadRemoteReaderJson(resultUrl)
-                                            }
-                                            "FAILED" -> error(status.optString("error").ifBlank { "Media transcription failed." })
-                                            else -> {
-                                                val statusText = status.optString("status")
-                                                videoImportMessage = "Transcribing media · $statusText · job $jobId"
-                                            }
-                                        }
-                                        attempts++
-                                    }
-                                    val json = readerJson ?: error("The job is still processing. Check again later.")
-                                    val cached = File(context.cacheDir, "omniintel-media-$jobId.json")
-                                    withContext(Dispatchers.IO) { cached.writeText(json, Charsets.UTF_8) }
-                                    loadBook(Uri.fromFile(cached))
+                                    val now = System.currentTimeMillis()
+                                    val pending = RemoteCloudJobEntity(
+                                        jobId = jobId, statusUrl = statusPath, apiBase = apiBase.trim().trimEnd('/'),
+                                        sourceLabel = selectedUri.lastPathSegment ?: "Uploaded media",
+                                        jobType = "UPLOADED_MEDIA_TO_NOTES", status = "QUEUED",
+                                        createdAtEpochMs = now, updatedAtEpochMs = now
+                                    )
+                                    withContext(Dispatchers.IO) { libraryDatabase.remoteCloudJobs().upsert(pending) }
+                                    pendingRemoteJob = pending
                                     uploadUri = null
                                     uploadConsent = false
                                     visualApproved = false
-                                    videoImportMessage = "AI notes generated. Importing into your on-device library…"
+                                    resumeRemoteCloudJob(pending, apiToken)
                                 } catch (failure: Throwable) {
                                     videoImportMessage = failure.message ?: "Media upload or transcription failed."
                                 } finally {
