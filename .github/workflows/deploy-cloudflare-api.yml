@@ -126,9 +126,14 @@ jobs:
             ExposeHeaders: ["ETag"],
             MaxAgeSeconds: 3600
           };
-          const index = rules.findIndex(x => x.ID === rule.ID);
-          if (index >= 0) rules[index] = rule;
-          else rules.push(rule);
+          // Backblaze's S3-compatible API may omit the optional CORS rule ID
+          // on read-back. Replace our rule by ID or by its exact OmniIntel origins.
+          const isOurs = x => x.ID === rule.ID ||
+            (Array.isArray(x.AllowedOrigins) &&
+             origins.every(origin => x.AllowedOrigins.includes(origin)) &&
+             Array.isArray(x.AllowedMethods) && x.AllowedMethods.includes("PUT"));
+          const retained = rules.filter(x => !isOurs(x));
+          retained.push(rule);
           fs.writeFileSync(output, JSON.stringify({ CORSRules: rules }));
           NODE
           aws s3api put-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" --cors-configuration "file://$merged"
@@ -136,11 +141,18 @@ jobs:
           WEB_ORIGINS="$WEB_ORIGINS" node --input-type=module - "$current" <<'NODE'
           import fs from "node:fs";
           const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-          const rule = (config.CORSRules || []).find(x => x.ID === "OmniIntelBrowserDirectUpload");
           const origins = process.env.WEB_ORIGINS.split(",").map(x => x.trim()).filter(Boolean);
-          if (!rule || !origins.every(x => rule.AllowedOrigins?.includes(x)) ||
-              !rule.AllowedMethods?.includes("PUT") || !rule.AllowedHeaders?.includes("*")) {
-            throw new Error("Backblaze CORS read-back verification failed.");
+          const rules = config.CORSRules || [];
+          // Verify the effective rule, not its optional ID: B2 may omit IDs
+          // when returning S3-compatible CORS configurations.
+          const rule = rules.find(x =>
+            origins.every(origin => x.AllowedOrigins?.includes(origin)) &&
+            x.AllowedMethods?.includes("PUT") &&
+            x.AllowedHeaders?.includes("*")
+          );
+          if (!rule) {
+            console.error("Backblaze CORS read-back (non-secret configuration):", JSON.stringify(config));
+            throw new Error("Backblaze CORS read-back verification failed: expected origins, PUT and wildcard headers were not returned.");
           }
           console.log("PASS: Backblaze B2 allows browser PUT uploads from: " + origins.join(", "));
           NODE
