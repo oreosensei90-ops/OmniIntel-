@@ -1,278 +1,4 @@
 name: Deploy OmniIntel Cloudflare API
-# Worker API/B2 deployment is intentionally independent of Cloudflare Pages permissions.
-
-on:
-  workflow_dispatch:
-    inputs:
-      web_origins:
-        description: Comma-separated exact HTTPS origins allowed by the API
-        required: true
-        default: https://omniintel.pages.dev
-        type: string
-  push:
-    branches:
-      - milestone/end-to-end-reliability-2026-11-21
-    paths:
-      - '.github/workflows/deploy-cloudflare-api.yml'
-      - 'infra/cloudflare/worker/**'
-      - 'migrations/**'
-
-permissions:
-  contents: read
-
-concurrency:
-  group: omniintel-cloudflare-production
-  cancel-in-progress: false
-
-jobs:
-  deploy:
-    name: Validate, migrate and deploy Worker
-    runs-on: ubuntu-latest
-    environment: production
-    defaults:
-      run:
-        working-directory: infra/cloudflare/worker
-    env:
-      WEB_ORIGINS: ${{ inputs.web_origins || 'https://omniintel.pages.dev' }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Update npm to stable v11
-        run: npm install --global npm@11.6.2
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Validate Worker
-        run: |
-          npm run typecheck
-          npm test
-
-      - name: Authenticate with Cloudflare
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing CLOUDFLARE_API_TOKEN"; exit 1; }
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
-          npx wrangler whoami
-
-      - name: Validate all required deployment secrets and Web origins
-        env:
-          OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
-          OMNIINTEL_WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
-          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-        run: |
-          for name in OMNIINTEL_API_TOKEN OMNIINTEL_WORKER_TOKEN B2_KEY_ID B2_APPLICATION_KEY; do
-            case "$name" in
-              OMNIINTEL_API_TOKEN) value="$OMNIINTEL_API_TOKEN" ;;
-              OMNIINTEL_WORKER_TOKEN) value="$OMNIINTEL_WORKER_TOKEN" ;;
-              B2_KEY_ID) value="$B2_KEY_ID" ;;
-              B2_APPLICATION_KEY) value="$B2_APPLICATION_KEY" ;;
-            esac
-            test -n "$value" || { echo "::error::Missing GitHub Actions secret $name"; exit 1; }
-          done
-          WEB_ORIGINS="$WEB_ORIGINS" node --input-type=module -e '
-            const values = process.env.WEB_ORIGINS.split(",").map(value => value.trim()).filter(Boolean);
-            if (!values.length || values.length > 10) throw new Error("Provide between 1 and 10 exact Web origins.");
-            for (const value of values) {
-              const url = new URL(value);
-              if (url.protocol !== "https:" || url.origin !== value || url.pathname !== "/" || url.search || url.hash) {
-                throw new Error("Every Web origin must be an exact HTTPS origin without a path, query or fragment: " + value);
-              }
-            }
-          '
-
-      - name: Configure and verify Backblaze B2 browser upload CORS
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-          AWS_DEFAULT_REGION: us-east-005
-          # Backblaze's S3 API rejects the AWS CLI's default CRC checksum headers.
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          B2_BUCKET_NAME: omniintel-vault-2026
-          B2_ENDPOINT: https://s3.us-east-005.backblazeb2.com
-          WEB_ORIGINS: ${{ env.WEB_ORIGINS }}
-        run: |
-          set -euo pipefail
-          aws --version
-          current="$(mktemp)"
-          merged="$(mktemp)"
-          trap 'rm -f "$current" "$merged"' EXIT
-          if ! aws s3api get-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" > "$current" 2>cors-read.err; then
-            if grep -qiE 'NoSuchCorsConfiguration|NoSuchCORSConfiguration' cors-read.err; then
-              printf '{"CORSRules":[]}' > "$current"
-            else
-              cat cors-read.err
-              echo "::error::Could not read Backblaze bucket CORS. Check the B2 key permissions."
-              exit 1
-            fi
-          fi
-          WEB_ORIGINS="$WEB_ORIGINS" node --input-type=module - "$current" "$merged" <<'NODE'
-          import fs from "node:fs";
-          const [input, output] = process.argv.slice(2);
-          const config = JSON.parse(fs.readFileSync(input, "utf8"));
-          const origins = process.env.WEB_ORIGINS.split(",").map(x => x.trim()).filter(Boolean);
-          if (!origins.length) throw new Error("No production Web origins were supplied.");
-          const rules = Array.isArray(config.CORSRules) ? config.CORSRules : [];
-          const rule = {
-            ID: "OmniIntelBrowserDirectUpload",
-            AllowedOrigins: origins,
-            AllowedMethods: ["PUT", "GET", "HEAD"],
-            AllowedHeaders: ["*"],
-            ExposeHeaders: ["ETag"],
-            MaxAgeSeconds: 3600
-          };
-          // Backblaze's S3-compatible API may omit the optional CORS rule ID
-          // on read-back. Replace our rule by ID or by its exact OmniIntel origins.
-          const isOurs = x => x.ID === rule.ID ||
-            (Array.isArray(x.AllowedOrigins) &&
-             origins.every(origin => x.AllowedOrigins.includes(origin)) &&
-             Array.isArray(x.AllowedMethods) && x.AllowedMethods.includes("PUT"));
-          const retained = rules.filter(x => !isOurs(x));
-          retained.push(rule);
-          fs.writeFileSync(output, JSON.stringify({ CORSRules: retained }));
-          NODE
-          aws s3api put-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" --cors-configuration "file://$merged"
-          aws s3api get-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" > "$current"
-          WEB_ORIGINS="$WEB_ORIGINS" node --input-type=module - "$current" <<'NODE'
-          import fs from "node:fs";
-          const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-          const origins = process.env.WEB_ORIGINS.split(",").map(x => x.trim()).filter(Boolean);
-          const rules = config.CORSRules || [];
-          // Verify the effective rule, not its optional ID: B2 may omit IDs
-          // when returning S3-compatible CORS configurations.
-          const rule = rules.find(x =>
-            origins.every(origin => x.AllowedOrigins?.includes(origin)) &&
-            x.AllowedMethods?.includes("PUT") &&
-            x.AllowedHeaders?.includes("*")
-          );
-          if (!rule) {
-            console.error("Backblaze CORS read-back (non-secret configuration):", JSON.stringify(config));
-            throw new Error("Backblaze CORS read-back verification failed: expected origins, PUT and wildcard headers were not returned.");
-          }
-          console.log("PASS: Backblaze B2 allows browser PUT uploads from: " + origins.join(", "));
-          NODE
-          rm -f cors-read.err
-
-      - name: Validate existing D1 database and migration state
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          npx wrangler d1 list
-          npx wrangler d1 migrations list omniintel-db --remote
-
-      - name: Apply D1 migrations
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply omniintel-db --remote
-
-      - name: Deploy Worker with secrets and exact CORS origins
-        id: deploy_worker
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
-          OMNIINTEL_WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
-          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-        run: |
-          set -euo pipefail
-          secret_file="$(mktemp)"
-          trap 'rm -f "$secret_file"' EXIT
-          node -e '
-            const fs = require("node:fs");
-            const values = {
-              OMNIINTEL_API_TOKEN: process.env.OMNIINTEL_API_TOKEN,
-              OMNIINTEL_WORKER_TOKEN: process.env.OMNIINTEL_WORKER_TOKEN,
-              B2_KEY_ID: process.env.B2_KEY_ID,
-              B2_APPLICATION_KEY: process.env.B2_APPLICATION_KEY
-            };
-            for (const [name, value] of Object.entries(values)) {
-              if (!value) throw new Error("Missing secret " + name);
-            }
-            fs.writeFileSync(process.argv[1], JSON.stringify(values), { mode: 0o600 });
-          ' "$secret_file"
-          set -o pipefail
-          npx wrangler deploy --var "CORS_ORIGIN:$WEB_ORIGINS" --secrets-file "$secret_file" 2>&1 | tee deploy.log
-          WORKER_BASE_URL="$(grep -Eo 'https://omniintel-api\.[a-z0-9-]+\.workers\.dev' deploy.log | head -n 1)"
-          test -n "$WORKER_BASE_URL" || { echo "::error::Could not determine the deployed workers.dev URL from Wrangler output"; exit 1; }
-          echo "api_base_url=$WORKER_BASE_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Verify public health endpoint
-        env:
-          WORKER_BASE_URL: ${{ steps.deploy_worker.outputs.api_base_url }}
-        run: curl --fail --silent --show-error "$WORKER_BASE_URL/health"
-
-      - name: Verify live browser CORS and authenticated API access
-        env:
-          WORKER_BASE_URL: ${{ steps.deploy_worker.outputs.api_base_url }}
-          OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
-          WEB_ORIGINS: ${{ env.WEB_ORIGINS }}
-        run: |
-          node --input-type=module <<'NODE'
-          const base = process.env.WORKER_BASE_URL;
-          const token = process.env.OMNIINTEL_API_TOKEN;
-          const origins = process.env.WEB_ORIGINS.split(",").map(value => value.trim()).filter(Boolean);
-          if (!base || !token || origins.length < 1) throw new Error("Missing live smoke-test configuration");
-          for (const origin of origins) {
-            const preflight = await fetch(base + "/v1/youtube/jobs", {
-              method: "OPTIONS",
-              headers: {
-                Origin: origin,
-                "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "authorization,content-type"
-              }
-            });
-            const allowedOrigin = preflight.headers.get("access-control-allow-origin");
-            const allowedHeaders = (preflight.headers.get("access-control-allow-headers") || "").toLowerCase();
-            if (preflight.status !== 204 || allowedOrigin !== origin ||
-                !allowedHeaders.includes("authorization") || !allowedHeaders.includes("content-type")) {
-              throw new Error("CORS preflight failed for " + origin + ": HTTP " + preflight.status +
-                ", allow-origin=" + allowedOrigin + ", allow-headers=" + allowedHeaders);
-            }
-            const authenticated = await fetch(base + "/v1/youtube/jobs", {
-              method: "POST",
-              headers: { Origin: origin, Authorization: "Bearer " + token, "Content-Type": "application/json" },
-              body: JSON.stringify({ url: "https://www.youtube.com/watch?v=smoke-test", approve_network: false })
-            });
-            const body = await authenticated.json().catch(() => ({}));
-            if (authenticated.status !== 400 || !String(body.error || "").includes("Explicit network approval")) {
-              throw new Error("Authenticated API route failed for " + origin + ": HTTP " +
-                authenticated.status + " " + JSON.stringify(body));
-            }
-            if (authenticated.headers.get("access-control-allow-origin") !== origin) {
-              throw new Error("API response omitted the expected CORS origin for " + origin);
-            }
-            console.log("PASS: CORS preflight + bearer-authenticated API validation for " + origin);
-          }
-          const blocked = await fetch(base + "/v1/youtube/jobs", {
-            method: "OPTIONS",
-            headers: {
-              Origin: "https://untrusted.invalid",
-              "Access-Control-Request-Method": "POST",
-              "Access-Control-Request-Headers": "authorization,content-type"
-            }
-          });
-          if (blocked.headers.has("access-control-allow-origin")) {
-            throw new Error("CORS incorrectly allowed an untrusted origin");
-          }
-          console.log("PASS: untrusted origin is not granted CORS access");
-          NODE
-
 
 on:
   workflow_dispatch:
@@ -541,4 +267,34 @@ jobs:
             throw new Error("CORS incorrectly allowed an untrusted origin");
           }
           console.log("PASS: untrusted origin is not granted CORS access");
+          NODE
+
+      - name: Inspect Cloudflare Pages project and deployment branch
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler pages project list
+
+      - name: Verify live OmniIntel website and API client bundle
+        continue-on-error: true
+        env:
+          WEB_ORIGIN: ${{ inputs.web_origins || 'https://omniintel.pages.dev' }}
+        run: |
+          node --input-type=module <<'NODE'
+          const origin = process.env.WEB_ORIGIN.split(",")[0].trim();
+          const page = await fetch(origin, { redirect: "follow" });
+          if (!page.ok) throw new Error("OmniIntel website returned HTTP " + page.status);
+          const html = await page.text();
+          if (!html.includes('id="online-video-form"') || !html.includes('src="app.js"')) {
+            throw new Error("Live website is missing the online video form or app.js client entry point");
+          }
+          const script = await fetch(new URL("app.js", page.url));
+          if (!script.ok) throw new Error("Live app.js returned HTTP " + script.status);
+          const js = await script.text();
+          if (!js.includes("https://omniintel-api.scrbaba502.workers.dev") ||
+              !js.includes("/v1/youtube/jobs")) {
+            throw new Error("Live app.js does not contain the expected OmniIntel API endpoint and job route");
+          }
+          console.log("PASS: live website HTML and app.js are reachable and contain the expected API client");
           NODE
