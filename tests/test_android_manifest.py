@@ -177,12 +177,15 @@ def test_android_library_uses_normalized_room_storage_and_persistable_document_a
     assert 'tableName = "textbook_evidence"' in database
     assert 'tableName = "reader_annotations"' in database
     assert 'tableName = "reader_progress"' in database
-    assert 'version = 4' in database
+    assert 'tableName = "remote_cloud_jobs"' in database
+    assert 'version = 5' in database
     assert 'Migration(1, 2)' in database
     assert 'Migration(2, 3)' in database
     assert 'Migration(3, 4)' in database
+    assert 'Migration(4, 5)' in database
     assert 'study_progress' in database
-    assert 'addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)' in database
+    assert 'addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)' in database
+    assert 'latestPending()' in database
     assert 'Room.databaseBuilder(' in database
     assert 'libraryDatabase.readerContent()' in activity
     assert 'dao.insertBlocks(' in activity
@@ -193,6 +196,11 @@ def test_android_library_uses_normalized_room_storage_and_persistable_document_a
     assert 'openStoredBook(entry.versionId)' in activity
     assert 'libraryDatabase.libraryBooks().delete(entry.versionId)' in activity
     assert 'searchLibrary(term)' in activity
+    assert 'libraryDatabase.remoteCloudJobs().latestPending()' in activity
+    assert 'libraryDatabase.remoteCloudJobs().upsert(pending)' in activity
+    assert 'Resume saved job' in activity
+    assert 'File(context.filesDir, "omniintel-${job.jobId}.json")' in activity
+    assert 'loadBook(Uri.fromFile(durable))' in activity
 
 
 
@@ -225,7 +233,7 @@ def test_android_online_video_client_requires_https_and_explicit_consent_control
     assert "approveAi = aiApproved" in activity
     assert "networkApproved && aiApproved" not in activity
     assert "getRemoteVideoJob" in activity
-    assert "loadBook(Uri.fromFile(cached))" in activity
+    assert "loadBook(Uri.fromFile(durable))" in activity
 
 
 def test_android_supports_consent_gated_media_upload_as_asr_fallback() -> None:
