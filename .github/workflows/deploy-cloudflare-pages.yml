@@ -41,3 +41,26 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing CLOUDFLARE_API_TOKEN"; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
           npx wrangler pages deploy ../../../apps/web --project-name=omniintel --branch=main
+
+      - name: Verify deployed production Pages bundle
+        run: |
+          node --input-type=module <<'NODE'
+          const origin = "https://omniintel.pages.dev";
+          const page = await fetch(origin, { redirect: "follow" });
+          if (!page.ok) throw new Error("Pages site returned HTTP " + page.status);
+          const html = await page.text();
+          if (!html.includes('id="online-video-form"') || !html.includes('src="app.js"')) {
+            throw new Error("Production Pages HTML is missing the OmniIntel online form or app.js");
+          }
+          const jsResponse = await fetch(new URL("app.js", page.url));
+          if (!jsResponse.ok) throw new Error("app.js returned HTTP " + jsResponse.status);
+          const js = await jsResponse.text();
+          if (!js.includes("omniintel-active-job") || !js.includes("/v1/youtube/jobs")) {
+            throw new Error("Production app.js is stale or missing job recovery/API routes");
+          }
+          const swResponse = await fetch(new URL("service-worker.js", page.url));
+          if (!swResponse.ok || !(await swResponse.text()).includes("shell-v8")) {
+            throw new Error("Production service worker is stale; expected shell-v8");
+          }
+          console.log("PASS: production Pages HTML, app.js recovery/API route, and service-worker v8 verified");
+          NODE
