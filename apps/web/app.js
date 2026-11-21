@@ -763,16 +763,67 @@ if (onlineForm) {
     return parsed.origin;
   }
   async function apiRequest(base, token, path, options = {}) {
-    const response = await fetch(base + path, {
-      ...options,
-      headers: {
-        "Authorization": "Bearer " + token,
-        ...(options.headers || {})
-      }
-    });
+    let response;
+    try {
+      response = await fetch(base + path, {
+        ...options,
+        headers: {
+          "Authorization": "Bearer " + token,
+          ...(options.headers || {})
+        }
+      });
+    } catch (cause) {
+      const error = new Error("Could not reach the OmniIntel API at " + base + ". The server may be offline, " +
+        "or this website's origin (" + location.origin + ") is not in the API's CORS allow-list.");
+      error.transient = true;
+      error.cause = cause;
+      throw error;
+    }
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.detail || ("API request failed: HTTP " + response.status));
+    if (!response.ok) {
+      // The Worker reports { error }, the legacy Python API reports { detail }.
+      const reason = body.error || body.detail || "";
+      const error = new Error(response.status === 401
+        ? "The API rejected the access token (HTTP 401). Re-enter the token issued for this server."
+        : (reason ? reason + " (HTTP " + response.status + ")" : "API request failed: HTTP " + response.status));
+      error.status = response.status;
+      error.transient = response.status >= 500 || response.status === 429;
+      throw error;
+    }
     return body;
+  }
+  const ACTIVE_JOB_KEY = "omniintel-active-job";
+  function rememberJob(base, created, kind) {
+    try { localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ base, job_id: created.job_id, status_url: created.status_url, kind, savedAt: Date.now() })); } catch {}
+  }
+  function forgetJob() { try { localStorage.removeItem(ACTIVE_JOB_KEY); } catch {} }
+  // Polls until the job finishes. Short network/5xx blips do not abort a long-running job.
+  async function waitForReader(base, token, statusUrl, report) {
+    let consecutiveFailures = 0;
+    for (let attempt = 0; attempt < 1800; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      let job;
+      try {
+        job = await apiRequest(base, token, statusUrl);
+        consecutiveFailures = 0;
+      } catch (error) {
+        if (error.transient && ++consecutiveFailures < 15) { report("Connection problem; retrying… (" + error.message + ")"); continue; }
+        throw error;
+      }
+      if (job.status === "COMPLETED") {
+        if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
+        let readerResponse;
+        try { readerResponse = await fetch(job.result_url); }
+        catch (cause) { throw new Error("The notes were generated, but the browser could not download them from storage. The B2 bucket CORS rule must allow GET from " + location.origin + "."); }
+        if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
+        forgetJob();
+        return readerResponse.json();
+      }
+      if (job.status === "FAILED") { forgetJob(); throw new Error(job.error || "Processing failed."); }
+      report("Processing · " + job.status.toLowerCase() + " · attempt " + job.attempt +
+        (job.status === "QUEUED" && !job.attempt ? " · waiting for a worker to pick this up" : ""));
+    }
+    throw new Error("This job is still running. Reload this page to resume watching it.");
   }
   onlineForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -797,29 +848,34 @@ if (onlineForm) {
           chapter_minutes: 10
         })
       });
-      setOnlineStatus("Video accepted · job " + created.job_id + " · fetching metadata and captions…");
-      for (let attempt = 0; attempt < 1800; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const job = await apiRequest(base, token, created.status_url);
-        if (job.status === "COMPLETED") {
-          if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
-          const readerResponse = await fetch(job.result_url);
-          if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
-          const reader = await readerResponse.json();
-          setOnlineStatus("Notes generated · opening " + (reader.source?.title || "your video") + "…");
-          renderBook(reader, (reader.source?.title || "OmniIntel video notes") + ".json");
-          return;
-        }
-        if (job.status === "FAILED") throw new Error(job.error || "Video processing failed.");
-        setOnlineStatus("Processing video · " + job.status.toLowerCase() + " · attempt " + job.attempt);
-      }
-      throw new Error("This job is still running. Reopen the app and check its job status with the server.");
+      rememberJob(base, created, "youtube");
+      setOnlineStatus("Video accepted · job " + created.job_id + " · waiting for a worker…");
+      const reader = await waitForReader(base, token, created.status_url, setOnlineStatus);
+      setOnlineStatus("Notes generated · opening " + (reader.source?.title || "your video") + "…");
+      renderBook(reader, (reader.source?.title || "OmniIntel video notes") + ".json");
     } catch (error) {
       setOnlineStatus(error.message || "Video processing failed.", true);
     } finally {
       onlineButton.disabled = false;
     }
   });
+
+  // Recovery: if the page was reloaded while a job was running, resume watching it.
+  (async () => {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || "null"); } catch {}
+    const token = sessionStorage.getItem("omniintel-api-token");
+    if (!saved || !saved.status_url || !token || Date.now() - saved.savedAt > 24 * 3600 * 1000) return;
+    const target = saved.kind === "media" ? $("#media-upload-status") : onlineStatus;
+    try {
+      target.textContent = "Resuming job " + saved.job_id + "…";
+      const reader = await waitForReader(saved.base, token, saved.status_url, (m) => { target.textContent = m; });
+      renderBook(reader, (reader.source?.title || "OmniIntel notes") + ".json");
+    } catch (error) {
+      target.textContent = error.message; target.classList.add("error");
+      if (error.status === 404) forgetJob();
+    }
+  })();
 
   const mediaUploadForm = $("#online-media-form");
   if (mediaUploadForm) {
@@ -882,23 +938,11 @@ if (onlineForm) {
           body: "{}"
         });
         uploadStage = "waiting for transcription and note generation";
+        rememberJob(base, created, "media");
         uploadStatus.textContent = "Upload verified · transcription job " + created.job_id;
-        for (let attempt = 0; attempt < 1800; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const job = await apiRequest(base, token, created.status_url);
-          if (job.status === "COMPLETED") {
-            if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
-            const readerResponse = await fetch(job.result_url);
-            if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
-            const reader = await readerResponse.json();
-            uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
-            renderBook(reader, (reader.source?.title || file.name) + ".json");
-            return;
-          }
-          if (job.status === "FAILED") throw new Error(job.error || "Media processing failed.");
-          uploadStatus.textContent = "Transcribing media · " + job.status.toLowerCase();
-        }
-        throw new Error("The job is still running. Check its status with the server later.");
+        const reader = await waitForReader(base, token, created.status_url, (m) => { uploadStatus.textContent = m; });
+        uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
+        renderBook(reader, (reader.source?.title || file.name) + ".json");
       } catch (error) {
         uploadStatus.textContent = error.message || ("Failed while " + uploadStage + ".");
         uploadStatus.classList.add("error");
