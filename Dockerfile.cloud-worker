@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . /app
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir '.[youtube,asr]' \
+    && useradd --system --uid 10001 --create-home omniintel \
+    && mkdir -p /var/lib/omniintel/uploads /var/lib/omniintel/assets \
+    && chown -R omniintel:omniintel /var/lib/omniintel /app \
+    && chmod +x /app/deploy/start-cloud-worker.sh
+
+USER omniintel
+ENTRYPOINT ["/app/deploy/start-cloud-worker.sh"]
