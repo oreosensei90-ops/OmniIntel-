@@ -774,6 +774,99 @@ if (onlineForm) {
     if (!response.ok) throw new Error(body.detail || ("API request failed: HTTP " + response.status));
     return body;
   }
+
+  const pendingJobKey = "omniintel-pending-cloud-job";
+  let resumeInFlight = false;
+
+  function savePendingJob(job, base, jobType, fallbackTitle) {
+    if (!job || typeof job.job_id !== "string" ||
+        typeof job.status_url !== "string" ||
+        !/^\/v1\/jobs\/[0-9a-f-]{36}$/i.test(job.status_url)) {
+      throw new Error("The server returned an invalid job status reference.");
+    }
+    localStorage.setItem(pendingJobKey, JSON.stringify({
+      job_id: job.job_id,
+      status_url: job.status_url,
+      api_base: base,
+      job_type: jobType,
+      fallback_title: fallbackTitle || "OmniIntel video notes",
+      saved_at: new Date().toISOString()
+    }));
+  }
+
+  function clearPendingJob(jobId) {
+    try {
+      const pending = JSON.parse(localStorage.getItem(pendingJobKey) || "null");
+      if (!jobId || pending?.job_id === jobId) localStorage.removeItem(pendingJobKey);
+    } catch {
+      localStorage.removeItem(pendingJobKey);
+    }
+  }
+
+  async function pollRemoteJob(base, token, pending, onStatus) {
+    for (let attempt = 0; attempt < 1800; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const job = await apiRequest(base, token, pending.status_url);
+      if (job.status === "COMPLETED") {
+        if (!job.result_url || new URL(job.result_url).protocol !== "https:") {
+          throw new Error("The server completed without a secure reader download URL.");
+        }
+        const readerResponse = await fetch(job.result_url);
+        if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
+        const reader = await readerResponse.json();
+        validateReaderPayload(reader);
+        renderBook(reader, (reader.source?.title || pending.fallback_title) + ".json");
+        clearPendingJob(pending.job_id);
+        onStatus("Notes generated · saved in this browser's library.");
+        return;
+      }
+      if (job.status === "FAILED") {
+        clearPendingJob(pending.job_id);
+        throw new Error(job.error || "Video processing failed.");
+      }
+      onStatus("Processing · " + String(job.status || "QUEUED").toLowerCase() +
+        " · attempt " + String(job.attempt || 0) + " · job " + pending.job_id);
+    }
+    throw new Error("The job is still running. Its ID is saved here; resume it later without submitting the video again.");
+  }
+
+  async function resumePendingJob() {
+    if (resumeInFlight) return;
+    let pending;
+    try { pending = JSON.parse(localStorage.getItem(pendingJobKey) || "null"); } catch {}
+    if (!pending) return;
+    if (typeof pending.api_base !== "string" ||
+        typeof pending.status_url !== "string" ||
+        !/^\/v1\/jobs\/[0-9a-f-]{36}$/i.test(pending.status_url)) {
+      clearPendingJob();
+      setOnlineStatus("A saved job record was invalid and has been cleared.", true);
+      return;
+    }
+    const token = $("#api-token").value.trim() || sessionStorage.getItem("omniintel-api-token") || "";
+    if (!token) {
+      setOnlineStatus("Job " + pending.job_id + " is saved. Enter your API token and resume; do not submit the video again.");
+      return;
+    }
+    resumeInFlight = true;
+    onlineButton.disabled = true;
+    try {
+      setOnlineStatus("Resuming saved job " + pending.job_id + "…");
+      await pollRemoteJob(pending.api_base, token, pending, setOnlineStatus);
+    } catch (error) {
+      setOnlineStatus(error.message || "Could not resume the saved job.", true);
+    } finally {
+      onlineButton.disabled = false;
+      resumeInFlight = false;
+    }
+  }
+
+  $("#api-token").addEventListener("change", () => {
+    const token = $("#api-token").value.trim();
+    if (token) {
+      sessionStorage.setItem("omniintel-api-token", token);
+      resumePendingJob();
+    }
+  });
   onlineForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!onlineForm.reportValidity()) return;
@@ -797,23 +890,19 @@ if (onlineForm) {
           chapter_minutes: 10
         })
       });
+      const pending = {
+        job_id: created.job_id,
+        status_url: created.status_url,
+        fallback_title: $("#video-url").value.trim()
+      };
+      savePendingJob(pending, base, "YOUTUBE_TO_NOTES", pending.fallback_title);
       setOnlineStatus("Video accepted · job " + created.job_id + " · fetching metadata and captions…");
-      for (let attempt = 0; attempt < 1800; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const job = await apiRequest(base, token, created.status_url);
-        if (job.status === "COMPLETED") {
-          if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
-          const readerResponse = await fetch(job.result_url);
-          if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
-          const reader = await readerResponse.json();
-          setOnlineStatus("Notes generated · opening " + (reader.source?.title || "your video") + "…");
-          renderBook(reader, (reader.source?.title || "OmniIntel video notes") + ".json");
-          return;
-        }
-        if (job.status === "FAILED") throw new Error(job.error || "Video processing failed.");
-        setOnlineStatus("Processing video · " + job.status.toLowerCase() + " · attempt " + job.attempt);
-      }
-      throw new Error("This job is still running. Reopen the app and check its job status with the server.");
+      await pollRemoteJob(base, token, {
+        ...pending,
+        api_base: base,
+        job_type: "YOUTUBE_TO_NOTES"
+      }, setOnlineStatus);
+      return;
     } catch (error) {
       setOnlineStatus(error.message || "Video processing failed.", true);
     } finally {
@@ -869,23 +958,19 @@ if (onlineForm) {
           headers: { "Content-Type": "application/json" },
           body: "{}"
         });
+        const pending = {
+          job_id: created.job_id,
+          status_url: created.status_url,
+          fallback_title: file.name
+        };
+        savePendingJob(pending, base, "UPLOADED_MEDIA_TO_NOTES", file.name);
         uploadStatus.textContent = "Upload verified · transcription job " + created.job_id;
-        for (let attempt = 0; attempt < 1800; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const job = await apiRequest(base, token, created.status_url);
-          if (job.status === "COMPLETED") {
-            if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
-            const readerResponse = await fetch(job.result_url);
-            if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
-            const reader = await readerResponse.json();
-            uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
-            renderBook(reader, (reader.source?.title || file.name) + ".json");
-            return;
-          }
-          if (job.status === "FAILED") throw new Error(job.error || "Media processing failed.");
-          uploadStatus.textContent = "Transcribing media · " + job.status.toLowerCase();
-        }
-        throw new Error("The job is still running. Check its status with the server later.");
+        await pollRemoteJob(base, token, {
+          ...pending,
+          api_base: base,
+          job_type: "UPLOADED_MEDIA_TO_NOTES"
+        }, message => { uploadStatus.textContent = message; });
+        return;
       } catch (error) {
         uploadStatus.textContent = error.message || "Media processing failed.";
         uploadStatus.classList.add("error");
@@ -896,6 +981,8 @@ if (onlineForm) {
   }
 }
 
+
+resumePendingJob();
 
 async function restoreLatestReaderBook() {
   try {
