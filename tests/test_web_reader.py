@@ -188,7 +188,10 @@ def test_cloudflare_job_schema_tracks_upload_completion_gate() -> None:
     assert "input_uploaded=0" in worker
 
 
-def test_media_download_url_requires_https_in_both_web_flows() -> None:
+def test_reader_download_url_requires_https_in_shared_web_polling_flow() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
-    assert app.count('new URL(job.result_url).protocol !== "https:"') == 2
+    assert app.count('new URL(job.result_url).protocol !== "https:"') == 1
+    assert "async function pollRemoteJob" in app
+    assert app.count("await pollRemoteJob(base, token, {") == 2
+    assert "validateReaderPayload(reader);" in app
     assert '!new URL(job.result_url).protocol === "https:"' not in app
