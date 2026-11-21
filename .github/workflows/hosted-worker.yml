@@ -2,6 +2,7 @@
 # identical on `main` (where it actually fires) and on the application branch. It checks out
 # PROCESSING_BRANCH so the worker image always matches the intended application source.
 name: OmniIntel hosted processing worker
+# Audit deployment trigger: image readiness is gated against the processing-branch commit.
 
 on:
   push:
