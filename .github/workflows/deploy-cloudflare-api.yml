@@ -88,6 +88,64 @@ jobs:
             }
           '
 
+      - name: Configure and verify Backblaze B2 browser upload CORS
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: us-east-005
+          B2_BUCKET_NAME: omniintel-vault-2026
+          B2_ENDPOINT: https://s3.us-east-005.backblazeb2.com
+          WEB_ORIGINS: ${{ env.WEB_ORIGINS }}
+        run: |
+          set -euo pipefail
+          aws --version
+          current="$(mktemp)"
+          merged="$(mktemp)"
+          trap 'rm -f "$current" "$merged"' EXIT
+          if ! aws s3api get-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" > "$current" 2>cors-read.err; then
+            if grep -q 'NoSuchCORSConfiguration' cors-read.err; then
+              printf '{"CORSRules":[]}' > "$current"
+            else
+              cat cors-read.err
+              echo "::error::Could not read Backblaze bucket CORS. Check the B2 key permissions."
+              exit 1
+            fi
+          fi
+          WEB_ORIGINS="$WEB_ORIGINS" node --input-type=module - "$current" "$merged" <<'NODE'
+          import fs from "node:fs";
+          const [input, output] = process.argv.slice(2);
+          const config = JSON.parse(fs.readFileSync(input, "utf8"));
+          const origins = process.env.WEB_ORIGINS.split(",").map(x => x.trim()).filter(Boolean);
+          if (!origins.length) throw new Error("No production Web origins were supplied.");
+          const rules = Array.isArray(config.CORSRules) ? config.CORSRules : [];
+          const rule = {
+            ID: "OmniIntelBrowserDirectUpload",
+            AllowedOrigins: origins,
+            AllowedMethods: ["PUT", "GET", "HEAD"],
+            AllowedHeaders: ["*"],
+            ExposeHeaders: ["ETag"],
+            MaxAgeSeconds: 3600
+          };
+          const index = rules.findIndex(x => x.ID === rule.ID);
+          if (index >= 0) rules[index] = rule;
+          else rules.push(rule);
+          fs.writeFileSync(output, JSON.stringify({ CORSRules: rules }));
+          NODE
+          aws s3api put-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" --cors-configuration "file://$merged"
+          aws s3api get-bucket-cors --bucket "$B2_BUCKET_NAME" --endpoint-url "$B2_ENDPOINT" > "$current"
+          WEB_ORIGINS="$WEB_ORIGINS" node --input-type=module - "$current" <<'NODE'
+          import fs from "node:fs";
+          const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const rule = (config.CORSRules || []).find(x => x.ID === "OmniIntelBrowserDirectUpload");
+          const origins = process.env.WEB_ORIGINS.split(",").map(x => x.trim()).filter(Boolean);
+          if (!rule || !origins.every(x => rule.AllowedOrigins?.includes(x)) ||
+              !rule.AllowedMethods?.includes("PUT") || !rule.AllowedHeaders?.includes("*")) {
+            throw new Error("Backblaze CORS read-back verification failed.");
+          }
+          console.log("PASS: Backblaze B2 allows browser PUT uploads from: " + origins.join(", "));
+          NODE
+          rm -f cors-read.err
+
       - name: Validate existing D1 database and migration state
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
