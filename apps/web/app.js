@@ -746,7 +746,7 @@ if (onlineForm) {
   const onlineButton = $("#online-submit");
   const apiInput = $("#api-base-url");
   const savedApi = localStorage.getItem("omniintel-api-base-url");
-  if (savedApi) apiInput.value = savedApi;
+  apiInput.value = savedApi || "https://omniintel-api.scrbaba502.workers.dev";
   const savedToken = sessionStorage.getItem("omniintel-api-token");
   if (savedToken) $("#api-token").value = savedToken;
 

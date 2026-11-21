@@ -285,7 +285,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
     var videoUrlDraft by remember { mutableStateOf("") }
     var videoImportMessage by remember { mutableStateOf<String?>(null) }
     var apiBaseDraft by remember {
-        mutableStateOf(context.getSharedPreferences("omniintel_remote", Context.MODE_PRIVATE).getString("api_base", "").orEmpty())
+        val savedApiBase = context.getSharedPreferences("omniintel_remote", Context.MODE_PRIVATE)
+            .getString("api_base", null)
+        mutableStateOf(savedApiBase?.takeIf { it.isNotBlank() } ?: "https://omniintel-api.scrbaba502.workers.dev")
     }
     var apiTokenDraft by remember { mutableStateOf("") }
     var networkApproved by remember { mutableStateOf(false) }
