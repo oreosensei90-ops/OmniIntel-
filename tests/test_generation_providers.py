@@ -25,3 +25,4 @@ def test_freelm_adapter_uses_only_configured_keys_and_bounded_retries(monkeypatc
     assert calls["config"] == {"keyless": False, "timeout": 180, "max_attempts": 3, "hedge": False}
     assert calls["kwargs"]["model"] == "chat:fast"
     assert calls["kwargs"]["response_format"] == {"type": "json_object"}
+\n\ndef test_gemini_provider_resolves_to_schema_constrained_adapter():\n    from omniintel.gemini_generation import generate_gemini_study_json\n\n    assert resolve_study_generator("gemini") is generate_gemini_study_json\n
