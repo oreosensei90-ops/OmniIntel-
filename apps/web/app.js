@@ -803,6 +803,15 @@ if (onlineForm) {
     }
   }
 
+  function assertNoPendingJob() {
+    let pending = null;
+    try { pending = JSON.parse(localStorage.getItem(pendingJobKey) || "null"); } catch {}
+    if (pending?.job_id) {
+      throw new Error("You already have a saved job (" + pending.job_id +
+        "). Resume it first; this prevents losing its result.");
+    }
+  }
+
   async function pollRemoteJob(base, token, pending, onStatus) {
     for (let attempt = 0; attempt < 1800; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -872,6 +881,7 @@ if (onlineForm) {
     if (!onlineForm.reportValidity()) return;
     onlineButton.disabled = true;
     try {
+      assertNoPendingJob();
       const base = apiBase();
       const token = $("#api-token").value.trim();
       if (!token) throw new Error("Enter the API access token supplied by your OmniIntel server.");
@@ -919,6 +929,7 @@ if (onlineForm) {
       if (!mediaUploadForm.reportValidity()) return;
       uploadButton.disabled = true;
       try {
+        assertNoPendingJob();
         const base = apiBase();
         const token = $("#api-token").value.trim();
         const file = $("#media-upload-file").files?.[0];
