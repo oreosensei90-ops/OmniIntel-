@@ -29,14 +29,14 @@ def test_service_worker_only_caches_static_shell_not_user_documents() -> None:
     assert "application/json" not in worker
 
 
-def test_online_client_uses_only_user_configured_api_and_never_embeds_provider_keys() -> None:
+def test_online_client_defaults_to_live_api_and_never_embeds_provider_keys() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     assert "fetch(base + path" in app
     assert "apiBase()" in app
     assert 'sessionStorage.setItem("omniintel-api-token", token)' in app
     assert "/v1/youtube/jobs" in app
     assert "OMNIINTEL_OPENAI_API_KEY" not in app
-    assert "https://" not in app
+    assert 'apiInput.value = savedApi || "https://omniintel-api.scrbaba502.workers.dev"' in app
 
 
 def test_web_manifest_is_valid_and_standalone() -> None:

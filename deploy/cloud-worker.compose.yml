@@ -13,6 +13,7 @@ services:
       OMNIINTEL_UPLOAD_DIR: /var/lib/omniintel/uploads
       OMNIINTEL_ASSET_DIR: /var/lib/omniintel/assets
       HF_HOME: /var/lib/omniintel/huggingface
+      HOME: /var/lib/omniintel
       XDG_CACHE_HOME: /var/lib/omniintel/cache
     volumes:
       - omniintel-worker-data:/var/lib/omniintel
