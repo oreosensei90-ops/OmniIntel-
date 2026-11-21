@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 : "${OMNIINTEL_WORKER_API:?Set OMNIINTEL_WORKER_API to the deployed Cloudflare Worker origin}"
 : "${OMNIINTEL_WORKER_TOKEN:?Set OMNIINTEL_WORKER_TOKEN to the Worker bridge token}"

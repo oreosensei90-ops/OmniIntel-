@@ -35,7 +35,12 @@ jobs:
         run: npm install --no-audit --no-fund && npm test && npm run typecheck
 
       - name: Check deployment entrypoint shell syntax
-        run: bash -n deploy/start-service.sh deploy/start-cloud-worker.sh
+        run: bash -n deploy/start-service.sh && sh -n deploy/start-cloud-worker.sh
+
+      - name: Validate Cloud worker Compose configuration
+        run: |
+          cp deploy/cloud-worker.env.example deploy/cloud-worker.env
+          docker compose --file deploy/cloud-worker.compose.yml config --quiet
 
       - name: Build production Cloudflare bridge worker image
         run: docker build --pull --file Dockerfile.cloud-worker --tag omniintel-cloud-worker:ci .
