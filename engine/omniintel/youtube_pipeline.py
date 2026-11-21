@@ -69,8 +69,18 @@ def inspect_video(url: str) -> dict:
     yt_dlp = _yt_dlp()
     options = {"quiet": True, "no_warnings": True, "skip_download": True,
                "noplaylist": True, "extract_flat": False}
-    with yt_dlp.YoutubeDL(options) as client:
-        info = client.extract_info(canonical, download=False)
+    try:
+        with yt_dlp.YoutubeDL(options) as client:
+            info = client.extract_info(canonical, download=False)
+    except yt_dlp.utils.DownloadError as error:
+        message = str(error).lower()
+        if "sign in to confirm" in message or "not a bot" in message:
+            raise RuntimeError(
+                "YouTube is temporarily blocking automated access from this hosted worker. "
+                "OmniIntel does not use browser cookies or private access methods. "
+                "Retry later, or upload media you own or are authorized to process."
+            ) from error
+        raise
     if not isinstance(info, dict) or info.get("_type") == "playlist":
         raise ValueError("A single video is required; playlists are not accepted")
     duration = info.get("duration")
