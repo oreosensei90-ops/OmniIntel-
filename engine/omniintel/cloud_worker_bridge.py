@@ -24,6 +24,33 @@ from .worker import run_once as run_local_once
 _MAX_UPLOAD = 250 * 1024 * 1024
 _MAX_READER = 20 * 1024 * 1024
 _MEDIA_SUFFIX = re.compile(r"\.(mp3|m4a|wav|aac|flac|ogg|opus|mp4|m4v|mov|mkv|webm)$", re.IGNORECASE)
+_JOB_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.IGNORECASE)
+_WORKSPACE_NAME = re.compile(r"^[0-9a-f-]{36}-attempt-[1-9][0-9]{0,5}$", re.IGNORECASE)
+_WORKSPACE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
+
+
+def _prune_stale_workspaces(root: Path, *, now: float | None = None) -> int:
+    """Remove abandoned per-attempt workspaces older than seven days."""
+    if not root.exists():
+        return 0
+    current = time.time() if now is None else now
+    removed = 0
+    for candidate in root.iterdir():
+        if candidate.is_symlink() or not candidate.is_dir():
+            continue
+        if not _WORKSPACE_NAME.fullmatch(candidate.name):
+            continue
+        try:
+            if current - candidate.stat().st_mtime <= _WORKSPACE_MAX_AGE_SECONDS:
+                continue
+            shutil.rmtree(candidate)
+            removed += 1
+        except OSError:
+            # Leave directories that cannot be removed for a later cleanup pass.
+            continue
+    return removed
+
+
 
 
 class BridgeError(RuntimeError):
