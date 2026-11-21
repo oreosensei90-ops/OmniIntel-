@@ -990,10 +990,9 @@ if (onlineForm) {
       }
     });
   }
+
+  resumePendingJob();
 }
-
-
-resumePendingJob();
 
 async function restoreLatestReaderBook() {
   try {
