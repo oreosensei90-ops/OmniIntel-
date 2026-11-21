@@ -38,6 +38,21 @@ private fun remoteApiBase(raw: String): String {
     return value
 }
 
+/** Accepts a raw token or a copied Authorization value and canonicalizes it once. */
+private fun normalizeApiToken(raw: String): String {
+    val trimmed = raw.trim()
+    val token = if (trimmed.startsWith("Bearer ", ignoreCase = true)) {
+        trimmed.substringAfter(' ').trim()
+    } else {
+        trimmed
+    }
+    require(token.isNotBlank()) { "Enter the OmniIntel API access token." }
+    require(!token.any { it.isWhitespace() }) {
+        "The API token contains an internal space or newline. Paste the token again without extra characters."
+    }
+    return token
+}
+
 private fun remoteApiRequest(
     base: String, token: String, path: String, method: String,
     payload: JSONObject? = null
@@ -47,7 +62,7 @@ private fun remoteApiRequest(
     connection.connectTimeout = 20_000
     connection.readTimeout = 120_000
     connection.instanceFollowRedirects = false
-    connection.setRequestProperty("Authorization", "Bearer $token")
+    connection.setRequestProperty("Authorization", "Bearer ${normalizeApiToken(token)}")
     connection.setRequestProperty("Accept", "application/json")
     if (payload != null) {
         connection.doOutput = true
@@ -74,7 +89,7 @@ fun submitRemoteVideoJob(
     apiBase: String, token: String, videoUrl: String, language: String? = null,
     approveAi: Boolean = false
 ): JSONObject {
-    require(token.isNotBlank()) { "Enter the API access token." }
+    normalizeApiToken(token)
     val payload = JSONObject()
         .put("url", videoUrl)
         .put("approve_network", true)
@@ -113,7 +128,7 @@ fun downloadRemoteReaderJson(resultUrl: String): String {
         val text = connection.inputStream.use {
             readBoundedBytes(it, maxBytes).toString(Charsets.UTF_8)
         }
-        JSONObject(text) // fail closed before handing the export to the importer
+        JSONObject(text)
         return text
     } finally {
         connection.disconnect()
@@ -125,7 +140,7 @@ fun uploadRemoteMedia(
     language: String? = null, approveAi: Boolean = false,
     approveVisual: Boolean = false
 ): JSONObject {
-    require(token.isNotBlank()) { "Enter the API access token." }
+    normalizeApiToken(token)
     val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
     require(mime.startsWith("audio/") || mime.startsWith("video/")) {
         "Choose a supported audio or video file."

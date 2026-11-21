@@ -724,8 +724,9 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     onValueChange = { apiTokenDraft = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Server API token · this session only") },
-                    placeholder = { Text("Bearer token") }
+                    label = { Text("OmniIntel API access token") },
+                    placeholder = { Text("Paste token (Bearer prefix optional)") },
+                    supportingText = { Text("Paste the token value only. The app adds the Bearer authorization prefix automatically.") }
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = networkApproved, onCheckedChange = { networkApproved = it })
