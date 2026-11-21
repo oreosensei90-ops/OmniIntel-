@@ -1,6 +1,11 @@
+# NOTE: GitHub only runs `schedule:` triggers from the DEFAULT branch. This file must be
+# identical on `main` (where it actually fires) and on the application branch. It checks out
+# PROCESSING_BRANCH so the worker image always matches the intended application source.
 name: OmniIntel hosted processing worker
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
@@ -8,50 +13,101 @@ on:
 permissions:
   contents: read
   packages: read
+  actions: read   # lets the image-readiness gate inspect the image build run
 
 concurrency:
   group: omniintel-hosted-worker
   cancel-in-progress: false
 
 jobs:
-  process-one-job:
+  process-queued-jobs:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 55
     env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/omniintel-cloud-worker:sha-${{ github.sha }}
+      PROCESSING_BRANCH: milestone/end-to-end-reliability-2026-11-21
+      IMAGE_WAIT_SECONDS: "1500"
     steps:
-      - name: Check whether the worker token is configured
+      - name: Check worker token
         id: guard
         env:
           WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
         run: |
-          if [ -n "$WORKER_TOKEN" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Hosted processing is paused. Configure the OMNIINTEL_WORKER_TOKEN repository secret."
+          if [ -z "$WORKER_TOKEN" ]; then
+            echo "::error::OMNIINTEL_WORKER_TOKEN is missing; queued jobs cannot be processed."
+            exit 1
           fi
+
+      - name: Check out the processing source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PROCESSING_BRANCH }}
+
+      - name: Resolve immutable worker image for this exact commit
+        id: image
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/omniintel-cloud-worker:sha-$sha" >> "$GITHUB_OUTPUT"
+
       - name: Authenticate to GitHub Container Registry
-        if: steps.guard.outputs.enabled == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Restore the tiny transcription model cache
-        if: steps.guard.outputs.enabled == 'true'
+
+      # The worker must never start before the image for this exact commit exists.
+      # Publishing runs in a separate workflow, so wait for it instead of racing it.
+      - name: Wait until the exact image has been published
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          SHA: ${{ steps.image.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          deadline=$(( $(date +%s) + IMAGE_WAIT_SECONDS ))
+          missing_since=$(date +%s)
+          while :; do
+            if docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+              echo "Image is published: $IMAGE"
+              exit 0
+            fi
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow publish-worker-image.yml \
+              --commit "$SHA" --json status,conclusion,url --limit 5 2>/dev/null || echo '[]')"
+            if echo "$runs" | grep -q '"conclusion":"success"'; then
+              echo "Build reported success; waiting for registry propagation..."
+            elif echo "$runs" | grep -Eq '"status":"(queued|in_progress|waiting|pending)"'; then
+              echo "Image build for $SHA is still running; waiting..."
+              missing_since=$(date +%s)
+            elif echo "$runs" | grep -Eq '"conclusion":"(failure|cancelled|timed_out)"'; then
+              echo "::error::The image build for commit $SHA failed. Fix publish-worker-image.yml first: $runs"
+              exit 1
+            elif [ $(( $(date +%s) - missing_since )) -gt 180 ]; then
+              echo "::error::No image build exists for commit $SHA. Run 'Cloud worker image' on ${PROCESSING_BRANCH}."
+              exit 1
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out after ${IMAGE_WAIT_SECONDS}s waiting for $IMAGE"
+              exit 1
+            fi
+            sleep 30
+          done
+
+      - name: Restore transcription model cache
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/omniintel/huggingface
           key: omniintel-faster-whisper-tiny-v3-${{ runner.os }}
-      - name: Run the immutable worker image for one job
-        if: steps.guard.outputs.enabled == 'true'
-        timeout-minutes: 45
+
+      - name: Process queued jobs (stops claiming new jobs after 10 minutes)
+        timeout-minutes: 50
         env:
           WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IMAGE: ${{ steps.image.outputs.ref }}
         run: |
-          mkdir -p "$RUNNER_TEMP/omniintel/huggingface"
+          set -eu
+          mkdir -p "$RUNNER_TEMP/omniintel/huggingface" "$RUNNER_TEMP/omniintel/cache"
           docker pull "$IMAGE"
           docker run --rm --init \
             --user "$(id -u):$(id -g)" \
@@ -75,4 +131,4 @@ jobs:
             --env HF_HOME=/var/lib/omniintel/huggingface \
             --env HOME=/var/lib/omniintel \
             --env XDG_CACHE_HOME=/var/lib/omniintel/cache \
-            "$IMAGE" --once
+            "$IMAGE" --poll-seconds 5 --max-seconds 600
