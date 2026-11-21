@@ -31,3 +31,33 @@ def test_gemini_provider_resolves_to_schema_constrained_adapter():
     from omniintel.gemini_generation import generate_gemini_study_json
 
     assert resolve_study_generator("gemini") is generate_gemini_study_json
+
+def test_gemini_adapter_sends_schema_and_parses_json_without_leaking_key(monkeypatch):
+    import json
+    from io import BytesIO
+    from omniintel.gemini_generation import generate_gemini_study_json
+
+    calls = {}
+    class FakeResponse:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def read(self, _limit):
+            return json.dumps({"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]}).encode()
+
+    class FakeOpener:
+        def open(self, request, timeout):
+            calls["url"] = request.full_url
+            calls["body"] = json.loads(request.data)
+            calls["timeout"] = timeout
+            return FakeResponse()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-secret-key")
+    monkeypatch.setattr("omniintel.gemini_generation.urllib.request.build_opener", lambda *_args: FakeOpener())
+    result = generate_gemini_study_json("gemini-2.5-flash", "source evidence")
+    assert result == {"ok": True}
+    assert "test-secret-key" in calls["url"]
+    assert calls["timeout"] == 180
+    assert calls["body"]["generationConfig"]["responseMimeType"] == "application/json"
+    assert calls["body"]["generationConfig"]["responseSchema"]["required"]
+    assert "source evidence" in calls["body"]["contents"][0]["parts"][0]["text"]
