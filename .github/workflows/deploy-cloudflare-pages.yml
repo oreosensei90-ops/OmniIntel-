@@ -28,9 +28,9 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install pinned Wrangler from Worker lockfile
+      - name: Install Wrangler from Worker package manifest
         working-directory: infra/cloudflare/worker
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Deploy production Pages site
         working-directory: infra/cloudflare/worker
