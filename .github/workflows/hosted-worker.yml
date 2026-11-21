@@ -1,17 +1,95 @@
 name: OmniIntel hosted processing worker
 
 on:
+  schedule:
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: read
+
+concurrency:
+  group: omniintel-hosted-worker
+  cancel-in-progress: false
 
 jobs:
-  select-milestone:
+  process-queued-jobs:
     runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      PROCESSING_BRANCH: milestone/end-to-end-reliability-2026-11-21
     steps:
-      - name: Explain the worker branch
+      - name: Check worker token
+        id: guard
+        env:
+          WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
         run: |
-          echo "This default-branch entry exists to expose GitHub's Run workflow button."
-          echo "For actual processing, select branch milestone/end-to-end-reliability-2026-11-21 in the Run workflow branch selector."
-          echo "Do not run this default-branch stub for media processing."
+          if [ -n "$WORKER_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::error::OMNIINTEL_WORKER_TOKEN is missing; queued jobs cannot be processed."
+            exit 1
+          fi
+
+      - name: Check out the live processing implementation
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: milestone/end-to-end-reliability-2026-11-21
+
+      - name: Resolve immutable worker image
+        id: image
+        if: steps.guard.outputs.enabled == 'true'
+        run: echo "tag=sha-$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GitHub Container Registry
+        if: steps.guard.outputs.enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore transcription model cache
+        if: steps.guard.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/omniintel/huggingface
+          key: omniintel-faster-whisper-tiny-v3-${{ runner.os }}
+
+      - name: Process queued jobs continuously
+        if: steps.guard.outputs.enabled == 'true'
+        timeout-minutes: 12
+        env:
+          WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/omniintel-cloud-worker:${{ steps.image.outputs.tag }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/omniintel/huggingface"
+          docker pull "$IMAGE"
+          docker run --rm --init \\
+            --user "$(id -u):$(id -g)" \\
+            --cpus=2 --memory=12g --pids-limit=512 \\
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=512m \\
+            --cap-drop ALL --security-opt no-new-privileges:true \\
+            --volume "$RUNNER_TEMP/omniintel:/var/lib/omniintel" \\
+            --env OMNIINTEL_WORKER_API=https://omniintel-api.scrbaba502.workers.dev \\
+            --env OMNIINTEL_WORKER_TOKEN="$WORKER_TOKEN" \\
+            --env OMNIINTEL_DATABASE=/var/lib/omniintel/worker.sqlite3 \\
+            --env OMNIINTEL_UPLOAD_DIR=/var/lib/omniintel/uploads \\
+            --env OMNIINTEL_ASSET_DIR=/var/lib/omniintel/assets \\
+            --env OMNIINTEL_ASR_MODEL_ID=tiny \\
+            --env OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD=1 \\
+            --env OMNIINTEL_ASR_DEVICE=cpu \\
+            --env OMNIINTEL_ASR_COMPUTE_TYPE=int8 \\
+            --env OMNIINTEL_ASR_THREADS=2 \\
+            --env OMNIINTEL_AI_PROVIDER=freelm \\
+            --env OMNIINTEL_AI_MODEL=chat:fast \\
+            --env GEMINI_API_KEY="$GEMINI_API_KEY" \\
+            --env HF_HOME=/var/lib/omniintel/huggingface \\
+            --env HOME=/var/lib/omniintel \\
+            --env XDG_CACHE_HOME=/var/lib/omniintel/cache \\
+            "$IMAGE" --poll-seconds 5
