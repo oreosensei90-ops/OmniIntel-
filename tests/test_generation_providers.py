@@ -34,7 +34,6 @@ def test_gemini_provider_resolves_to_schema_constrained_adapter():
 
 def test_gemini_adapter_sends_schema_and_parses_json_without_leaking_key(monkeypatch):
     import json
-    from io import BytesIO
     from omniintel.gemini_generation import generate_gemini_study_json
 
     calls = {}
