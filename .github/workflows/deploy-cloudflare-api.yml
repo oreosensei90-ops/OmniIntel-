@@ -139,3 +139,59 @@ jobs:
         env:
           WORKER_BASE_URL: ${{ steps.deploy_worker.outputs.api_base_url }}
         run: curl --fail --silent --show-error "$WORKER_BASE_URL/health"
+
+      - name: Verify live browser CORS and authenticated API access
+        env:
+          WORKER_BASE_URL: ${{ steps.deploy_worker.outputs.api_base_url }}
+          OMNIINTEL_API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
+          WEB_ORIGINS: ${{ env.WEB_ORIGINS }}
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.WORKER_BASE_URL;
+          const token = process.env.OMNIINTEL_API_TOKEN;
+          const origins = process.env.WEB_ORIGINS.split(",").map(value => value.trim()).filter(Boolean);
+          if (!base || !token || origins.length < 1) throw new Error("Missing live smoke-test configuration");
+          for (const origin of origins) {
+            const preflight = await fetch(base + "/v1/youtube/jobs", {
+              method: "OPTIONS",
+              headers: {
+                Origin: origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type"
+              }
+            });
+            const allowedOrigin = preflight.headers.get("access-control-allow-origin");
+            const allowedHeaders = (preflight.headers.get("access-control-allow-headers") || "").toLowerCase();
+            if (preflight.status !== 204 || allowedOrigin !== origin ||
+                !allowedHeaders.includes("authorization") || !allowedHeaders.includes("content-type")) {
+              throw new Error("CORS preflight failed for " + origin + ": HTTP " + preflight.status +
+                ", allow-origin=" + allowedOrigin + ", allow-headers=" + allowedHeaders);
+            }
+            const authenticated = await fetch(base + "/v1/youtube/jobs", {
+              method: "POST",
+              headers: { Origin: origin, Authorization: "Bearer " + token, "Content-Type": "application/json" },
+              body: JSON.stringify({ url: "https://www.youtube.com/watch?v=smoke-test", approve_network: false })
+            });
+            const body = await authenticated.json().catch(() => ({}));
+            if (authenticated.status !== 400 || !String(body.error || "").includes("Explicit network approval")) {
+              throw new Error("Authenticated API route failed for " + origin + ": HTTP " +
+                authenticated.status + " " + JSON.stringify(body));
+            }
+            if (authenticated.headers.get("access-control-allow-origin") !== origin) {
+              throw new Error("API response omitted the expected CORS origin for " + origin);
+            }
+            console.log("PASS: CORS preflight + bearer-authenticated API validation for " + origin);
+          }
+          const blocked = await fetch(base + "/v1/youtube/jobs", {
+            method: "OPTIONS",
+            headers: {
+              Origin: "https://untrusted.invalid",
+              "Access-Control-Request-Method": "POST",
+              "Access-Control-Request-Headers": "authorization,content-type"
+            }
+          });
+          if (blocked.headers.has("access-control-allow-origin")) {
+            throw new Error("CORS incorrectly allowed an untrusted origin");
+          }
+          console.log("PASS: untrusted origin is not granted CORS access");
+          NODE
