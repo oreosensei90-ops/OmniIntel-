@@ -188,7 +188,9 @@ def test_cloudflare_job_schema_tracks_upload_completion_gate() -> None:
     assert "input_uploaded=0" in worker
 
 
-def test_media_download_url_requires_https_in_both_web_flows() -> None:
+def test_shared_reader_download_requires_https_for_both_web_flows() -> None:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
-    assert app.count('new URL(job.result_url).protocol !== "https:"') == 2
+    # Both YouTube and uploaded-media flows use the shared waitForReader helper.
+    assert app.count('new URL(job.result_url).protocol !== "https:"') == 1
+    assert app.count("waitForReader(base, token, created.status_url") == 2
     assert '!new URL(job.result_url).protocol === "https:"' not in app
