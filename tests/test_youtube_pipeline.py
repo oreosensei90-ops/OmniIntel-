@@ -307,3 +307,32 @@ def test_youtube_audio_asr_downloads_audio_and_preserves_video_provenance(tmp_pa
         source = conn.execute("SELECT source_uri,metadata_json FROM sources WHERE id=?", (source_id,)).fetchone()
     assert source["source_uri"] == metadata["url"]
     assert json.loads(source["metadata_json"])["transcript_origin"] == "youtube_audio_asr"
+
+def test_inspect_video_surfaces_youtube_bot_block_without_cookie_workaround(monkeypatch):
+    from types import SimpleNamespace
+    import omniintel.youtube_pipeline as pipeline
+
+    class FakeDownloadError(Exception):
+        pass
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def extract_info(self, *args, **kwargs):
+            raise FakeDownloadError("Sign in to confirm you're not a bot")
+
+    fake = SimpleNamespace(
+        YoutubeDL=lambda options: FakeClient(),
+        utils=SimpleNamespace(DownloadError=FakeDownloadError),
+    )
+    monkeypatch.setattr(pipeline, "_yt_dlp", lambda: fake)
+
+    with pytest.raises(RuntimeError, match="temporarily blocking automated access") as error:
+        pipeline.inspect_video("https://youtu.be/AbCdEf12345")
+
+    assert "does not use browser cookies or private access methods" in str(error.value)
+    assert "cookies-from-browser" not in str(error.value)
