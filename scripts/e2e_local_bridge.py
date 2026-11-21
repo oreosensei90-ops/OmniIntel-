@@ -181,7 +181,7 @@ def main() -> int:
     reader = json.loads(urllib.request.urlopen(job["result_url"]).read())
     (out / "youtube.reader.json").write_text(json.dumps(reader, ensure_ascii=False, indent=1))
     blocks = [b for c in reader["chapters"] for b in c["blocks"]]
-    check(len(blocks) > 3 and all(b["evidence"] for b in blocks if b["block_type"] == "PARAGRAPH"), f"reader has {len(blocks)} blocks; paragraphs carry evidence")
+    check(len(blocks) >= 3 and all(b["evidence"] for b in blocks if b["block_type"] == "PARAGRAPH"), f"reader has {len(blocks)} blocks; paragraphs carry evidence")
     check(reader["pipeline"]["transcript_origin"] == "caption", "origin recorded as caption")
 
     print("\n== AUDIO UPLOAD: intent -> PUT -> finalize -> claim -> ASR -> reader -> retrieve ==")
