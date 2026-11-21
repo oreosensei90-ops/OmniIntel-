@@ -806,8 +806,33 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     Checkbox(checked = aiApproved, onCheckedChange = { aiApproved = it })
                     Text("I authorize sending the transcript to the AI provider configured on my processing machine.", color = Muted, fontSize = 11.sp)
                 }
+                pendingRemoteJob?.let { pending ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Panel)
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                            Text("SAVED CLOUD JOB", color = Gold, fontSize = 10.sp, letterSpacing = 2.sp)
+                            Spacer(Modifier.height(5.dp))
+                            Text(pending.sourceLabel, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text("Job ${pending.jobId} · ${pending.status}", color = Muted, fontSize = 10.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Text("This job survived the app restart. Enter your API token above and resume it; do not submit the same video again.", color = Muted, fontSize = 11.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                enabled = !onlineBusy && apiTokenDraft.isNotBlank(),
+                                onClick = {
+                                    val token = apiTokenDraft
+                                    scope.launch { resumeRemoteCloudJob(pending, token) }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (onlineBusy) "Resuming…" else "Resume saved job") }
+                        }
+                    }
+                }
                 Button(
-                    enabled = !onlineBusy && videoUrlDraft.isNotBlank() && apiBaseDraft.isNotBlank() &&
+                    enabled = !onlineBusy && pendingRemoteJob == null &&
+                        videoUrlDraft.isNotBlank() && apiBaseDraft.isNotBlank() &&
                         apiTokenDraft.isNotBlank() && networkApproved,
                     onClick = {
                         val parsed = parseYouTubeUrl(videoUrlDraft)
@@ -858,8 +883,8 @@ private fun ReaderScreen(sharedUrl: String? = null, open: (Uri, (Result<Book>) -
                     }
                 }
                 Button(
-                    enabled = !onlineBusy && uploadUri != null && apiBaseDraft.isNotBlank() &&
-                        apiTokenDraft.isNotBlank() && uploadConsent,
+                    enabled = !onlineBusy && pendingRemoteJob == null && uploadUri != null &&
+                        apiBaseDraft.isNotBlank() && apiTokenDraft.isNotBlank() && uploadConsent,
                     onClick = {
                         val selectedUri = uploadUri
                         if (selectedUri != null) {
