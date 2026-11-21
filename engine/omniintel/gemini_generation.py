@@ -11,6 +11,15 @@ from typing import Any
 from .study_generation import _study_schema
 
 
+def _gemini_schema(value: Any) -> Any:
+    """Remove JSON Schema keywords not accepted by Gemini responseSchema."""
+    if isinstance(value, dict):
+        return {key: _gemini_schema(item) for key, item in value.items() if key != "additionalProperties"}
+    if isinstance(value, list):
+        return [_gemini_schema(item) for item in value]
+    return value
+
+
 def generate_gemini_study_json(model: str, prompt: str) -> dict[str, Any]:
     """Call Google's fixed Gemini API endpoint; never accept a caller-controlled host."""
     api_key = os.environ.get("OMNIINTEL_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY", "")
@@ -39,7 +48,7 @@ def generate_gemini_study_json(model: str, prompt: str) -> dict[str, Any]:
         "generationConfig": {
             "temperature": 0.15,
             "responseMimeType": "application/json",
-            "responseSchema": schema,
+            "responseSchema": _gemini_schema(schema),
         },
     }
     query = urllib.parse.urlencode({"key": api_key})
