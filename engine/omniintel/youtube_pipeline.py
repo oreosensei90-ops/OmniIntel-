@@ -69,8 +69,18 @@ def inspect_video(url: str) -> dict:
     yt_dlp = _yt_dlp()
     options = {"quiet": True, "no_warnings": True, "skip_download": True,
                "noplaylist": True, "extract_flat": False}
-    with yt_dlp.YoutubeDL(options) as client:
-        info = client.extract_info(canonical, download=False)
+    try:
+        with yt_dlp.YoutubeDL(options) as client:
+            info = client.extract_info(canonical, download=False)
+    except yt_dlp.utils.DownloadError as error:
+        message = str(error).lower()
+        if "sign in to confirm" in message or "not a bot" in message:
+            raise RuntimeError(
+                "YouTube is temporarily blocking automated access from this hosted worker. "
+                "OmniIntel does not use browser cookies or private access methods. "
+                "Retry later, or upload media you own or are authorized to process."
+            ) from error
+        raise
     if not isinstance(info, dict) or info.get("_type") == "playlist":
         raise ValueError("A single video is required; playlists are not accepted")
     duration = info.get("duration")
@@ -183,28 +193,9 @@ def compose_transcript_textbook(
                  "answer_guidance": "Learner response; not generated from an external model."},
                 "EXPLANATION", "NEEDS_REVIEW", ordinal=paragraph_index + 2,
             ))
-    # Surface repeated proper-name/technical phrases as reviewable glossary candidates;
-    # never invent definitions that the source did not state.
-    term_counts: dict[str, int] = {}
-    for segment in transcript.segments:
-        for term in re.findall(r"\b[A-Z][A-Za-z0-9-]*(?:\s+[A-Z][A-Za-z0-9-]*){0,2}\b", segment.text):
-            normalized = term.strip()
-            if len(normalized) > 2 and normalized.lower() not in {"the", "this", "that", "when", "what", "how"}:
-                term_counts[normalized] = term_counts.get(normalized, 0) + 1
-    candidates = [term for term, count in sorted(term_counts.items(), key=lambda item: (-item[1], item[0].casefold())) if count >= 2][:40]
-    if candidates and groups:
-        glossary_chapter = store.add_chapter(
-            version_id, "Glossary · review candidates", ordinal=len(groups),
-            summary="Repeated capitalized terms surfaced from the transcript; definitions require human review.",
-        )
-        store.add_block(glossary_chapter, BlockInput(
-            "HEADING", {"text": "Glossary candidates"}, "EXPLANATION", "NEEDS_REVIEW", ordinal=0,
-        ))
-        for ordinal, term in enumerate(candidates, start=1):
-            store.add_block(glossary_chapter, BlockInput(
-                "DEFINITION", {"term": term, "definition": "Definition not explicitly established by this automated pass. Add and verify a source-grounded definition.", "candidate_frequency": term_counts[term]},
-                "UNCERTAIN", "NEEDS_REVIEW", ordinal=ordinal,
-            ))
+    # Do not manufacture a glossary from capitalization or repetition. Proper names,
+    # titles and emphasized phrases are not definitions. A glossary is added only by
+    # the separately consented study-generation stage when source evidence supports it.
     tree = store.get_version_tree(version_id)
     if tree is None:
         raise RuntimeError("Textbook draft could not be read after composition")
@@ -497,28 +488,8 @@ def compose_registered_source(
                  "answer_guidance": "Learner response; not generated from an external model."},
                 "EXPLANATION", "NEEDS_REVIEW", ordinal=paragraph_index + 2,
             ))
-    term_counts: dict[str, int] = {}
-    for segment in transcript.segments:
-        for term in re.findall(r"\b[A-Z][A-Za-z0-9-]*(?:\s+[A-Z][A-Za-z0-9-]*){0,2}\b", segment.text):
-            if len(term) > 2 and term.lower() not in {"the", "this", "that", "when", "what", "how"}:
-                term_counts[term] = term_counts.get(term, 0) + 1
-    candidates = [term for term, count in sorted(
-        term_counts.items(), key=lambda item: (-item[1], item[0].casefold())
-    ) if count >= 2][:40]
-    if candidates:
-        glossary_chapter = store.add_chapter(
-            version_id, "Glossary · review candidates", ordinal=len(groups),
-            summary="Repeated capitalized terms surfaced from the transcript; definitions require human review.",
-        )
-        store.add_block(glossary_chapter, BlockInput(
-            "HEADING", {"text": "Glossary candidates"}, "EXPLANATION", "NEEDS_REVIEW", ordinal=0,
-        ))
-        for ordinal, term in enumerate(candidates, start=1):
-            store.add_block(glossary_chapter, BlockInput(
-                "DEFINITION",
-                {"term": term, "definition": "Definition not explicitly established by this automated pass. Add and verify a source-grounded definition.", "candidate_frequency": term_counts[term]},
-                "UNCERTAIN", "NEEDS_REVIEW", ordinal=ordinal,
-            ))
+    # A transcript alone does not make capitalized phrases into glossary terms.
+    # Leave the glossary absent unless evidence-grounded study generation supplies it.
     tree = store.get_version_tree(version_id)
     if tree is None:
         raise RuntimeError("Textbook draft could not be read after composition")

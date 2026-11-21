@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Pin npm to a stable Arborist release
+        run: npm install --global npm@11.6.2
       - run: npm install --no-audit --no-fund
       - run: npx wrangler d1 migrations apply omniintel-db --local
       - run: npm test

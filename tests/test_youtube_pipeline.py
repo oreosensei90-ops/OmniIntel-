@@ -37,7 +37,7 @@ def test_rejects_untrusted_or_invalid_youtube_urls(url):
         normalize_youtube_url(url)
 
 
-def test_composes_offline_reader_draft_with_source_evidence_and_reviewable_glossary(tmp_path):
+def test_composes_offline_reader_draft_without_invented_glossary_candidates(tmp_path):
     caption = """WEBVTT
 
 00:00:00.000 --> 00:00:03.000
@@ -73,12 +73,11 @@ A Neural Network can learn complex representations.
     assert paragraphs
     assert "Neural Networks learn patterns from data." in paragraphs[0]["content"]["text"]
     assert len(paragraphs[0]["evidence"]) == 3
-    glossary = [item for item in result["chapters"] if item["chapter"]["title"].startswith("Glossary")]
-    assert glossary
-    definitions = [block for block in glossary[0]["blocks"] if block["block_type"] == "DEFINITION"]
-    assert definitions
-    assert all(block["provenance"] == "UNCERTAIN" for block in definitions)
-    assert all(block["review_status"] == "NEEDS_REVIEW" for block in definitions)
+    assert len(result["chapters"]) == 1
+    assert not any(
+        block["block_type"] == "DEFINITION"
+        for chapter in result["chapters"] for block in chapter["blocks"]
+    )
 
 
 def test_composition_rejects_invalid_chapter_size(tmp_path):
@@ -307,3 +306,32 @@ def test_youtube_audio_asr_downloads_audio_and_preserves_video_provenance(tmp_pa
         source = conn.execute("SELECT source_uri,metadata_json FROM sources WHERE id=?", (source_id,)).fetchone()
     assert source["source_uri"] == metadata["url"]
     assert json.loads(source["metadata_json"])["transcript_origin"] == "youtube_audio_asr"
+
+def test_inspect_video_surfaces_youtube_bot_block_without_cookie_workaround(monkeypatch):
+    from types import SimpleNamespace
+    import omniintel.youtube_pipeline as pipeline
+
+    class FakeDownloadError(Exception):
+        pass
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def extract_info(self, *args, **kwargs):
+            raise FakeDownloadError("Sign in to confirm you're not a bot")
+
+    fake = SimpleNamespace(
+        YoutubeDL=lambda options: FakeClient(),
+        utils=SimpleNamespace(DownloadError=FakeDownloadError),
+    )
+    monkeypatch.setattr(pipeline, "_yt_dlp", lambda: fake)
+
+    with pytest.raises(RuntimeError, match="temporarily blocking automated access") as error:
+        pipeline.inspect_video("https://youtu.be/AbCdEf12345")
+
+    assert "does not use browser cookies or private access methods" in str(error.value)
+    assert "cookies-from-browser" not in str(error.value)

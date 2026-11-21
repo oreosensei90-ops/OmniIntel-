@@ -14,6 +14,8 @@ from .transcription import FasterWhisperAdapter, run_wav_transcription
 from .generation_providers import resolve_study_generator
 from .study_generation import generate_study_guide
 from .youtube_pipeline import compose_registered_source, process_youtube_video
+from .video_frames import extract_video_frames
+from .visual_timeline import build_visual_timeline, list_visual_timeline
 
 
 def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool:
@@ -21,9 +23,11 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
     job = queue.claim(worker_id or socket.gethostname(), lease_ms=60 * 60 * 1000)
     if job is None:
         return False
+    upload_path: Path | None = None
+    cleanup_upload = False
+    result_visual: dict[str, object] | None = None
     try:
         payload = job["payload"]
-        upload_path: Path | None = None
         if job["job_type"] == "YOUTUBE_TO_NOTES":
             if payload.get("approve_network") is not True:
                 raise PermissionError("Job is missing explicit network approval")
@@ -67,6 +71,46 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 ))
             transcript_reader = compose_registered_source(database_path, imported.source_id,
                 chapter_minutes=int(payload.get("chapter_minutes", 10)))
+            if payload.get("approve_visual") is True:
+                if not str(getattr(imported.asset, "media_type", "")).startswith("video/"):
+                    result_visual = {"status": "NOT_APPLICABLE", "reason": "NO_VIDEO_STREAM"}
+                else:
+                    extraction = extract_video_frames(
+                        database_path, asset_dir, imported.asset.id,
+                        min_interval_ms=15_000, max_frames=120,
+                        max_total_bytes=128 * 1024 * 1024,
+                        max_total_pixels=60_000_000,
+                    )
+                    timeline = build_visual_timeline(database_path, extraction.id)
+                    timeline_rows = list_visual_timeline(database_path, imported.source_id)
+                    events = {}
+                    for row in timeline_rows:
+                        event = events.setdefault(row["visual_event_id"], {
+                            "event_id": row["visual_event_id"],
+                            "timestamp_ms": row["timestamp_ms"],
+                            "frame_index": row["frame_index"],
+                            "review_state": row["review_state"],
+                            "transcript_alignments": [],
+                        })
+                        if row["alignment_id"] is not None:
+                            event["transcript_alignments"].append({
+                                "transcript_segment_id": row["transcript_segment_id"],
+                                "transcript_start_ms": row["transcript_start_ms"],
+                                "transcript_end_ms": row["transcript_end_ms"],
+                                "relation": row["relation"],
+                                "delta_ms": row["delta_ms"],
+                                "review_state": row["alignment_review_state"],
+                            })
+                    result_visual = {
+                        "status": "SAMPLED_NEEDS_REVIEW",
+                        "frame_count": extraction.frame_count,
+                        "sample_interval_ms": extraction.sample_interval_ms,
+                        "events_created": timeline.events_created,
+                        "alignments_created": timeline.alignments_created,
+                        "events": list(events.values()),
+                        "automatic_acceptance": False,
+                    }
+                    transcript_reader["visual_timeline"] = result_visual
         else:
             raise ValueError("Unsupported job type: " + str(job["job_type"]))
         result = {
@@ -75,43 +119,66 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
             "reader": transcript_reader,
             "ai_generation": "NOT_REQUESTED",
         }
+        if payload.get("approve_visual") is True:
+            result["visual_analysis"] = result_visual or {
+                "status": "NOT_AVAILABLE",
+                "reason": "VISUAL_SAMPLING_REQUIRES_UPLOADED_VIDEO",
+            }
         if payload.get("approve_ai") is True:
-            provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "openai").strip().lower()
+            provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "").strip().lower()
+            if not provider:
+                provider = "gemini" if (os.environ.get("OMNIINTEL_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")) else "openai"
             default_model = (
                 os.environ.get("OMNIINTEL_OLLAMA_MODEL", "llama3.1")
                 if provider == "ollama"
+                else os.environ.get("OMNIINTEL_GEMINI_MODEL", "gemini-2.5-flash")
+                if provider == "gemini"
                 else os.environ.get("OMNIINTEL_FREE_LLM_MODEL", "chat:fast")
                 if provider == "freelm"
                 else os.environ.get("OMNIINTEL_OPENAI_MODEL", "gpt-4.1-mini")
             )
             model = os.environ.get("OMNIINTEL_AI_MODEL", default_model)
-            generator = resolve_study_generator(provider)
-            study_reader = generate_study_guide(
-                database_path,
-                transcript_reader["source"]["id"],
-                model=model,
-                approve_local_model=True,
-                generator=generator,
-            )
-            study_reader["pipeline"]["provider"] = provider
-            study_reader["pipeline"]["network_access"] = (
-                "loopback-only" if provider == "ollama" else "external-user-approved"
-            )
-            result["reader"] = study_reader
-            result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
+            try:
+                generator = resolve_study_generator(provider)
+                study_reader = generate_study_guide(
+                    database_path,
+                    transcript_reader["source"]["id"],
+                    model=model,
+                    approve_local_model=True,
+                    generator=generator,
+                )
+            except Exception as ai_error:  # noqa: BLE001 - keep the source-grounded transcript reader
+                # The extractive reader is already complete and evidence-linked. An optional AI
+                # provider outage must not discard it; the failure is recorded for the client.
+                result["ai_generation"] = "FAILED_EXTRACTIVE_READER_RETURNED"
+                result["ai_error"] = f"{type(ai_error).__name__}: {ai_error}"[:500]
+                transcript_reader.setdefault("pipeline", {})["ai_error"] = result["ai_error"]
+            else:
+                study_reader["pipeline"]["provider"] = provider
+                study_reader["pipeline"]["network_access"] = (
+                    "loopback-only" if provider == "ollama" else "external-user-approved"
+                )
+                # AI generation composes a new reader object; carry forward the
+                # separately consented visual timeline instead of silently dropping it.
+                if "visual_timeline" in transcript_reader:
+                    study_reader["visual_timeline"] = transcript_reader["visual_timeline"]
+                result["reader"] = study_reader
+                result["ai_generation"] = "DRAFT_READY_REVIEW_REQUIRED"
         queue.complete(job["id"], job["lease_token"], result)
+        cleanup_upload = True
     except Exception as error:  # noqa: BLE001 - persist bounded failure for client recovery
         try:
-            queue.fail(
+            failure_state = queue.fail(
                 job["id"],
                 job["lease_token"],
                 f"{type(error).__name__}: {error}",
                 retry_delay_ms=0,
             )
+            cleanup_upload = failure_state == "FAILED"
         except LeaseLost:
             return True
     finally:
-        if "upload_path" in locals() and upload_path is not None:
+        if cleanup_upload and upload_path is not None:
             upload_root = Path(os.environ.get(
                 "OMNIINTEL_UPLOAD_DIR", str(Path(database_path).parent / "uploads")
             )).resolve()

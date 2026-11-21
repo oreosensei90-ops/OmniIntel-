@@ -5,6 +5,9 @@ from typing import Any
 
 def resolve_study_generator(provider: str) -> Callable[[str, str], dict[str, Any]] | None:
     selected = (provider or "").strip().lower()
+    if selected == "gemini":
+        from .gemini_generation import generate_gemini_study_json
+        return generate_gemini_study_json
     if selected == "openai":
         from .remote_generation import generate_openai_study_json
         return generate_openai_study_json
@@ -14,4 +17,4 @@ def resolve_study_generator(provider: str) -> Callable[[str, str], dict[str, Any
     if selected == "freelm":
         from .freelm_generation import generate_freelm_study_json
         return generate_freelm_study_json
-    raise ValueError("Unsupported OMNIINTEL_AI_PROVIDER; choose openai, ollama or freelm. No fallback is performed.")
+    raise ValueError("Unsupported OMNIINTEL_AI_PROVIDER; choose gemini, openai, ollama or freelm. No fallback is performed.")

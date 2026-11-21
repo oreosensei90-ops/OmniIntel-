@@ -1,0 +1,57 @@
+name: Build OmniIntel source handoff ZIP
+
+on:
+  push:
+    branches:
+      - milestone/end-to-end-reliability-2026-11-21
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact application source
+        uses: actions/checkout@v4
+        with:
+          ref: milestone/end-to-end-reliability-2026-11-21
+          fetch-depth: 0
+
+      - name: Package clean source snapshot and main-branch worker workflow
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/OmniIntel"
+          mkdir -p "$ROOT/HANDOFF"
+          git archive HEAD | tar -x -C "$ROOT"
+          git fetch --no-tags origin main
+          git show origin/main:.github/workflows/hosted-worker.yml > "$ROOT/HANDOFF/MAIN_BRANCH_HOSTED_WORKER.yml"
+          {
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Application source branch: milestone/end-to-end-reliability-2026-11-21"
+            echo "Application source commit: $(git rev-parse HEAD)"
+            echo "Default branch worker workflow commit: $(git rev-parse origin/main)"
+            echo "Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "This ZIP is a clean tracked-source snapshot. It excludes .git metadata, Actions secrets, runner caches and untracked files."
+            echo "The main-branch worker workflow is included separately under HANDOFF for review because main and the application branch currently have different trees."
+          } > "$ROOT/HANDOFF/SNAPSHOT_METADATA.txt"
+          cp docs/MASTER_BLUEPRINT.md "$ROOT/HANDOFF/MASTER_BLUEPRINT.md"
+          ZIP="$GITHUB_WORKSPACE/OmniIntel-source-handoff-$(git rev-parse --short=12 HEAD).zip"
+          (cd "$RUNNER_TEMP" && zip -qr "$ZIP" OmniIntel)
+          echo "zip_path=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
+          sha256sum "$ZIP" | tee "$GITHUB_WORKSPACE/SHA256SUMS.txt"
+
+      - name: Upload source handoff ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniIntel-source-handoff
+          path: |
+            ${{ steps.package.outputs.zip_path }}
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

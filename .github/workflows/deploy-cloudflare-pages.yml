@@ -1,0 +1,114 @@
+name: Deploy OmniIntel Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - milestone/end-to-end-reliability-2026-11-21
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omniintel-cloudflare-pages-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy web app to production Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out application source
+        uses: actions/checkout@v4
+        with:
+          ref: milestone/end-to-end-reliability-2026-11-21
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Wrangler CLI
+        run: npm install --global --no-audit --no-fund wrangler@4.47.0
+
+      - name: Align Cloudflare Pages production branch with application source
+        id: pages_project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing CLOUDFLARE_PAGES_API_TOKEN (Cloudflare Pages: Edit permission required)"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+          project_url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/omniintel"
+          # The current Pages production branch was an obsolete build/* branch.
+          # Promote the checked-out application branch so this deployment reaches the canonical domain.
+          response="$(curl --fail --silent --show-error -X PATCH \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"production_branch":"milestone/end-to-end-reliability-2026-11-21"}' \
+            "$project_url")"
+          production_branch="$(printf '%s' "$response" | node -e '
+            let input = ""; process.stdin.on("data", chunk => input += chunk);
+            process.stdin.on("end", () => {
+              const body = JSON.parse(input);
+              if (!body.success || !body.result?.production_branch) {
+                throw new Error("Cloudflare did not return the Pages production_branch: " + JSON.stringify(body.errors || []));
+              }
+              process.stdout.write(body.result.production_branch);
+            });
+          ')"
+          echo "Cloudflare Pages production branch: $production_branch"
+          echo "production_branch=$production_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to the configured production Pages branch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PRODUCTION_BRANCH: ${{ steps.pages_project.outputs.production_branch }}
+        run: |
+          set -euo pipefail
+          test -n "$PAGES_PRODUCTION_BRANCH" || { echo "::error::Cloudflare production branch was not resolved"; exit 1; }
+          echo "Deploying milestone source to configured production branch: $PAGES_PRODUCTION_BRANCH"
+          wrangler pages deploy apps/web --project-name=omniintel --branch="$PAGES_PRODUCTION_BRANCH"
+
+      - name: Verify deployed production Pages bundle
+        run: |
+          node --input-type=module <<'NODE'
+          const origin = "https://omniintel.pages.dev";
+          const page = await fetch(origin, { redirect: "follow" });
+          if (!page.ok) throw new Error("Pages site returned HTTP " + page.status);
+          const html = await page.text();
+          if (!html.includes('id="online-video-form"') || !html.includes('src="app.js"')) {
+            throw new Error("Production Pages HTML is missing the OmniIntel online form or app.js");
+          }
+          // Add a unique query string so the verifier cannot receive a cached older asset.
+          const jsUrl = new URL("app.js", page.url);
+          jsUrl.searchParams.set("omniintel_verify", String(Date.now()));
+          const jsResponse = await fetch(jsUrl, { headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
+          if (!jsResponse.ok) throw new Error("app.js returned HTTP " + jsResponse.status);
+          const js = await jsResponse.text();
+          const fs = await import("node:fs");
+          const crypto = await import("node:crypto");
+          const sourceJs = fs.readFileSync("apps/web/app.js");
+          const liveHash = crypto.createHash("sha256").update(js).digest("hex");
+          const sourceHash = crypto.createHash("sha256").update(sourceJs).digest("hex");
+          const hasRecovery = js.includes("omniintel-active-job");
+          const hasYoutubeRoute = js.includes("/v1/youtube/jobs");
+          if (!hasRecovery || !hasYoutubeRoute || liveHash !== sourceHash) {
+            throw new Error("Production app.js differs from checked-out source (recovery=" + hasRecovery +
+              ", youtubeRoute=" + hasYoutubeRoute + ", liveBytes=" + js.length +
+              ", liveSha256=" + liveHash + ", sourceSha256=" + sourceHash + ", url=" + jsResponse.url + ")");
+          }
+          const swUrl = new URL("service-worker.js", page.url);
+          swUrl.searchParams.set("omniintel_verify", String(Date.now()));
+          const swResponse = await fetch(swUrl, { headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
+          const sw = swResponse.ok ? await swResponse.text() : "";
+          const sourceSw = fs.readFileSync("apps/web/service-worker.js", "utf8");
+          if (!swResponse.ok || sw !== sourceSw) {
+            throw new Error("Production service worker differs from checked-out source (HTTP " + swResponse.status + ")");
+          }
+          console.log("PASS: configured production branch deployed; production HTML, exact app.js source, recovery/API route, and exact service-worker source verified");
+          NODE
+
+# Deployment trigger: keep this workflow push-enabled for the milestone branch.

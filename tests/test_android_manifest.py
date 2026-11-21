@@ -177,10 +177,12 @@ def test_android_library_uses_normalized_room_storage_and_persistable_document_a
     assert 'tableName = "textbook_evidence"' in database
     assert 'tableName = "reader_annotations"' in database
     assert 'tableName = "reader_progress"' in database
-    assert 'version = 3' in database
+    assert 'version = 4' in database
     assert 'Migration(1, 2)' in database
     assert 'Migration(2, 3)' in database
-    assert 'addMigrations(MIGRATION_1_2, MIGRATION_2_3)' in database
+    assert 'Migration(3, 4)' in database
+    assert 'study_progress' in database
+    assert 'addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)' in database
     assert 'Room.databaseBuilder(' in database
     assert 'libraryDatabase.readerContent()' in activity
     assert 'dao.insertBlocks(' in activity
@@ -193,6 +195,19 @@ def test_android_library_uses_normalized_room_storage_and_persistable_document_a
     assert 'searchLibrary(term)' in activity
 
 
+
+def test_android_native_study_mode_persists_adaptive_review_schedules() -> None:
+    root = Path(__file__).parents[1]
+    database = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "ReaderDatabase.kt").read_text(encoding="utf-8")
+    activity = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "MainActivity.kt").read_text(encoding="utf-8")
+    study = (root / "apps" / "android" / "app" / "src" / "main" / "java" / "ai" / "omniintel" / "reader" / "StudyPractice.kt").read_text(encoding="utf-8")
+    assert "StudyProgressEntity" in database
+    assert "dueAtEpochMs" in database
+    assert "studyFront" in activity and "studyBack" in activity
+    assert "StudyPracticeDialog" in activity
+    assert '"AGAIN"' in study and '"HARD"' in study and '"GOOD"' in study and '"EASY"' in study
+    assert "database.studyProgress().upsert(item)" in study
+    assert "dueCards" in study
 
 
 def test_android_online_video_client_requires_https_and_explicit_consent_controls() -> None:

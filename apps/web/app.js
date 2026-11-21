@@ -322,10 +322,76 @@ function validateReaderPayload(data) {
       }
     }
   }
+  if (data.visual_timeline !== undefined) {
+    const timeline = data.visual_timeline;
+    if (!timeline || typeof timeline !== "object" || Array.isArray(timeline) ||
+        typeof timeline.status !== "string" ||
+        (timeline.events !== undefined && (!Array.isArray(timeline.events) || timeline.events.length > 120))) {
+      throw new Error("Reader export contains an invalid visual timeline.");
+    }
+    for (const event of timeline.events || []) {
+      if (!event || typeof event !== "object" || !Number.isSafeInteger(event.timestamp_ms) ||
+          event.timestamp_ms < 0 || !Number.isSafeInteger(event.frame_index) || event.frame_index < 0 ||
+          !Array.isArray(event.transcript_alignments) || event.transcript_alignments.length > 100) {
+        throw new Error("Reader export contains an invalid visual frame event.");
+      }
+    }
+  }
   for (const source of data.sources) {
     if (!source || typeof source !== "object" || typeof source.source_id !== "string") {
       throw new Error("A course source has an invalid structure.");
     }
+  }
+}
+function renderVisualTimeline(timeline) {
+  const panel = $("#visual-timeline-panel");
+  const list = $("#visual-timeline-events");
+  if (!panel || !list) return;
+  list.replaceChildren();
+  if (!timeline || typeof timeline !== "object") {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const events = Array.isArray(timeline.events) ? timeline.events.slice(0, 120) : [];
+  const count = Number.isSafeInteger(timeline.frame_count) ? timeline.frame_count : events.length;
+  $("#visual-timeline-summary").textContent = timeline.status === "SAMPLED_NEEDS_REVIEW"
+    ? count + " sampled frames · all frame and transcript links need review. Attach the matching local video to jump."
+    : (timeline.reason || timeline.status.replaceAll("_", " ").toLowerCase());
+  if (!events.length) {
+    list.append(element("p", "muted", "No frame samples are available for this source."));
+    return;
+  }
+  for (const event of events) {
+    const row = element("div", "visual-event-row");
+    const video = $("#local-media");
+    const canSeek = Boolean(video && !video.hidden && video.src &&
+      state.mediaSourceId && state.mediaSourceId === state.book?.anchor_source_id);
+    const seek = element("button", "seek-button", "▶ " + (Number(event.timestamp_ms) / 1000).toFixed(1) + "s");
+    seek.type = "button";
+    seek.disabled = !canSeek;
+    seek.title = canSeek ? "Jump to this frame in the attached local video" : "Attach the exact source video to enable seeking";
+    seek.addEventListener("click", () => {
+      if (!video.src || state.mediaSourceId !== state.book?.anchor_source_id) return;
+      video.currentTime = Number(event.timestamp_ms) / 1000;
+      video.play().catch(() => {});
+    });
+    const links = Array.isArray(event.transcript_alignments) ? event.transcript_alignments : [];
+    row.append(seek, element("span", "visual-event-meta",
+      "FRAME " + (Number(event.frame_index) + 1) + " · " +
+      String(event.review_state || "NEEDS_REVIEW").replaceAll("_", " ") +
+      " · " + links.length + " temporal link(s)"));
+    for (const link of links) {
+      const interval = Number.isFinite(Number(link.transcript_start_ms)) &&
+        Number.isFinite(Number(link.transcript_end_ms))
+        ? " · transcript " + (Number(link.transcript_start_ms) / 1000).toFixed(1) +
+          "–" + (Number(link.transcript_end_ms) / 1000).toFixed(1) + "s"
+        : "";
+      row.append(element("p", "visual-event-link",
+        String(link.relation || "CANDIDATE") + " · " +
+        String(link.review_state || "NEEDS_REVIEW").replaceAll("_", " ") + interval));
+    }
+    list.append(row);
   }
 }
 function renderBook(data, filename) {
@@ -366,6 +432,7 @@ function renderBook(data, filename) {
   $("#clear-button").disabled = false;
   configureMediaSources();
   resetLocalMedia();
+  renderVisualTimeline(data.visual_timeline);
   renderChapter();
 }
 fileInput.addEventListener("change", async () => {
@@ -392,6 +459,7 @@ $("#media-source").addEventListener("change", (event) => {
   resetLocalMedia();
   state.mediaSourceId = event.target.value || null;
   $("#media-file").disabled = !state.mediaSourceId;
+  renderVisualTimeline(state.book?.visual_timeline);
   $("#media-status").textContent = state.mediaSourceId
     ? "Source selected. Attach only the matching local media file."
     : "Select the exact course source before attaching media.";
@@ -413,6 +481,7 @@ $("#media-file").addEventListener("change", (event) => {
   media.load();
   $("#media-status").textContent = "Attached locally: " + file.name + ". Timestamps are source-local; no cross-source offset is applied.";
   event.target.value = "";
+  renderVisualTimeline(state.book?.visual_timeline);
   renderChapter();
 });
 $("#search").addEventListener("input", (event) => {
@@ -677,7 +746,7 @@ if (onlineForm) {
   const onlineButton = $("#online-submit");
   const apiInput = $("#api-base-url");
   const savedApi = localStorage.getItem("omniintel-api-base-url");
-  if (savedApi) apiInput.value = savedApi;
+  apiInput.value = savedApi || "https://omniintel-api.scrbaba502.workers.dev";
   const savedToken = sessionStorage.getItem("omniintel-api-token");
   if (savedToken) $("#api-token").value = savedToken;
 
@@ -694,16 +763,67 @@ if (onlineForm) {
     return parsed.origin;
   }
   async function apiRequest(base, token, path, options = {}) {
-    const response = await fetch(base + path, {
-      ...options,
-      headers: {
-        "Authorization": "Bearer " + token,
-        ...(options.headers || {})
-      }
-    });
+    let response;
+    try {
+      response = await fetch(base + path, {
+        ...options,
+        headers: {
+          "Authorization": "Bearer " + token,
+          ...(options.headers || {})
+        }
+      });
+    } catch (cause) {
+      const error = new Error("Could not reach the OmniIntel API at " + base + ". The server may be offline, " +
+        "or this website's origin (" + location.origin + ") is not in the API's CORS allow-list.");
+      error.transient = true;
+      error.cause = cause;
+      throw error;
+    }
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.detail || ("API request failed: HTTP " + response.status));
+    if (!response.ok) {
+      // The Worker reports { error }, the legacy Python API reports { detail }.
+      const reason = body.error || body.detail || "";
+      const error = new Error(response.status === 401
+        ? "The API rejected the access token (HTTP 401). Re-enter the token issued for this server."
+        : (reason ? reason + " (HTTP " + response.status + ")" : "API request failed: HTTP " + response.status));
+      error.status = response.status;
+      error.transient = response.status >= 500 || response.status === 429;
+      throw error;
+    }
     return body;
+  }
+  const ACTIVE_JOB_KEY = "omniintel-active-job";
+  function rememberJob(base, created, kind) {
+    try { localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ base, job_id: created.job_id, status_url: created.status_url, kind, savedAt: Date.now() })); } catch {}
+  }
+  function forgetJob() { try { localStorage.removeItem(ACTIVE_JOB_KEY); } catch {} }
+  // Polls until the job finishes. Short network/5xx blips do not abort a long-running job.
+  async function waitForReader(base, token, statusUrl, report) {
+    let consecutiveFailures = 0;
+    for (let attempt = 0; attempt < 1800; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      let job;
+      try {
+        job = await apiRequest(base, token, statusUrl);
+        consecutiveFailures = 0;
+      } catch (error) {
+        if (error.transient && ++consecutiveFailures < 15) { report("Connection problem; retrying… (" + error.message + ")"); continue; }
+        throw error;
+      }
+      if (job.status === "COMPLETED") {
+        if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
+        let readerResponse;
+        try { readerResponse = await fetch(job.result_url); }
+        catch (cause) { throw new Error("The notes were generated, but the browser could not download them from storage. The B2 bucket CORS rule must allow GET from " + location.origin + "."); }
+        if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
+        forgetJob();
+        return readerResponse.json();
+      }
+      if (job.status === "FAILED") { forgetJob(); throw new Error(job.error || "Processing failed."); }
+      report("Processing · " + job.status.toLowerCase() + " · attempt " + job.attempt +
+        (job.status === "QUEUED" && !job.attempt ? " · waiting for a worker to pick this up" : ""));
+    }
+    throw new Error("This job is still running. Reload this page to resume watching it.");
   }
   onlineForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -728,29 +848,34 @@ if (onlineForm) {
           chapter_minutes: 10
         })
       });
-      setOnlineStatus("Video accepted · job " + created.job_id + " · fetching metadata and captions…");
-      for (let attempt = 0; attempt < 1800; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const job = await apiRequest(base, token, created.status_url);
-        if (job.status === "COMPLETED") {
-          if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
-          const readerResponse = await fetch(job.result_url);
-          if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
-          const reader = await readerResponse.json();
-          setOnlineStatus("Notes generated · opening " + (reader.source?.title || "your video") + "…");
-          renderBook(reader, (reader.source?.title || "OmniIntel video notes") + ".json");
-          return;
-        }
-        if (job.status === "FAILED") throw new Error(job.error || "Video processing failed.");
-        setOnlineStatus("Processing video · " + job.status.toLowerCase() + " · attempt " + job.attempt);
-      }
-      throw new Error("This job is still running. Reopen the app and check its job status with the server.");
+      rememberJob(base, created, "youtube");
+      setOnlineStatus("Video accepted · job " + created.job_id + " · waiting for a worker…");
+      const reader = await waitForReader(base, token, created.status_url, setOnlineStatus);
+      setOnlineStatus("Notes generated · opening " + (reader.source?.title || "your video") + "…");
+      renderBook(reader, (reader.source?.title || "OmniIntel video notes") + ".json");
     } catch (error) {
       setOnlineStatus(error.message || "Video processing failed.", true);
     } finally {
       onlineButton.disabled = false;
     }
   });
+
+  // Recovery: if the page was reloaded while a job was running, resume watching it.
+  (async () => {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || "null"); } catch {}
+    const token = sessionStorage.getItem("omniintel-api-token");
+    if (!saved || !saved.status_url || !token || Date.now() - saved.savedAt > 24 * 3600 * 1000) return;
+    const target = saved.kind === "media" ? $("#media-upload-status") : onlineStatus;
+    try {
+      target.textContent = "Resuming job " + saved.job_id + "…";
+      const reader = await waitForReader(saved.base, token, saved.status_url, (m) => { target.textContent = m; });
+      renderBook(reader, (reader.source?.title || "OmniIntel notes") + ".json");
+    } catch (error) {
+      target.textContent = error.message; target.classList.add("error");
+      if (error.status === 404) forgetJob();
+    }
+  })();
 
   const mediaUploadForm = $("#online-media-form");
   if (mediaUploadForm) {
@@ -760,6 +885,7 @@ if (onlineForm) {
       event.preventDefault();
       if (!mediaUploadForm.reportValidity()) return;
       uploadButton.disabled = true;
+      let uploadStage = "validating the form";
       try {
         const base = apiBase();
         const token = $("#api-token").value.trim();
@@ -773,7 +899,8 @@ if (onlineForm) {
         if (!$("#approve-upload").checked) throw new Error("Confirm that you own or are authorized to upload and process this media.");
         sessionStorage.setItem("omniintel-api-token", token);
         localStorage.setItem("omniintel-api-base-url", base);
-        uploadStatus.textContent = "Uploading media securely…";
+        uploadStage = "requesting a secure upload URL from OmniIntel";
+        uploadStatus.textContent = "Preparing secure upload…";
         const created = await apiRequest(base, token, "/v1/media/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -782,42 +909,42 @@ if (onlineForm) {
             title: file.name,
             approve_media_upload: true,
             approve_ai: $("#approve-upload-ai").checked,
+            approve_visual: $("#approve-upload-visual").checked,
             language: $("#upload-language").value.trim() || null,
             chapter_minutes: 10
           })
         });
         if (!created.upload_url || !created.upload_complete_url) throw new Error("The server did not return a B2 upload URL.");
+        uploadStage = "uploading the file to Backblaze B2";
         uploadStatus.textContent = "Uploading media to private storage…";
-        const uploaded = await fetch(created.upload_url, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file
-        });
+        let uploaded;
+        try {
+          uploaded = await fetch(created.upload_url, {
+            method: "PUT",
+            mode: "cors",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file
+          });
+        } catch (cause) {
+          const error = new Error("The secure upload URL was created, but the browser could not upload to Backblaze B2. This usually means the B2 bucket is missing a CORS rule for this website (PUT + Content-Type), or the network blocked the storage request. The API address and token are not the cause.");
+          error.cause = cause;
+          throw error;
+        }
         if (!uploaded.ok) throw new Error("Backblaze upload failed: HTTP " + uploaded.status);
+        uploadStage = "confirming the uploaded file with OmniIntel";
         await apiRequest(base, token, created.upload_complete_url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: "{}"
         });
+        uploadStage = "waiting for transcription and note generation";
+        rememberJob(base, created, "media");
         uploadStatus.textContent = "Upload verified · transcription job " + created.job_id;
-        for (let attempt = 0; attempt < 1800; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const job = await apiRequest(base, token, created.status_url);
-          if (job.status === "COMPLETED") {
-            if (!job.result_url || new URL(job.result_url).protocol !== "https:") throw new Error("The server completed without a reader download URL.");
-            const readerResponse = await fetch(job.result_url);
-            if (!readerResponse.ok) throw new Error("Reader download failed: HTTP " + readerResponse.status);
-            const reader = await readerResponse.json();
-            uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
-            renderBook(reader, (reader.source?.title || file.name) + ".json");
-            return;
-          }
-          if (job.status === "FAILED") throw new Error(job.error || "Media processing failed.");
-          uploadStatus.textContent = "Transcribing media · " + job.status.toLowerCase();
-        }
-        throw new Error("The job is still running. Check its status with the server later.");
+        const reader = await waitForReader(base, token, created.status_url, (m) => { uploadStatus.textContent = m; });
+        uploadStatus.textContent = "Transcription and notes complete · opening your reader…";
+        renderBook(reader, (reader.source?.title || file.name) + ".json");
       } catch (error) {
-        uploadStatus.textContent = error.message || "Media processing failed.";
+        uploadStatus.textContent = error.message || ("Failed while " + uploadStage + ".");
         uploadStatus.classList.add("error");
       } finally {
         uploadButton.disabled = false;

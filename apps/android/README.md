@@ -12,7 +12,7 @@ Native Kotlin + Jetpack Compose reader for local OmniIntel synchronized-reader J
 
 2. Transfer the JSON file to Android and select it with the system document picker.
 
-The app stores the imported reader content on-device in Room v3: sources, chapters, blocks and evidence references are normalized into separate tables. The original JSON is limited to 50 MiB and parsed on an IO dispatcher. Once imported, the reader content remains available offline even if the original document provider does not grant persistent access.
+The app stores the imported reader content on-device in Room v4: sources, chapters, blocks and evidence references are normalized into separate tables. The original JSON is limited to 50 MiB and parsed on an IO dispatcher. Once imported, the reader content remains available offline even if the original document provider does not grant persistent access.
 
 ## Persistence and migration
 
@@ -57,4 +57,4 @@ cd apps/android
 - Reader import and library search are local-only.
 - Media files are explicitly selected by the user and uploaded only after explicit consent to the private B2 bucket; a short-lived presigned URL is used, and media is not exposed publicly.
 - The YouTube intake queue exports a portable JSON handoff. On a computer with the local Python engine installed, run `omniintel-youtube-queue ./omniintel.db ./omniintel-video-queue.json --output-dir ./exports --approve-network`. This retrieves public metadata/captions only; it does not download media. Each completed video produces a reader JSON file, and failures are listed in `queue-results.json`.
-- Annotation export/backup, background media controls, large-library FTS indexing, native ASR and complete study workflows remain future work.
+- Native flashcards now support definitions, exercises, questions and flashcards with offline, Room-persisted adaptive review intervals and due-card sessions. Full study planning, background media controls, large-library FTS indexing and native ASR remain future work.

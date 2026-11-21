@@ -10,8 +10,9 @@ database_id = "ac4e2978-6253-4fb1-b451-4800a9a149ef"
 migrations_dir = "migrations"
 
 [vars]
-B2_BUCKET_NAME = "omniintel-assets"
+B2_BUCKET_NAME = "omniintel-vault-2026"
 B2_S3_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
 MAX_ARTIFACT_BYTES = "20971520"
 MAX_UPLOAD_BYTES = "262144000"
-CORS_ORIGIN = "http://localhost:4173"
+# Exact deployed HTTPS origins allowed by the browser API CORS policy.
+CORS_ORIGIN = "https://omniintel.pages.dev,https://b9588ac7.omniintel.pages.dev"

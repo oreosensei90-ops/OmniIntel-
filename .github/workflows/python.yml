@@ -5,17 +5,18 @@ concurrency:
 
 on:
   push:
-    branches: [main, "build/**", "migration/omniintel-foundation", "fix/**", "research/**"]
+    branches: [main, "build/**", "migration/omniintel-foundation", "fix/**", "research/**", "milestone/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: "0 * * * *"
+
 permissions:
   contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,71 +26,26 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e '.[dev,publishing,documents,service]'
       - run: pytest -q
+      - name: Install ffmpeg for audio fixture generation
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - name: Run offline end-to-end bridge and engine harness
+        run: python scripts/e2e_local_bridge.py
       - run: ruff check engine tests
       - name: Check Web Reader JavaScript syntax
         run: node --check apps/web/app.js && node --check apps/web/service-worker.js
-
       - name: Check Cloudflare Worker tests and types
         working-directory: infra/cloudflare/worker
         run: npm install --no-audit --no-fund && npm test && npm run typecheck
-
       - name: Check deployment entrypoint shell syntax
-        run: bash -n deploy/start-service.sh
-
-
-  hosted-worker:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      OMNIINTEL_WORKER_API: https://omniintel-api.scrbaba502.workers.dev
-      OMNIINTEL_WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
-      OMNIINTEL_DATABASE: .omniintel/worker.sqlite3
-      OMNIINTEL_UPLOAD_DIR: .omniintel/uploads
-      OMNIINTEL_ASSET_DIR: .omniintel/assets
-      OMNIINTEL_ASR_MODEL_ID: tiny
-      OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD: "1"
-      OMNIINTEL_ASR_DEVICE: cpu
-      OMNIINTEL_ASR_COMPUTE_TYPE: int8
-      OMNIINTEL_ASR_THREADS: "2"
-      OMNIINTEL_AI_PROVIDER: freelm
-      OMNIINTEL_AI_MODEL: chat:fast
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-    steps:
-      - name: Check whether the API secret is configured
-        id: guard
+        run: bash -n deploy/start-service.sh && sh -n deploy/start-cloud-worker.sh
+      - name: Validate Cloud worker Compose configuration
+        run: |
+          cp deploy/cloud-worker.env.example deploy/cloud-worker.env
+          docker compose --file deploy/cloud-worker.compose.yml config --quiet
+      - name: Build production Cloudflare bridge worker image
+        run: docker build --pull --file Dockerfile.cloud-worker --tag omniintel-cloud-worker:ci .
+      - name: Smoke-test worker entrypoint and argument forwarding
         env:
-          WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
-        run: |
-          if [ -n "$WORKER_TOKEN" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Set the OMNIINTEL_WORKER_TOKEN repository secret to enable hosted processing."
-          fi
-      - uses: actions/checkout@v4
-        if: steps.guard.outputs.enabled == 'true'
-      - uses: actions/setup-python@v5
-        if: steps.guard.outputs.enabled == 'true'
-        with:
-          python-version: "3.12"
-      - name: Install FFmpeg for audio extraction
-        if: steps.guard.outputs.enabled == 'true'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Cache the small Faster-Whisper model
-        if: steps.guard.outputs.enabled == 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/huggingface/hub
-          key: omniintel-faster-whisper-tiny-v1
-      - name: Install engine, YouTube adapter and local ASR
-        if: steps.guard.outputs.enabled == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --no-deps -e .
-          python -m pip install "yt-dlp>=2025.1.15" "faster-whisper>=1.1" "av>=11,<19" "freelm>=0.5.2"
-      - name: Process one job
-        if: steps.guard.outputs.enabled == 'true'
-        run: |
-          mkdir -p .omniintel/uploads .omniintel/assets
-          omniintel-cloud-worker --once
+          OMNIINTEL_WORKER_API: https://example.invalid
+          OMNIINTEL_WORKER_TOKEN: ci-smoke-test-token
+        run: docker run --rm -e OMNIINTEL_WORKER_API -e OMNIINTEL_WORKER_TOKEN omniintel-cloud-worker:ci --help

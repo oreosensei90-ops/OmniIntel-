@@ -5,7 +5,7 @@
 OmniIntel is a modular monorepo with native Android and web clients, shared versioned contracts, and a replaceable processing engine. Each platform owns its local database and files; contracts and import/export formats are shared rather than sharing a live SQLite database.
 
 ```text
-Android (Compose / Room / WorkManager)      Web (React / TypeScript / IndexedDB)
+Android (Compose / Room)                 Web (vanilla JS / IndexedDB / Service Worker)
                     \                         /
                      Shared domain + event contracts
                                   |
@@ -26,7 +26,7 @@ Do not collapse these layers into one summary field.
 
 ## Initial Python slice
 
-The foundation now includes stable identifiers, typed transcript inputs, SQLite persistence, immutable migration checksums, transcript and PDF-page evidence, local OCR, deterministic PDF layout extraction, source-linked knowledge candidates and evidence-gated textbook composition. It still does not claim to perform speech recognition, semantic claim extraction, visual understanding or AI reasoning.
+The implemented engine includes local-file registration, FFmpeg audio extraction, optional Faster-Whisper transcription, public-caption YouTube intake, bounded PDF text/OCR/layout extraction, source-linked knowledge candidates, review-gated textbook composition, optional local vision adapters and audited PDF/DOCX/HTML/Markdown publishing. Uploaded-media processing and visual timeline sampling are connected through the leased worker path. Model-generated study content remains a review-required draft; semantic correctness and completeness are not inferred from structurally valid citations.
 
 ## Planned processing flow
 
@@ -56,7 +56,7 @@ AI providers are optional adapters. Deterministic core operations must remain av
 
 ## Current local media metadata slice
 
-A registered local audio/video asset is inspected by the optional ffprobe executable. The adapter verifies the content-addressed original asset, invokes ffprobe without a shell and with local-only protocol restrictions, enforces time/stream/output limits, stores immutable container and stream metadata (including each stream's source start time), and records duration on the source only when no duration was already present. The optional FFmpeg stage can extract one selected audio stream to a normalized mono 16 kHz PCM WAV derivative. It stores both asset hashes, tool/configuration identity and the source stream offset; the transcription stage applies that offset to every segment and evidence locator. Original media remains immutable. Video frame extraction, subtitle stream extraction and transcript-to-visual grounding remain pending. See MEDIA_PROBING.md, AUDIO_EXTRACTION.md and AUDIO_TRANSCRIPTION.md.
+A registered local audio/video asset is inspected by the optional ffprobe executable. The adapter verifies the content-addressed original asset, invokes ffprobe without a shell and with local-only protocol restrictions, enforces time/stream/output limits, stores immutable container and stream metadata (including each stream's source start time), and records duration on the source only when no duration was already present. The optional FFmpeg stage can extract one selected audio stream to a normalized mono 16 kHz PCM WAV derivative. It stores both asset hashes, tool/configuration identity and the source stream offset; the transcription stage applies that offset to every segment and evidence locator. Original media remains immutable. Opt-in video frame sampling and conservative transcript-to-visual temporal alignment are now connected to the uploaded-media worker path; candidates remain NEEDS_REVIEW and sampled frame assets stay in the local asset store. OCR, slide classification, visual descriptions, semantic frame/transcript scoring and cross-modal claim verification remain separate review-gated stages. See MEDIA_PROBING.md, AUDIO_EXTRACTION.md, AUDIO_TRANSCRIPTION.md and VISUAL_TIMELINE.md.
 
 ## Current local PDF processing slice
 

@@ -1,0 +1,54 @@
+name: OmniIntel live YouTube to reader E2E
+
+on:
+  push:
+    branches: [milestone/end-to-end-reliability-2026-11-21]
+
+permissions:
+  contents: read
+
+jobs:
+  live-youtube-to-reader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Submit a captions-first public YouTube test job
+        env:
+          API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
+          API_BASE: https://omniintel-api.scrbaba502.workers.dev
+        run: |
+          set -euo pipefail
+          test -n "$API_TOKEN" || { echo "::error::OMNIINTEL_API_TOKEN is not configured"; exit 1; }
+          payload='{"url":"https://www.youtube.com/watch?v=aircAruvnKk","approve_network":true,"approve_ai":false,"language":"en","chapter_minutes":10}'
+          response="$(curl --fail --silent --show-error -X POST "$API_BASE/v1/youtube/jobs" \
+            -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" --data "$payload")"
+          job_id="$(printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const j=JSON.parse(s);if(!j.job_id||!j.status_url)throw Error("API did not return a job id/status URL");process.stdout.write(j.job_id)})')"
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "Created live YouTube job: $job_id"
+        id: submit
+
+      - name: Wait for completed reader artifact
+        env:
+          API_TOKEN: ${{ secrets.OMNIINTEL_API_TOKEN }}
+          API_BASE: https://omniintel-api.scrbaba502.workers.dev
+          JOB_ID: ${{ steps.submit.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 150); do
+            response="$(curl --fail --silent --show-error "$API_BASE/v1/jobs/$JOB_ID" -H "Authorization: Bearer $API_TOKEN")"
+            status="$(printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).status||"UNKNOWN"))')"
+            echo "Attempt $attempt: $status"
+            if [ "$status" = "COMPLETED" ]; then
+              result_url="$(printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const j=JSON.parse(s);if(!j.result_url)throw Error("Completed job has no result URL");process.stdout.write(j.result_url)})')"
+              curl --fail --silent --show-error "$result_url" -o "$RUNNER_TEMP/reader.json"
+              node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!Array.isArray(r.chapters)||!r.chapters.length)throw Error("Reader has no chapters");const blocks=r.chapters.reduce((n,c)=>n+(Array.isArray(c.blocks)?c.blocks.length:0),0);if(!blocks)throw Error("Reader has no content blocks");console.log("PASS: reader artifact downloaded; chapters="+r.chapters.length+"; blocks="+blocks)' "$RUNNER_TEMP/reader.json"
+              exit 0
+            fi
+            if [ "$status" = "FAILED" ]; then
+              printf '%s' "$response" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const j=JSON.parse(s);console.error("Job failed: "+(j.error||"no error detail"))})'
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::YouTube job did not complete within 25 minutes"
+          exit 1

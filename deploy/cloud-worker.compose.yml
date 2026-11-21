@@ -1,0 +1,35 @@
+services:
+  cloud-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.cloud-worker
+    image: omniintel-cloud-worker:latest
+    init: true
+    restart: unless-stopped
+    env_file:
+      - cloud-worker.env
+    environment:
+      OMNIINTEL_DATABASE: /var/lib/omniintel/worker.sqlite3
+      OMNIINTEL_UPLOAD_DIR: /var/lib/omniintel/uploads
+      OMNIINTEL_ASSET_DIR: /var/lib/omniintel/assets
+      HF_HOME: /var/lib/omniintel/huggingface
+      HOME: /var/lib/omniintel
+      XDG_CACHE_HOME: /var/lib/omniintel/cache
+    volumes:
+      - omniintel-worker-data:/var/lib/omniintel
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 2m
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  omniintel-worker-data:

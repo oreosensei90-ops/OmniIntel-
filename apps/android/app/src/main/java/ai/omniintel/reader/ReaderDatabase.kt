@@ -122,7 +122,9 @@ data class TextbookBlockEntity(
     val blockIndex: Int,
     val blockType: String,
     val text: String,
-    val provenance: String
+    val provenance: String,
+    val studyFront: String = "",
+    val studyBack: String = ""
 )
 
 @Entity(
@@ -166,6 +168,17 @@ data class ReaderProgressEntity(
 
 @Entity(tableName = "reader_migrations")
 data class ReaderMigrationEntity(@PrimaryKey val migrationKey: String, val completedAtEpochMs: Long)
+
+@Entity(tableName = "study_progress", primaryKeys = ["versionId", "blockId"], indices = [Index(value = ["versionId", "dueAtEpochMs"])])
+data class StudyProgressEntity(
+    val versionId: String,
+    val blockId: String,
+    val repetitions: Int,
+    val intervalDays: Double,
+    val easeFactor: Double,
+    val dueAtEpochMs: Long,
+    val lastReviewedAtEpochMs: Long
+)
 
 @Dao
 interface ReaderContentDao {
@@ -230,13 +243,29 @@ interface ReaderMigrationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(item: ReaderMigrationEntity)
 }
 
+@Dao
+interface StudyProgressDao {
+    @Query("SELECT * FROM study_progress WHERE versionId = :versionId ORDER BY dueAtEpochMs, blockId")
+    suspend fun forVersion(versionId: String): List<StudyProgressEntity>
+
+    @Query("SELECT * FROM study_progress WHERE versionId = :versionId AND blockId = :blockId LIMIT 1")
+    suspend fun find(versionId: String, blockId: String): StudyProgressEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: StudyProgressEntity)
+
+    @Query("DELETE FROM study_progress WHERE versionId = :versionId")
+    suspend fun deleteForVersion(versionId: String)
+}
+
 @Database(
     entities = [
         LibraryBookEntity::class, VideoImportEntity::class, TextbookSourceEntity::class,
         TextbookChapterEntity::class, TextbookBlockEntity::class, TextbookEvidenceEntity::class,
-        ReaderAnnotationEntity::class, ReaderProgressEntity::class, ReaderMigrationEntity::class
+        ReaderAnnotationEntity::class, ReaderProgressEntity::class, ReaderMigrationEntity::class,
+        StudyProgressEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class ReaderDatabase : RoomDatabase() {
@@ -246,6 +275,7 @@ abstract class ReaderDatabase : RoomDatabase() {
     abstract fun annotations(): ReaderAnnotationDao
     abstract fun progress(): ReaderProgressDao
     abstract fun migrations(): ReaderMigrationDao
+    abstract fun studyProgress(): StudyProgressDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -291,6 +321,18 @@ abstract class ReaderDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE textbook_blocks ADD COLUMN studyFront TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE textbook_blocks ADD COLUMN studyBack TEXT NOT NULL DEFAULT ''")
+                database.execSQL("""CREATE TABLE IF NOT EXISTS study_progress (
+                    versionId TEXT NOT NULL, blockId TEXT NOT NULL, repetitions INTEGER NOT NULL,
+                    intervalDays REAL NOT NULL, easeFactor REAL NOT NULL, dueAtEpochMs INTEGER NOT NULL,
+                    lastReviewedAtEpochMs INTEGER NOT NULL, PRIMARY KEY(versionId, blockId))""")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_study_progress_versionId_dueAtEpochMs ON study_progress(versionId, dueAtEpochMs)")
+            }
+        }
+
         @Volatile private var instance: ReaderDatabase? = null
 
         fun get(context: Context): ReaderDatabase =
@@ -299,7 +341,7 @@ abstract class ReaderDatabase : RoomDatabase() {
                     context.applicationContext,
                     ReaderDatabase::class.java,
                     "omniintel_reader.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build().also { instance = it }
             }
     }
