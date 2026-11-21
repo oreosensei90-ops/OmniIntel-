@@ -50,15 +50,24 @@ jobs:
           if (!html.includes('id="online-video-form"') || !html.includes('src="app.js"')) {
             throw new Error("Production Pages HTML is missing the OmniIntel online form or app.js");
           }
-          const jsResponse = await fetch(new URL("app.js", page.url));
+          // Add a unique query string so the verifier cannot receive a cached older asset.
+          const jsUrl = new URL("app.js", page.url);
+          jsUrl.searchParams.set("omniintel_verify", String(Date.now()));
+          const jsResponse = await fetch(jsUrl, { headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
           if (!jsResponse.ok) throw new Error("app.js returned HTTP " + jsResponse.status);
           const js = await jsResponse.text();
-          if (!js.includes("omniintel-active-job") || !js.includes("/v1/youtube/jobs")) {
-            throw new Error("Production app.js is stale or missing job recovery/API routes");
+          const hasRecovery = js.includes("omniintel-active-job");
+          const hasYoutubeRoute = js.includes("/v1/youtube/jobs");
+          if (!hasRecovery || !hasYoutubeRoute) {
+            throw new Error("Production app.js does not match the deployed source (recovery=" + hasRecovery +
+              ", youtubeRoute=" + hasYoutubeRoute + ", bytes=" + js.length + ", url=" + jsResponse.url + ")");
           }
-          const swResponse = await fetch(new URL("service-worker.js", page.url));
-          if (!swResponse.ok || !(await swResponse.text()).includes("shell-v8")) {
-            throw new Error("Production service worker is stale; expected shell-v8");
+          const swUrl = new URL("service-worker.js", page.url);
+          swUrl.searchParams.set("omniintel_verify", String(Date.now()));
+          const swResponse = await fetch(swUrl, { headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
+          const sw = swResponse.ok ? await swResponse.text() : "";
+          if (!swResponse.ok || !sw.includes("shell-v8")) {
+            throw new Error("Production service worker is stale or unavailable (HTTP " + swResponse.status + ")");
           }
           console.log("PASS: production Pages HTML, app.js recovery/API route, and service-worker v8 verified");
           NODE
