@@ -125,7 +125,7 @@ def run_once(database_path: str | Path, *, worker_id: str | None = None) -> bool
                 "reason": "VISUAL_SAMPLING_REQUIRES_UPLOADED_VIDEO",
             }
         if payload.get("approve_ai") is True:
-            provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "openai").strip().lower()
+            provider = os.environ.get("OMNIINTEL_AI_PROVIDER", "").strip().lower()\n            if not provider:\n                provider = "gemini" if (os.environ.get("OMNIINTEL_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")) else "openai"
             default_model = (
                 os.environ.get("OMNIINTEL_OLLAMA_MODEL", "llama3.1")
                 if provider == "ollama"
