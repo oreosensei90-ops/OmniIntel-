@@ -9,13 +9,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY . /app
+COPY pyproject.toml README.md /app/
+COPY engine /app/engine
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir '.[youtube,asr]' \
     && useradd --system --uid 10001 --create-home omniintel \
     && mkdir -p /var/lib/omniintel/uploads /var/lib/omniintel/assets \
-    && chown -R omniintel:omniintel /var/lib/omniintel /app \
-    && chmod +x /app/deploy/start-cloud-worker.sh
+    && chown -R omniintel:omniintel /var/lib/omniintel
 
 USER omniintel
-ENTRYPOINT ["/app/deploy/start-cloud-worker.sh"]
+ENTRYPOINT ["/usr/local/bin/omniintel-cloud-worker"]
