@@ -21,9 +21,9 @@ jobs:
     env:
       OMNIINTEL_WORKER_API: https://omniintel-api.scrbaba502.workers.dev
       OMNIINTEL_WORKER_TOKEN: ${{ secrets.OMNIINTEL_WORKER_TOKEN }}
-      OMNIINTEL_DATABASE: ${{ runner.temp }}/omniintel/worker.sqlite3
-      OMNIINTEL_UPLOAD_DIR: ${{ runner.temp }}/omniintel/uploads
-      OMNIINTEL_ASSET_DIR: ${{ runner.temp }}/omniintel/assets
+      OMNIINTEL_DATABASE: /tmp/omniintel/worker.sqlite3
+      OMNIINTEL_UPLOAD_DIR: /tmp/omniintel/uploads
+      OMNIINTEL_ASSET_DIR: /tmp/omniintel/assets
       OMNIINTEL_ASR_MODEL_ID: tiny
       OMNIINTEL_ASR_ALLOW_MODEL_DOWNLOAD: "1"
       OMNIINTEL_ASR_DEVICE: cpu
