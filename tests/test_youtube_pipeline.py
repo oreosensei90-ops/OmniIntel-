@@ -37,7 +37,7 @@ def test_rejects_untrusted_or_invalid_youtube_urls(url):
         normalize_youtube_url(url)
 
 
-def test_composes_offline_reader_draft_with_source_evidence_and_reviewable_glossary(tmp_path):
+def test_composes_offline_reader_draft_without_invented_glossary_candidates(tmp_path):
     caption = """WEBVTT
 
 00:00:00.000 --> 00:00:03.000
@@ -73,12 +73,11 @@ A Neural Network can learn complex representations.
     assert paragraphs
     assert "Neural Networks learn patterns from data." in paragraphs[0]["content"]["text"]
     assert len(paragraphs[0]["evidence"]) == 3
-    glossary = [item for item in result["chapters"] if item["chapter"]["title"].startswith("Glossary")]
-    assert glossary
-    definitions = [block for block in glossary[0]["blocks"] if block["block_type"] == "DEFINITION"]
-    assert definitions
-    assert all(block["provenance"] == "UNCERTAIN" for block in definitions)
-    assert all(block["review_status"] == "NEEDS_REVIEW" for block in definitions)
+    assert len(result["chapters"]) == 1
+    assert not any(
+        block["block_type"] == "DEFINITION"
+        for chapter in result["chapters"] for block in chapter["blocks"]
+    )
 
 
 def test_composition_rejects_invalid_chapter_size(tmp_path):
